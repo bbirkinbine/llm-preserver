@@ -355,5 +355,5 @@ parallelize only with partitioned file ownership.
 - Public-facing framing rule: avoid "against future access
   restrictions" / threat-prediction phrasing in repo docs — neutral
   durability/offline language only (Brian, 2026-07-09).
-- Two Dependabot PRs open (actions/checkout v7, setup-uv v7), CI
-  green — Brian to review/merge, ideally before the feature branch.
+- Dependabot PRs #1 (setup-uv v7) and #2 (actions/checkout v7) are
+  merged (2026-07-09); no PRs open.
