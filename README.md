@@ -1,10 +1,10 @@
 # llm-preserver
 
-Archives local LLMs against future access restrictions: pulls model
-weights (GGUF quants, full Hugging Face snapshots) into a
-runtime-independent local archive along with tokenizer/config files,
-licenses, model cards, SHA256 checksums, and offline smoke tests — so
-"I downloaded it once" becomes "I can still run this in two years."
+Archives local LLMs for long-term offline use: pulls model weights
+(GGUF quants, full Hugging Face snapshots) into a runtime-independent
+local archive along with tokenizer/config files, licenses, model
+cards, SHA256 checksums, and offline smoke tests — so "I downloaded
+it once" becomes "I can still run this in two years."
 
 > ## Status
 >

@@ -22,8 +22,11 @@ that's two places to drift out of sync. This section holds only the
 - Transient blockers (a flaky external dependency, a pinned-back
   version waiting on an upstream fix).
 
-Nothing operational in flight (2026-07-09): greenfield repo, no
-branches, deploys, or migrations yet.
+As of 2026-07-09: baseline pushed to `main` (private GitHub repo), CI
+green, no feature branches. Two Dependabot PRs open (CI-green action
+bumps) awaiting Brian. The single gating item — ADR 0001 under review
+— and the temporary docs-only-to-main exception are tracked in
+`CLAUDE.md` → Open work.
 
 ---
 

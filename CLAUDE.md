@@ -1,6 +1,6 @@
 # Project: llm-preserver
 
-CLI tool that archives local LLMs against future access restrictions.
+CLI tool that archives local LLMs for long-term offline use.
 It pulls model artifacts (GGUF quants, full Hugging Face snapshots)
 from model hubs into a runtime-independent local archive, and preserves
 everything needed to still run them years later: weights, tokenizer/
@@ -323,10 +323,28 @@ parallelize only with partitioned file ownership.
   data; never delete, move, or "clean up" archive contents. Tests use
   tmp dirs, never a real archive.
 
-## Open work / current state (updated 2026-07-09)
+## Open work / current state (updated 2026-07-09, end of session 1)
 
-- Greenfield: scaffolding just bootstrapped; no implementation code yet.
-- Product spec drafted at `docs/specs/0000-product.md` (from the vault's
-  "Local AI Model Preservation Plan") — Brian to review.
-- First feature spec drafted at `docs/specs/0001-archive-init-and-manifest.md`
-  (status draft) — review, then `/plan`.
+- No implementation code yet — planning phase. Baseline scaffolding
+  committed and pushed (`9734acb`); repo is **private** on GitHub,
+  public later (pre-flip scrub checklist applies then). CI green.
+- **Gating item: ADR 0001 (`docs/adr/0001-model-storage.md`, status
+  `proposed`) — Brian is still reviewing.** It decides the archive
+  layout (model-first `models/<creator>/<model>/<format>/`), JSON
+  record + generated markdown, immutable-payload/mutable-metadata,
+  BagIt-style manifests, and the runtime-views principle. Do not start
+  implementing spec 0001 until Brian flips it to `accepted`.
+- Specs: `0000-product.md` (evergreen), `0001` archive init + manifest
+  (draft; implements ADR 0001), `0002` runtime views (draft, blocked
+  on 0001). Planned-but-unnumbered features live in the 0000 roadmap —
+  numbers are consumed only at spec creation.
+- After ADR acceptance: branch `spec-0001-archive-init-and-manifest`,
+  then `/plan` → the normal loop.
+- Temporary docs-only-to-main exception is active — see the block at
+  the top of `.claude/rules/git-workflow.md`, including its sunset
+  clause (remind Brian to remove it when implementation starts).
+- Public-facing framing rule: avoid "against future access
+  restrictions" / threat-prediction phrasing in repo docs — neutral
+  durability/offline language only (Brian, 2026-07-09).
+- Two Dependabot PRs open (actions/checkout v7, setup-uv v7), CI
+  green — Brian to review/merge.

@@ -10,13 +10,13 @@
 
 ## Problem
 
-Local LLM access is fragile: open-weight releases can become
-restricted by policy, export controls, commercial strategy, or
-platform gating, and hub downloads can disappear behind license gates
-or account requirements. Brian runs local models (RTX 3090 host,
-Apple Silicon Mac) and wants a **curated, tested shelf** of models he
-can still run even if hubs, accounts, or new releases become harder to
-access. Doing this by hand (huggingface-cli invocations, hand-written
+A model that runs today is not guaranteed to be downloadable
+tomorrow: hub repos get renamed, gated behind license/account
+requirements, or removed, and a download is only as durable as the
+account and network it depends on. Brian runs local models (RTX 3090
+host, Apple Silicon Mac) and wants a **curated, tested shelf** of
+models that stays runnable offline, on his own storage, independent
+of any hub or account. Doing this by hand (huggingface-cli invocations, hand-written
 records, ad-hoc checksums) is error-prone and doesn't stay current.
 
 A usable preserved model is more than weights: it needs the tokenizer,
