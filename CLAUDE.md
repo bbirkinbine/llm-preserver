@@ -330,12 +330,14 @@ parallelize only with partitioned file ownership.
   green.
 - **ADR 0001 (`docs/adr/0001-model-storage.md`) is `accepted`**
   (Brian, 2026-07-09). The gate on spec 0001 is lifted.
-- **Next step: branch `spec-0001-archive-init-and-manifest`, then
-  `/plan` on `docs/specs/0001-archive-init-and-manifest.md`** → normal
-  loop (plan checkpoint → `/test-first` → implement → `/review-check`
-  → `/review`). Skip `/clarify` — the spec is tight; its one open
-  point (`status <model>` subcommand vs. separate `show`) is
-  explicitly deferred to plan time.
+- **Spec 0001 is implemented on branch
+  `spec-0001-archive-init-and-manifest`** (uncommitted): plan
+  approved, tests-first (65 passing), `/review-check` green, two
+  rounds of `/review` + `/review-adversarial` + `/security` resolved —
+  including four review-time decisions by Brian (read-path
+  marker/schema gate, `save_record` writes JSON + markdown together,
+  `extra="allow"` on records, per-record `record_schema_version`),
+  recorded in spec 0001. Next: Brian reviews the diff → commit → PR.
 - Specs: `0000-product.md` (evergreen; session-2 revisions: neutral
   problem framing, explicit-selection non-goal, roadmap bullets
   renamed to download *shape* — selective pull / full snapshot — with
@@ -348,10 +350,10 @@ parallelize only with partitioned file ownership.
 - Design stance recorded in the 0000 roadmap: the tool takes exact
   hub repo ids only — no fuzzy name resolution, no LLM inside the
   tool; deterministic product, so no `/eval` / `evaluator`.
-- Temporary docs-only-to-main exception is active — see the block at
-  the top of `.claude/rules/git-workflow.md`. **Its sunset clause
-  triggers at the start of spec 0001's Implement phase: remind Brian
-  to remove the block then, and stop applying the exception.**
+- The temporary docs-only-to-main exception was removed from
+  `.claude/rules/git-workflow.md` when spec 0001's Implement phase
+  started (sunset clause fired) — every change now uses the full
+  branch flow.
 - Public-facing framing rule: avoid "against future access
   restrictions" / threat-prediction phrasing in repo docs — neutral
   durability/offline language only (Brian, 2026-07-09).

@@ -1,22 +1,5 @@
 # Git workflow
 
-> **TEMPORARY EXCEPTION — early phase (added 2026-07-09).**
-> While the project is docs-only (no implementation code yet),
-> **docs-only changes may be committed directly to `main`** without a
-> branch, issue, or PR. "Docs-only" means the change touches nothing
-> but `*.md` files and `docs/` content — anything touching `src/`,
-> `tests/`, `pyproject.toml`, `uv.lock`, `.github/`, `.claude/hooks/`,
-> or `.claude/settings.json` uses the full branch flow below. The
-> `no-commit-to-branch` pre-commit hook still fires; bypass it per
-> commit with `SKIP=no-commit-to-branch`. Commits still require
-> Brian's explicit "commit" instruction — this exception relaxes
-> *where* commits land, not *whether* to make them.
->
-> **Sunset clause: this exception ends when implementation starts.**
-> At the start of the first Implement phase (spec 0001), the agent
-> must remind Brian to remove this block and must not apply the
-> exception to any commit from that point on.
-
 The standing rule: **every change happens on its own branch — never
 write feature or fix code on `main`.** Create the branch yourself, as
 soon as there is a spec or an issue to work. Do not wait to be asked;
