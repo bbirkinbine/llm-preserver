@@ -1,0 +1,47 @@
+# Python bytecode and build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+
+# Environment files — never commit real values.
+# .env.*.example IS committed (it carries no secrets); nothing else is.
+.env
+.env.*
+!.env.*.example
+
+# Tooling caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# uv manages the lockfile — uv.lock IS committed; do not ignore it.
+
+# serena MCP (optional, opt-in) — local symbol cache + project config.
+# Machine-specific; regenerated on first run. See docs/serena-setup.md.
+.serena/
+
+# Claude Code local-only files — personal settings and notes that must
+# not propagate to other machines or contributors. The shared
+# counterparts (.claude/settings.json, CLAUDE.md, .claude/rules/,
+# .claude/agents/, .claude/skills/, .claude/commands/) ARE committed.
+# Auto-memory lives outside the repo (~/.claude/projects/) — nothing to
+# ignore for it here.
+.claude/settings.local.json
+CLAUDE.local.md
+
+# OS / editor cruft
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/

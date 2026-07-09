@@ -1,0 +1,30 @@
+# Issue form for a bug. The labels below must exist in the repo —
+# create them before first use.
+name: Bug
+description: Something is broken
+labels: [bug, triage]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: The actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should happen
+      description: The expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps. A failing test is ideal.
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: Python version, OS, relevant package versions.

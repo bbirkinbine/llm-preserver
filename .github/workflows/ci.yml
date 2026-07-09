@@ -1,0 +1,70 @@
+name: CI
+
+# The non-skippable backstop for the Verify phase. Local pre-commit
+# hooks and /review-check can be bypassed (--no-verify, forgetting to
+# run them); this runs on every pull request and cannot be skipped.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Least privilege: both jobs only read the checkout and run tooling — no
+# writes, no secrets. Declared explicitly so a consumer whose org default
+# is "read and write" does not inherit an over-privileged CI token.
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      - name: Format check (ruff)
+        run: uv run ruff format --check .
+
+      - name: Type-check (mypy)
+        run: uv run mypy src/
+
+      - name: Tests (pytest)
+        run: uv run pytest
+
+  audit:
+    # Supply-chain backstop: scan the locked dependency tree for known
+    # CVEs. Separate from the quality job so its failure reads as
+    # "security advisory", not "lint/test broke", and so it runs in
+    # parallel. Dependabot (.github/dependabot.yml) opens the fix PRs;
+    # this gate makes a shipped advisory visible instead of silent.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      # `--with` adds pip-audit to the run ephemerally, so it sees the
+      # project's installed deps without becoming a permanent dev
+      # dependency. For an unfixable transitive advisory with no patched
+      # release yet, ignore it explicitly and leave a comment saying why:
+      #   uv run --with pip-audit pip-audit --ignore-vuln GHSA-xxxx-xxxx-xxxx
+      - name: Audit dependencies for known advisories (pip-audit)
+        run: uv run --with pip-audit pip-audit

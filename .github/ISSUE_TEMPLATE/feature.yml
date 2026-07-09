@@ -1,0 +1,32 @@
+# Issue form for a feature. The Goal / Success criteria / Non-goals
+# fields map straight into the docs/specs/ scaffold that /spec reads.
+# The labels below must exist in the repo — create them before first
+# use.
+name: Feature
+description: A new capability or enhancement
+labels: [feature, spec-needed]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: One paragraph — what this feature is for.
+    validations:
+      required: true
+  - type: textarea
+    id: success
+    attributes:
+      label: Success criteria
+      description: How you will know it is done.
+    validations:
+      required: true
+  - type: textarea
+    id: non-goals
+    attributes:
+      label: Non-goals
+      description: What this explicitly does not include.
+  - type: input
+    id: notes
+    attributes:
+      label: Notes
+      description: Related issues, constraints, or links (optional).

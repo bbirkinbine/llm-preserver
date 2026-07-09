@@ -1,0 +1,72 @@
+# Install both the pre-commit and commit-msg hook types from a bare
+# `pre-commit install` (no `--hook-type` flag needed), so the commit-msg
+# attribution-strip hook below is actually wired up on day zero.
+default_install_hook_types: [pre-commit, commit-msg]
+
+repos:
+  # Guardrail: block direct commits to main/master. Feature and fix work
+  # belongs on a branch (see CLAUDE.md -> Git workflow). The one expected
+  # exception is the day-zero scaffolding commit: git commit --no-verify.
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: no-commit-to-branch
+        args: [--branch, main, --branch, master]
+      # Hygiene guardrails — make the CLAUDE.md rules mechanical.
+      - id: detect-private-key        # blocks committed private keys
+      - id: check-added-large-files   # blocks accidental large/binary commits
+      - id: check-merge-conflict      # blocks unresolved conflict markers
+      - id: check-yaml                # validates YAML (workflows, issue forms)
+      - id: check-toml                # validates pyproject.toml
+
+  # Full secret scan — ~150 secret types (API tokens, cloud keys, JWTs).
+  # detect-private-key above only catches private keys; this is the real
+  # backstop for the "never commit credentials" rule in CLAUDE.md.
+  # Bump rev with: pre-commit autoupdate
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.2
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.13
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # commit-msg backstop: strip AI-attribution lines (Co-Authored-By:
+  # Claude trailers, "Generated with Claude Code" footers) from the commit
+  # message — the mechanical half of the no-AI-attribution rule in
+  # .claude/rules/commit-style.md. AI assistance is acknowledged once in
+  # README.md, never in git history. Runs at the commit-msg stage only.
+  - repo: local
+    hooks:
+      - id: strip-ai-attribution
+        name: strip AI co-author trailers / generated-with footers
+        entry: .claude/hooks/strip-ai-attribution.sh
+        language: script
+        stages: [commit-msg]
+        always_run: true
+
+  # mypy runs in the PROJECT uv environment (not pre-commit's isolated venv)
+  # so it resolves the project's third-party imports, and is scoped to src/ —
+  # matching the documented gate (`uv run mypy src/`) and CI
+  # (.github/workflows/ci.yml). Tests are intentionally NOT strict-typed (see
+  # the ruff per-file-ignores for tests/** in pyproject.toml). The previous
+  # mirrors-mypy hook ran in an isolated env WITHOUT the project's deps and
+  # strict-checked tests/, so every commit with src+tests failed on
+  # import-not-found + missing-annotation errors — that is the bug this
+  # avoids. `pass_filenames: false` => always run `mypy src/`, never the
+  # staged-file list; the `[ -d src ]` guard keeps it quiet on a fresh repo
+  # before src/ exists. Strict config comes from [tool.mypy] in pyproject.toml.
+  # (To add stubs, install them as a dev dependency, e.g. `uv add --dev
+  # types-requests` — the project env is what mypy now uses.)
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy (strict, src/)
+        entry: "bash -c 'if [ -d src ]; then uv run mypy src/; fi'"
+        language: system
+        types: [python]
+        pass_filenames: false
