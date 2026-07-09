@@ -33,11 +33,18 @@ spec is implemented.
   MLX): format, quantization, source repo URL, pinned hub revision
   (full commit hash, not a branch name), download date, per-file
   SHA256 + size + an original-vs-generated flag, runtime/hardware
-  tested (see ADR 0001's prior-art conventions). Unknown-at-
+  tested (see ADR 0001's prior-art conventions), and a provenance
+  flag distinguishing a verified hub pull (hashes match a pinned
+  revision) from an unverified cache import (see the cache-import
+  feature in the `0000-product.md` roadmap). Unknown-at-
   download-time fields are explicitly nullable, not omitted.
 - `llm-preserver status <path>` walks `models/` and prints an
   inventory table: each model, its archived formats, role, record
   completeness (missing license? missing checksum?), and sizes.
+- A per-model detail view — `status <path> <creator>/<model>` or a
+  separate `show` command (decide at plan time) — prints everything
+  archived for one model: each artifact's format, quantization,
+  source repo, pinned revision, size, and provenance flag.
 - All commands operate only on the given archive path; nothing is
   written outside it. Tests exercise everything in `tmp_path`.
 

@@ -323,28 +323,37 @@ parallelize only with partitioned file ownership.
   data; never delete, move, or "clean up" archive contents. Tests use
   tmp dirs, never a real archive.
 
-## Open work / current state (updated 2026-07-09, end of session 1)
+## Open work / current state (updated 2026-07-09, end of session 2)
 
-- No implementation code yet — planning phase. Baseline scaffolding
-  committed and pushed (`9734acb`); repo is **private** on GitHub,
-  public later (pre-flip scrub checklist applies then). CI green.
-- **Gating item: ADR 0001 (`docs/adr/0001-model-storage.md`, status
-  `proposed`) — Brian is still reviewing.** It decides the archive
-  layout (model-first `models/<creator>/<model>/<format>/`), JSON
-  record + generated markdown, immutable-payload/mutable-metadata,
-  BagIt-style manifests, and the runtime-views principle. Do not start
-  implementing spec 0001 until Brian flips it to `accepted`.
-- Specs: `0000-product.md` (evergreen), `0001` archive init + manifest
-  (draft; implements ADR 0001), `0002` runtime views (draft, blocked
-  on 0001). Planned-but-unnumbered features live in the 0000 roadmap —
-  numbers are consumed only at spec creation.
-- After ADR acceptance: branch `spec-0001-archive-init-and-manifest`,
-  then `/plan` → the normal loop.
+- No implementation code yet — planning phase. Repo is **private** on
+  GitHub, public later (pre-flip scrub checklist applies then). CI
+  green.
+- **ADR 0001 (`docs/adr/0001-model-storage.md`) is `accepted`**
+  (Brian, 2026-07-09). The gate on spec 0001 is lifted.
+- **Next step: branch `spec-0001-archive-init-and-manifest`, then
+  `/plan` on `docs/specs/0001-archive-init-and-manifest.md`** → normal
+  loop (plan checkpoint → `/test-first` → implement → `/review-check`
+  → `/review`). Skip `/clarify` — the spec is tight; its one open
+  point (`status <model>` subcommand vs. separate `show`) is
+  explicitly deferred to plan time.
+- Specs: `0000-product.md` (evergreen; session-2 revisions: neutral
+  problem framing, explicit-selection non-goal, roadmap bullets
+  renamed to download *shape* — selective pull / full snapshot — with
+  design notes on quant selection UX, `base_model` grouping, and
+  cache-import provenance), `0001` archive init + manifest (draft,
+  ready to plan; record now includes a per-artifact provenance flag
+  and a per-model detail view), `0002` runtime views (draft, blocked
+  on 0001 and the download specs). Unnumbered features live in the
+  0000 roadmap — numbers are consumed only at spec creation.
+- Design stance recorded in the 0000 roadmap: the tool takes exact
+  hub repo ids only — no fuzzy name resolution, no LLM inside the
+  tool; deterministic product, so no `/eval` / `evaluator`.
 - Temporary docs-only-to-main exception is active — see the block at
-  the top of `.claude/rules/git-workflow.md`, including its sunset
-  clause (remind Brian to remove it when implementation starts).
+  the top of `.claude/rules/git-workflow.md`. **Its sunset clause
+  triggers at the start of spec 0001's Implement phase: remind Brian
+  to remove the block then, and stop applying the exception.**
 - Public-facing framing rule: avoid "against future access
   restrictions" / threat-prediction phrasing in repo docs — neutral
   durability/offline language only (Brian, 2026-07-09).
 - Two Dependabot PRs open (actions/checkout v7, setup-uv v7), CI
-  green — Brian to review/merge.
+  green — Brian to review/merge, ideally before the feature branch.

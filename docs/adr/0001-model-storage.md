@@ -1,7 +1,7 @@
 # 0001 — Model Storage
 
-**Status:** proposed
-**Last updated:** 2026-07-09
+**Status:** accepted
+**Last updated:** 2026-07-09 (accepted by Brian)
 
 ## Context
 
