@@ -27,8 +27,14 @@ spec is implemented.
 - A model record (Pydantic model, serialized as `model-record.json`
   in the model's directory, with a generated human-readable
   `MODEL-RECORD.md` rendering — see ADR 0001) captures, at the model
-  level: name, original hub id, role (chat/coding/embedding/reranker/
-  multimodal), license, parameter count, context length, notes; and
+  level: name, original hub id, roles (nonempty list drawn from
+  chat/coding/embedding/reranker/multimodal — curator judgment, first
+  entry is the primary role; a model may serve several), capabilities
+  (machine-derived free-string list — e.g.
+  tools/vision/thinking/embedding — populated from source metadata by
+  the download/import features; null until then), the source repo's
+  `pipeline_tag` verbatim (null until recorded), license, parameter
+  count, context length, notes; and
   per artifact (a model holds one or more formats — GGUF, HF snapshot,
   MLX): format, quantization, source repo URL, pinned hub revision
   (full commit hash, not a branch name), download date, per-file
@@ -47,6 +53,24 @@ spec is implemented.
   source repo, pinned revision, size, and provenance flag.
 - All commands operate only on the given archive path; nothing is
   written outside it. Tests exercise everything in `tmp_path`.
+- Review-time decisions (Brian, 2026-07-09): read-only commands
+  (`status`, `show`) also refuse a missing/invalid marker or a newer
+  `schema_version`, per ADR 0001's refusal rule; `save_record` writes
+  `MODEL-RECORD.md` together with the JSON so they cannot desync
+  (`show` renders without the generated-file header); unknown record
+  fields survive load/re-save (`extra="allow"`) so an older tool never
+  destroys a newer record's data; the record carries its own
+  `record_schema_version` so a lone copied model dir stays
+  self-describing; `role` became `roles` (a model serves multiple
+  purposes) with separate machine-fact seats `capabilities` and
+  `pipeline_tag`, distinguishing curator judgment from derivable
+  metadata. A record claiming a *newer* `record_schema_version` is
+  flagged, not refused (`status` completeness column; `show` warns to
+  stderr but renders) — read-only inspection stays useful. Role and
+  format vocabularies stay strict `Literal`s: an unknown value fails
+  validation and the record degrades to a visible `record unreadable`
+  state (with a newer-schema hint when the record claims one); the
+  on-disk JSON is never touched, so nothing is lost.
 
 ## Non-goals
 

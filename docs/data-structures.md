@@ -1,0 +1,330 @@
+# Data structures
+
+Visual reference for the on-disk and in-memory structures the tool is
+built on. This is the foundation layer (spec 0001, layout decided by
+ADR 0001 — `docs/adr/0001-model-storage.md`); every later feature
+(download, verify, smoke test, runtime views) reads or writes these
+same structures. Diagrams are Mermaid — GitHub and VS Code's markdown
+preview render them natively.
+
+Source of truth for the schemas is the code
+(`src/llm_preserver/records.py`, `src/llm_preserver/archive.py`) and
+ADR 0001; this document is a rendering of them. If they disagree, the
+code and ADR win — update this file.
+
+## The big picture
+
+One archive root, marked by `archive.json`. One directory per logical
+model under `models/<creator>/<model>/`, holding *every* archived
+format of that model plus its own metadata. Metadata travels with the
+model: a partially copied archive (one model directory rsynced
+elsewhere) carries its own record.
+
+```mermaid
+graph TD
+    ROOT["archive root"] --> MARKER["archive.json<br/>root marker, schema_version"]
+    ROOT --> MODELS["models/"]
+    ROOT --> RUNTIMES["runtimes/<br/>preserved installers/builds<br/><i>(future specs)</i>"]
+    ROOT --> MANIFESTS["manifests/<br/>derived archive-wide aggregates,<br/>regenerable, never authoritative<br/><i>(future specs)</i>"]
+
+    MODELS --> CREATOR["&lt;creator&gt;/<br/>hub namespace: Qwen, mistralai, ..."]
+    CREATOR --> MODEL["&lt;model&gt;/<br/>one logical model"]
+
+    MODEL --> RECORD["model-record.json<br/><b>source of truth</b>"]
+    MODEL --> RENDERED["MODEL-RECORD.md<br/>generated rendering"]
+    MODEL --> SHA["manifest-sha256.txt<br/>sha256sum -c fixity check<br/><i>(future verify spec)</i>"]
+    MODEL --> GGUF["gguf/"]
+    MODEL --> HF["hf-snapshot/"]
+    MODEL --> MLX["mlx/"]
+
+    style RECORD fill:#e8f0fe,stroke:#4a76c9,color:#1a2b4a
+    style MARKER fill:#e8f0fe,stroke:#4a76c9,color:#1a2b4a
+```
+
+The same tree as it lands on disk (format subdirectories exist only for
+formats archived):
+
+```text
+<archive-root>/
+  archive.json                      # root marker: {"tool": "llm-preserver", "schema_version": 1}
+  models/
+    <creator>/                      # original model's hub namespace
+      <model>/                      # one dir per logical model
+        model-record.json           # source of truth for ALL formats below
+        MODEL-RECORD.md             # generated from the JSON; never parsed back
+        manifest-sha256.txt         # (planned, verify spec) coreutils-checkable fixity
+        gguf/                       # only the formats actually archived
+        hf-snapshot/
+        mlx/
+  runtimes/                         # (planned) preserved runtime installers/builds
+  manifests/                        # (planned) regenerable archive-wide aggregates
+```
+
+Two identity rules worth internalizing (ADR 0001):
+
+- **The directory answers "what model is this"; the record answers
+  "where did each file come from."** `<creator>/<model>` is always the
+  *original* model's hub id, even when an artifact was pulled from a
+  third-party repo (e.g. a `bartowski/...-GGUF` quant files under the
+  original creator; the quant repo's URL lives in that artifact's
+  `source_repo`).
+- **Role is metadata, not layout.** Embedding and reranker models are
+  ordinary model directories with `roles: ["embedding"]` etc. in the
+  record — there are no role-based top-level directories.
+
+## The record schema (`model-record.json`)
+
+Three nested Pydantic models, one JSON file. `ModelRecord` describes
+the logical model, `ArtifactEntry` one archived form of it (a format at
+a quantization), `FileEntry` one file of that artifact.
+
+```mermaid
+classDiagram
+    class ModelRecord {
+        record_schema_version : int, defaults to 1
+        name : str
+        hub_id : str
+        roles : list~Role~ nonempty, first is primary
+        capabilities : list~str~ or None
+        pipeline_tag : str or None
+        license : str or None
+        parameter_count : str or None, e.g. 7B
+        context_length : int or None
+        notes : str or None
+        artifacts : list~ArtifactEntry~
+    }
+
+    class ArtifactEntry {
+        format : ArtifactFormat
+        quantization : str or None, e.g. Q4_K_M
+        source_repo : str or None, actual source URL
+        revision : str or None, 40-hex commit hash
+        download_date : date or None
+        runtime_tested : str or None
+        provenance : Provenance
+        files : list~FileEntry~
+    }
+
+    class FileEntry {
+        path : str, relative, validated
+        sha256 : str or None, 64-hex
+        size : int or None, bytes
+        source : FileSource
+    }
+
+    class Role {
+        <<enumeration>>
+        chat
+        coding
+        embedding
+        reranker
+        multimodal
+    }
+
+    class ArtifactFormat {
+        <<enumeration>>
+        gguf
+        hf-snapshot
+        mlx
+    }
+
+    class Provenance {
+        <<enumeration>>
+        verified
+        unverified
+    }
+
+    class FileSource {
+        <<enumeration>>
+        original
+        generated
+    }
+
+    ModelRecord "1" *-- "0..*" ArtifactEntry : artifacts
+    ArtifactEntry "1" *-- "0..*" FileEntry : files
+    ModelRecord ..> Role : roles
+    ArtifactEntry ..> ArtifactFormat : format
+    ArtifactEntry ..> Provenance : provenance
+    FileEntry ..> FileSource : source
+```
+
+Semantics that don't fit in a box:
+
+| Field | Why it's shaped this way |
+| --- | --- |
+| `roles` vs `capabilities` | `roles` is curator judgment ("why is this on the shelf") — a strict enum, nonempty, first entry drives `status` grouping. `capabilities` is machine facts recorded from source metadata (`tools`, `vision`, ...) — free strings, because the vocabulary belongs to hubs/runtimes and will grow. |
+| `revision` | Full 40-hex commit hash only; a branch name is a moving pointer, not provenance, and fails validation. |
+| `provenance` | `verified` = hub pull whose hashes match the pinned revision; `unverified` = cache import that can't be checked against a source. |
+| `FileEntry.source` | Internet Archive's original-vs-generated split: `original` files (weights, tokenizer, license) are sacred and never regenerable; `generated` files (`MODEL-RECORD.md`, future manifests) can be rebuilt from originals + record. Backup and recovery logic treat the classes differently. |
+| `FileEntry.path` | Upstream filename preserved verbatim (GGUF names encode quant type and shard position). Validated: relative, POSIX, no `..`, no backslashes or control characters — filenames are upstream-supplied and therefore untrusted. |
+| Nullable fields | "Unknown at this point in time", serialized as explicit `null` — never omitted — so a reader can tell "unknown" from "not part of this schema version". Schema evolution is add-a-field, never rename. |
+
+### Example record
+
+```json
+{
+  "record_schema_version": 1,
+  "name": "Qwen2.5 Coder 32B Instruct",
+  "hub_id": "Qwen/Qwen2.5-Coder-32B-Instruct",
+  "roles": ["coding", "chat"],
+  "capabilities": ["tools"],
+  "pipeline_tag": "text-generation",
+  "license": "Apache-2.0",
+  "parameter_count": "32B",
+  "context_length": 131072,
+  "notes": null,
+  "artifacts": [
+    {
+      "format": "gguf",
+      "quantization": "Q4_K_M",
+      "source_repo": "https://huggingface.co/bartowski/Qwen2.5-Coder-32B-Instruct-GGUF",
+      "revision": "0123456789abcdef0123456789abcdef01234567",
+      "download_date": "2026-07-09",
+      "runtime_tested": null,
+      "provenance": "verified",
+      "files": [
+        {
+          "path": "gguf/Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size": 19851335840,
+          "source": "original"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Note how the third-party quant repo appears in `source_repo` while the
+directory (and `hub_id`) belong to the original creator.
+
+## Two version numbers, two behaviors
+
+Both structures are versioned, independently, and the tool reacts
+differently to each:
+
+| Version | Lives in | Constant | On a *newer* value |
+| --- | --- | --- | --- |
+| Archive schema | `archive.json` → `schema_version` | `archive.SCHEMA_VERSION = 1` | **Refuse.** Every command — including read-only `status`/`show` — errors and tells the user to upgrade. |
+| Record schema | `model-record.json` → `record_schema_version` | `records.RECORD_SCHEMA_VERSION = 1` | **Flag, don't refuse.** `status` shows it in the completeness column; `show` warns on stderr but still renders. Read-only inspection stays useful. |
+
+The record carries its own version so a lone model directory rsynced
+away from the archive stays self-describing without the root marker.
+
+Two more schema-evolution guards in the record layer:
+
+- **Unknown fields survive round-trips** (`extra="allow"` on every
+  record model): a record written by a newer tool keeps its extra
+  fields through an older tool's load → modify → save cycle instead of
+  being silently stripped.
+- **Strict vocabularies degrade visibly**: an unknown `role` or
+  `format` value fails validation and the record shows as
+  `record unreadable` (with a newer-schema hint when the record claims
+  one); the on-disk JSON is never touched.
+
+## Write paths: ordering is the crash-safety story
+
+There are no transactional writes (ADR 0001 accepts this) — the
+convention is *write the source of truth last*, so a crash in the
+middle leaves stale-but-regenerable debris, never committed truth
+missing its supporting files.
+
+```mermaid
+sequenceDiagram
+    participant CLI as init_archive(path)
+    participant FS as filesystem
+
+    CLI->>FS: mkdir models/ runtimes/ manifests/
+    CLI->>FS: write archive.json.tmp
+    CLI->>FS: rename archive.json.tmp → archive.json
+    Note over FS: marker lands last, atomically —<br/>a half-created dir is not yet an archive
+
+    participant SR as save_record(record, model_dir)
+    SR->>FS: write MODEL-RECORD.md (generated rendering)
+    SR->>FS: write model-record.json (source of truth)
+    Note over FS: JSON lands last — a failure in between<br/>leaves only a stale regenerable rendering
+```
+
+The same convention extends to future download specs: payload files
+first, record last, so the record only ever describes files that exist.
+
+`init` is idempotent and defensive: re-running on an existing archive
+changes nothing; a non-empty directory that is *not* an archive is
+refused untouched.
+
+## Read paths: gate, walk, degrade
+
+Every command validates the archive marker before touching contents,
+and the inventory walk degrades per-model instead of failing the whole
+archive.
+
+```mermaid
+flowchart TD
+    CMD["status / show &lt;path&gt;"] --> GATE{"archive.json exists,<br/>valid, schema_version ≤ 1?"}
+    GATE -- no --> ERR["error, exit 1<br/>(newer schema → 'upgrade llm-preserver')"]
+    GATE -- yes --> WALK["walk models/&lt;creator&gt;/&lt;model&gt;/<br/>records only — payload files<br/>never stat-ed or hashed"]
+
+    WALK --> HASREC{"model-record.json<br/>present?"}
+    HASREC -- no --> S1["summary: <b>no record</b>"]
+    HASREC -- yes --> VALID{"loads and<br/>validates?"}
+    VALID -- no --> PEEK["peek claimed<br/>record_schema_version"]
+    PEEK --> S2["summary: <b>record unreadable</b><br/>+ newer-schema hint if claimed > 1"]
+    VALID -- yes --> S3["summary: formats, roles, size,<br/>completeness flags<br/>(no license? missing checksums?<br/>newer record schema?)"]
+
+    S1 --> TABLE["status: one row per model"]
+    S2 --> TABLE
+    S3 --> TABLE
+
+    style ERR fill:#fdecea,stroke:#c0392b,color:#5b1a12
+    style S1 fill:#fef6e0,stroke:#b8860b,color:#5c430a
+    style S2 fill:#fef6e0,stroke:#b8860b,color:#5c430a
+```
+
+Defensive reads, because an archive may not be one the user authored
+(a copied NAS share): metadata files are size-capped (1 MB), symlinked
+markers/records/model-directories are refused, and `show`'s
+`<creator>/<model>` argument is validated against a strict pattern
+before any path is constructed.
+
+## How the layers stack
+
+What exists today versus what each planned feature adds. Every future
+layer writes into the structures above — none introduces a new
+top-level shape (that would take a new ADR).
+
+```mermaid
+flowchart LR
+    subgraph SPEC0001 ["spec 0001 — implemented"]
+        INIT["init: skeleton + marker"]
+        REC["records: schema + JSON round-trip<br/>+ generated markdown"]
+        STATUS["status / show: inventory + detail"]
+    end
+
+    subgraph FUTURE ["planned layers (0000-product roadmap)"]
+        DL["download specs<br/>(GGUF pull, HF snapshot)"]
+        VER["verify spec"]
+        SMOKE["smoke-test spec"]
+        IMPORT["cache-import spec"]
+        VIEWS["runtime views (spec 0002)"]
+    end
+
+    DL -- "writes payload files +<br/>artifact entries, hashes,<br/>pinned revisions" --> REC
+    IMPORT -- "writes artifacts with<br/>provenance: unverified" --> REC
+    VER -- "re-hashes files against records;<br/>writes manifest-sha256.txt;<br/>complete vs valid" --> REC
+    SMOKE -- "writes runtime_tested" --> REC
+    VIEWS -- "reads only; generates<br/>disposable symlink/config views" --> REC
+```
+
+Related vocabulary the verify spec will use (adopted from BagIt,
+ADR 0001): **complete** = every file the record lists is present;
+**valid** = complete *and* every SHA256 matches. The record enumerates
+*expected* files, which is what makes a partially rsynced or
+crash-interrupted model directory detectable offline.
+
+## In-memory structures (not persisted)
+
+`ModelSummary` (`archive.py`) is the per-model row behind `status` — a
+plain dataclass built either from a validated record or from the
+degraded states above. It is derived data, computed on every walk, and
+never written to disk. Sizes come from record entries, never from
+stat-ing the filesystem.
