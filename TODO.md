@@ -18,6 +18,12 @@ Check items off as they ship; update when priorities shift.
 - [ ] **Managed remove/retire**: the only sanctioned way to delete
   from the archive (record + directory updated together). Real
   pruning needs exist from first live use.
+- [ ] **Smoke test**: load an archived model offline in a local
+  runtime (llama.cpp / ollama), check a trivial deterministic
+  prompt, record the result in the record's `runtime_tested` field
+  (a 0000 success metric: the archive is *tested*, not just
+  downloaded). Pairs with runtime views — views make models
+  loadable in place, smoke test proves they load.
 
 ## Shipped
 
