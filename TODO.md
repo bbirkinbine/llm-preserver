@@ -1,0 +1,40 @@
+# TODO
+
+What's next, in rough order. Feature detail lives in
+[`docs/specs/0000-product.md`](docs/specs/0000-product.md) (roadmap)
+and the numbered specs; this file is the short-term working list.
+Check items off as they ship; update when priorities shift.
+
+## Next spec (0005) — pick one
+
+- [ ] **Verify** (recommended next): audit the archive against
+  records/manifests, BagIt-style — *complete* (every recorded file
+  exists) and *valid* (every file re-hashes to its recorded SHA256).
+  Read-only report. The archive now holds real Tier-1 content, so
+  drift/bitrot detection is earning its keep.
+- [ ] **Runtime views** (spec 0002, drafted): symlink/config views so
+  runtimes run archived models in place. Its blocker (the download
+  specs) is lifted — this is what makes the archive *usable* daily.
+- [ ] **Managed remove/retire**: the only sanctioned way to delete
+  from the archive (record + directory updated together). Real
+  pruning needs exist from first live use.
+
+## Shipped
+
+- 0001 archive init + records, 0003 selective pull, 0004 full
+  snapshot (`pull --all`). The core loop works end to end and is
+  live-verified: init → pull quants and masters → status/show.
+
+## Smaller items (from live use)
+
+- [ ] Quant-label selection UX: annotate recognized quant labels in
+  the interactive listing (deterministic table) and/or `--quant`
+  sugar; plus the vision-companion advisory (`mmproj-*` present but
+  none selected). Both in the 0000 roadmap "Later" list.
+- [ ] `quantization` record field is never populated (artifact-level
+  label extraction was never specced; per-file is likely the right
+  shape now that one artifact can hold several quants).
+- [ ] Split `pull.py` (291) and `records.py` (296) — both near the
+  300-line cap; split before the next feature touches either.
+- [ ] Refresh the CLAUDE.md "Open work" session notes (still
+  describe 0004 as pending).

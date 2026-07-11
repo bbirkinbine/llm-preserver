@@ -241,7 +241,7 @@ Harder / accepted downsides:
   with split provenance and no single per-model record. It also makes
   every new format a top-level layout addition, and it fights per-model
   backup tiering. Format-first would win if retrieval were per-runtime
-  bulk operations ("sync all GGUFs to the 3090 host"), but that's a
+  bulk operations ("sync all GGUFs to the GPU host"), but that's a
   query `status` can answer from records.
 - **SQLite catalog** — a single-file DB indexes/queries well, but it
   makes the archive illegible without the tool, concentrates

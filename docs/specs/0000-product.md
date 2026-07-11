@@ -64,8 +64,8 @@ runtime-locked working copies, not archives.
 - Model sources: Hugging Face Hub first (covers GGUF repos and full
   snapshots). Ollama/LM Studio caches are *imports*, not sources of
   record.
-- Hardware targets for smoke tests: RTX 3090 (CUDA) and Apple Silicon
-  (Metal/MLX) — but the archive format is runtime-independent.
+- Hardware targets for smoke tests: a consumer CUDA GPU and Apple
+  Silicon (Metal/MLX) — but the archive format is runtime-independent.
 - The archive layout and record format are decided in ADR 0001
   (`docs/adr/0001-model-storage.md`): a model-first filesystem tree
   (`models/<creator>/<model>/` holding all formats of a model together)

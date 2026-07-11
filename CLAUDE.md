@@ -364,7 +364,7 @@ parallelize only with partitioned file ownership.
 - Public-facing framing rule: avoid "against future access
   restrictions" / threat-prediction phrasing in repo docs — neutral
   durability/offline language only (Brian, 2026-07-09).
-- Brian's context: archive will likely live on the Asustor NAS
-  (`/volume1/models`, per the vault's AI Security Lab note); his
-  hardware is an M2 Max 96GB + RTX 3090 24GB — the Q8-on-Mac /
-  Q4-on-3090 split shapes the docs' examples.
+- Personal-context rule (2026-07-11): homelab/infrastructure
+  specifics (storage hosts, mount paths, hardware inventory, private
+  note names) stay out of repo files — including these session
+  notes. Generic phrasing only ("a NAS path", "a 24GB GPU").
