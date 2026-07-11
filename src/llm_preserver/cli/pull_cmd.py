@@ -88,6 +88,36 @@ def _log_underlying_failure(exc: PullError) -> None:
     )
 
 
+def _confirm_or_stop(prompt: str, assume_yes: bool) -> bool:
+    """Confirm interactively; deterministic stop when stdin cannot answer.
+
+    ``--yes`` auto-accepts the *size* confirmation only — grouping is an
+    identity decision that needs an explicit ``--model`` value, never a
+    blanket yes. When the prompt cannot be answered (non-interactive
+    stdin, exhausted piped input), click raises ``Abort``; that becomes
+    a ``PullUserError`` (exit 2) naming the bypass, so scripted pulls
+    never die with an undocumented exit 1 (spec 0004 adjudications).
+    Prompt classification keys on the strings ``pull_model`` composes —
+    the tool owns both sides of this seam.
+    """
+    cleaned = clean_text(prompt, single_line=True)
+    is_size_confirm = cleaned.startswith("pull ")
+    if assume_yes and is_size_confirm:
+        return True
+    try:
+        return bool(typer.confirm(cleaned))
+    # typer vendors click, so catch its own Abort, not the click
+    # package's (they are different classes).
+    except typer.Abort:
+        if is_size_confirm:
+            hint = "re-run with --yes to accept the size confirmation"
+        elif "every weight" in cleaned:
+            hint = "narrow --include, or run interactively"
+        else:
+            hint = "pass --model <creator>/<model> to choose the canonical model directory"
+        raise PullUserError(f"confirmation needed but stdin is not interactive: {hint}") from None
+
+
 def _prompt_for_selection(info: RepoInfo, repo_id: str) -> list[str]:
     """List the repo's files with sizes and prompt for include patterns.
 
@@ -114,6 +144,13 @@ def pull(
         list[str] | None,
         typer.Option("--include", help="fnmatch pattern selecting files; repeatable."),
     ] = None,
+    select_all: Annotated[
+        bool,
+        typer.Option(
+            "--all",
+            help="Full snapshot: download the repo's whole tree (excludes --include).",
+        ),
+    ] = False,
     model: Annotated[
         str | None,
         typer.Option("--model", help="Canonical model directory (<creator>/<model>) override."),
@@ -129,12 +166,28 @@ def pull(
             help="Replace changed upstream documentation files (never weights).",
         ),
     ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            help="Auto-accept the size confirmation (never the grouping confirm).",
+        ),
+    ] = False,
     verbose: Annotated[
         bool, typer.Option("--verbose", help="Show per-file progress and client detail.")
     ] = False,
 ) -> None:
-    """Pull selected files from a Hugging Face repo into the archive."""
+    """Pull selected files (or with --all, the whole tree) from a Hugging Face repo."""
     _setup_logging(verbose)
+    if select_all and include:
+        # Mutually exclusive shapes (spec 0004); refuse before any
+        # network call or client construction.
+        typer.echo(
+            "error [user input]: --all and --include are mutually exclusive; "
+            "pass --all for the whole tree or --include patterns for a selection",
+            err=True,
+        )
+        raise typer.Exit(code=2)
     # Fail fast on a bad archive path — before any network call or prompt.
     try:
         require_archive(path)
@@ -144,7 +197,7 @@ def pull(
     try:
         patterns = list(include or [])
         info: RepoInfo | None = None
-        if not patterns:
+        if not select_all and not patterns:
             info = client.repo_info(repo_id)
             patterns = _prompt_for_selection(info, repo_id)
         model_dir = pull_model(
@@ -156,7 +209,10 @@ def pull(
             roles=tuple(role or ()),
             repo_info=info,
             refresh_docs=refresh_docs,
-            confirm=lambda prompt: typer.confirm(prompt),
+            select_all=select_all,
+            # _confirm_or_stop sanitizes hub-supplied prompt text and
+            # converts unanswerable prompts to deterministic exits.
+            confirm=lambda prompt: _confirm_or_stop(prompt, yes),
         )
     except ArchiveError as exc:
         raise fail(str(exc)) from exc

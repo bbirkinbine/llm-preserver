@@ -98,10 +98,15 @@ class FileEntry(_PreservingModel):
 
         Filenames are upstream-supplied (hub repos name their own
         files), so a record must never carry an absolute path, a
-        ``..`` segment, backslashes, or control characters (a newline
-        could forge rows in the rendered provenance table).
+        ``..`` segment, backslashes, or control characters — C0, DEL,
+        and the C1 range alike (a newline could forge rows in the
+        rendered provenance table; C1 covers OSC/DCS introducers).
         """
-        if not value or "\\" in value or any(ord(ch) < 0x20 or ch == "\x7f" for ch in value):
+        if (
+            not value
+            or "\\" in value
+            or any(ord(ch) < 0x20 or 0x7F <= ord(ch) <= 0x9F for ch in value)
+        ):
             raise ValueError("file path must be a non-empty POSIX relative path")
         as_posix = PurePosixPath(value)
         if as_posix.is_absolute() or ".." in as_posix.parts:

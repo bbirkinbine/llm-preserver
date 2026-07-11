@@ -86,29 +86,17 @@ numbers):
   immutable) archive — LM Studio symlink tree, llama.cpp/vLLM direct
   paths, optional best-effort Ollama linker. Ships after the download
   specs.
+- `0003-selective-pull.md` — **shipped 2026-07-11 (PR #4)**: `pull`
+  downloads selected files from an exact hub repo id with checksums,
+  pinned commit, and a schema-v2 record; per-file provenance,
+  fault-domain errors, `LLM_PRESERVER_ARCHIVE`, `docs/cli.md`.
+- `0004-full-snapshot.md` — whole-repo-tree download for high-value
+  models (original safetensors masters; MLX rides the same path into
+  `mlx/`). Same `pull` verb, different *shape*; reuses 0003's
+  machinery.
 
 Planned features, spec pending (in rough priority order):
 
-- **Selective pull** — download selected files (+ README/LICENSE)
-  from a Hugging Face repo into the archive with checksums, a pinned
-  commit hash, and a record. Input is an exact hub repo id — the tool
-  never resolves fuzzy names ("qwen 27b"); deterministic metadata
-  lookups only, no LLM in the tool. The user picks the artifacts that
-  fit their hardware (e.g. one Q4_K_M file from a 20-quant GGUF repo,
-  never all of them); the tool assists by listing the repo's files
-  with sizes (one metadata API call) for interactive or
-  `--include`-pattern selection. Canonical grouping under the
-  original model's directory is inferred from the quant repo's
-  `base_model` model-card metadata and confirmed with the user, with
-  a `--model` override (see ADR 0001, "judgment call at download
-  time").
-- **Full snapshot** — full repo-tree download for high-value models
-  (original safetensors weights). MLX conversions ride this same
-  path — an `mlx-community/*` repo is just an HF repo landing in the
-  model's `mlx/` subdirectory. The two pull specs differ by download
-  *shape* (selected files vs. whole tree), not by weight format;
-  format is a record field and a subdirectory (ADR 0001), so new
-  formats need no new spec or code path.
 - **Verify** — audit the archive against records/manifests,
   BagIt-style: *complete* (every recorded file exists on disk —
   catches out-of-band deletion, since the tool itself never deletes)

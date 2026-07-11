@@ -239,13 +239,6 @@ def test_declined_grouping_writes_nothing(archive, fake_hub_factory):
     assert list((archive / "models").iterdir()) == []
 
 
-def test_no_base_model_and_no_override_hard_stops(archive, fake_hub_factory):
-    client = make_client(fake_hub_factory, base_model=None)
-    with pytest.raises(hub.PullUserError):
-        do_pull(archive, client, model=None)
-    assert list((archive / "models").iterdir()) == []
-
-
 def test_repull_updates_record_without_clobbering_artifacts(
     archive, fake_hub_factory, write_model, sample_record_dict
 ):

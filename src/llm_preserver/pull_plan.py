@@ -1,49 +1,38 @@
-"""Pull planning: grouping, existing-record load, idempotent skip matrix.
+"""Pull planning: the idempotent skip matrix.
 
-Split out of ``pull.py`` (300-line rule): this module decides *where* a
-pull lands and *what* it must download; ``pull.py`` stages, verifies,
-moves, and records. Every planned download carries its validated
-target path — the move phase consumes exactly what planning checked,
-so no later join can re-derive (and thereby weaken) the path.
+Split out of ``pull.py`` (300-line rule): this module decides *what* a
+pull must download (grouping lives in ``pull_grouping``); ``pull.py``
+stages, verifies, moves, and records. Every planned download carries
+its validated target path — the move phase consumes exactly what
+planning checked, so no later join can re-derive (and thereby weaken)
+the path.
 
-Doc files (README / model card / LICENSE / use-policy) target
+Selective pulls relocate doc files to
 ``<format>/docs/<namespace>--<repo>/<filename>`` so two source repos
-can never collide on ``README.md``; weights target
-``<format>/<filename>`` and are absolutely immutable. ``--refresh-docs``
-is the explicit choice for replacing changed upstream docs — it never
-applies to weight paths (spec 0003, review adjudications 2026-07-10).
+can never collide on ``README.md``; whole-tree snapshots keep every
+file at its in-tree path (``relocate_docs=False``, spec 0004). Weights
+are absolutely immutable in both shapes; ``--refresh-docs`` is the
+explicit choice for replacing changed upstream docs and never applies
+to weight paths (spec 0003, review adjudications 2026-07-10).
 """
 
 import hashlib
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
-
-from pydantic import ValidationError
 
 from llm_preserver.hub import (
     PullEnvError,
     PullIntegrityError,
-    PullUserError,
     RepoFile,
-    RepoInfo,
 )
-from llm_preserver.records import (
-    ID_COMPONENT_RE,
-    RECORD_FILENAME,
-    FileEntry,
-    ModelRecord,
-    load_record,
-)
+from llm_preserver.records import FileEntry, ModelRecord
 from llm_preserver.selection import checked_target_path, is_doc_file
 
 logger = logging.getLogger(__name__)
 
 _HASH_CHUNK_BYTES = 1 << 20
-
-ConfirmCallback = Callable[[str], bool]
-"""Callback that shows the user a prompt and returns their yes/no."""
 
 
 @dataclass(frozen=True)
@@ -86,56 +75,6 @@ def sha256_of(path: Path) -> str:
         while chunk := handle.read(_HASH_CHUNK_BYTES):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def resolve_model_id(
-    model: str | None, info: RepoInfo, repo_id: str, confirm: ConfirmCallback
-) -> tuple[str, str]:
-    """Resolve the canonical ``<creator>/<model>`` directory for a pull.
-
-    A ``--model`` override is used verbatim; otherwise the quant repo's
-    ``base_model`` metadata names the grouping, confirmed with the user
-    (ADR 0001: a judgment call at download time). No metadata and no
-    override is a hard stop, not a guess.
-
-    Raises:
-        PullUserError: On no metadata + no override, declined grouping,
-            or a malformed model id.
-    """
-    if model is None:
-        if info.base_model is None:
-            raise PullUserError(
-                f"{repo_id} declares no base_model and no --model override was given; "
-                "pass --model <creator>/<model> to choose the canonical model directory"
-            )
-        if not confirm(f"group {repo_id} under canonical model {info.base_model}?"):
-            raise PullUserError(
-                f"grouping under {info.base_model} declined: "
-                "re-run with --model <creator>/<model> to choose explicitly"
-            )
-        model = info.base_model
-    creator, sep, name = model.partition("/")
-    if not sep or not ID_COMPONENT_RE.fullmatch(creator) or not ID_COMPONENT_RE.fullmatch(name):
-        raise PullUserError(f"model id must look like <creator>/<model>, got {model!r}")
-    return creator, name
-
-
-def load_existing_record(model_dir: Path) -> ModelRecord | None:
-    """Load the model's record if one exists; unreadable is a hard stop.
-
-    Raises:
-        PullUserError: If a record file exists but cannot be read —
-            pulling on top of an unreadable record risks clobbering it.
-    """
-    if not (model_dir / RECORD_FILENAME).is_file():
-        return None
-    try:
-        return load_record(model_dir)
-    except (ValidationError, ValueError, OSError) as exc:
-        raise PullUserError(
-            f"existing record in {model_dir} cannot be read ({exc}); "
-            "fix or move it before pulling into this model"
-        ) from exc
 
 
 def _immutability_stop(target_rel: str, detail: str, hub_path: str) -> PullIntegrityError:
@@ -197,6 +136,7 @@ def plan_downloads(
     repo_id: str,
     commit: str,
     refresh_docs: bool = False,
+    relocate_docs: bool = True,
 ) -> PullPlan:
     """Classify each selected file: skip, download, adopt, or hard stop.
 
@@ -218,6 +158,9 @@ def plan_downloads(
         repo_id: The source repo — names the per-source doc directory.
         commit: The pull's resolved commit, pinned on adopted files.
         refresh_docs: Allow replacing changed *doc* files, never weights.
+        relocate_docs: Route docs to the per-source docs directory
+            (selective default); False keeps the tree verbatim
+            (whole-tree snapshots, spec 0004).
 
     Returns:
         The plan: downloads to perform and on-disk files adopted.
@@ -236,7 +179,7 @@ def plan_downloads(
     to_download: list[PlannedDownload] = []
     adopted: list[FileEntry] = []
     for repo_file in selected:
-        target_rel = checked_target_path(subdir, repo_id, repo_file.path)
+        target_rel = checked_target_path(subdir, repo_id, repo_file.path, relocate_docs)
         planned = PlannedDownload(repo_file=repo_file, target_rel=target_rel)
         target_abs = model_dir / target_rel
         entry = recorded.get(target_rel)

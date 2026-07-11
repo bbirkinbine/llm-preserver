@@ -198,6 +198,52 @@ def test_unrecorded_on_disk_file_with_different_content_still_refuses(archive, f
     assert target.read_bytes() == b"stray unrecorded bytes"
 
 
+def test_no_base_model_offers_repo_id_as_default_grouping(archive, fake_hub_factory):
+    # Spec 0004 (ratified 2026-07-11): the repo-id grouping default
+    # applies to pull GENERALLY — this amends 0003's no-metadata hard
+    # stop (replaces test_pull.py::test_no_base_model_and_no_override_
+    # hard_stops). No base_model → confirm the repo id itself.
+    prompts = []
+
+    def confirm(prompt):
+        prompts.append(prompt)
+        return True
+
+    client = make_client(fake_hub_factory, base_model=None)
+    do_pull(archive, client, model=None, confirm=confirm)
+
+    assert any(REPO_ID in prompt for prompt in prompts)
+    target = archive / "models" / "bartowski" / "tiny-chat-GGUF" / "gguf" / Q4_NAME
+    assert target.is_file()
+
+
+def test_declined_repo_id_default_grouping_names_model_flag(archive, fake_hub_factory):
+    prompts = []
+
+    def confirm(prompt):
+        prompts.append(prompt)
+        return False
+
+    client = make_client(fake_hub_factory, base_model=None)
+    with pytest.raises(hub.PullUserError) as excinfo:
+        do_pull(archive, client, model=None, confirm=confirm)
+
+    assert any(REPO_ID in prompt for prompt in prompts)  # the default was offered
+    assert "--model" in str(excinfo.value)
+    assert list((archive / "models").iterdir()) == []
+
+
+def test_present_but_malformed_base_model_still_hard_stops(archive, fake_hub_factory):
+    # Regression pin: the 0004 repo-id default applies only when
+    # base_model is ABSENT; present-but-unusable metadata stays a stop.
+    client = make_client(fake_hub_factory, base_model="not a valid id")
+
+    with pytest.raises(hub.PullUserError):
+        do_pull(archive, client, model=None, confirm=lambda prompt: True)
+
+    assert list((archive / "models").iterdir()) == []
+
+
 def test_hashless_size_change_is_hard_stop(archive, fake_hub_factory):
     # No hub hash to compare: a name match with a differing size is
     # ambiguous, and the archive is payload-immutable — refuse to guess.
