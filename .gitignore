@@ -39,6 +39,12 @@ htmlcov/
 .claude/settings.local.json
 CLAUDE.local.md
 
+# Model archive — if someone points llm-preserver at a directory inside
+# this repo (e.g. ./models/), the archive contents (multi-GB weights)
+# must never be committed. Root-anchored and directory-only so source
+# files like models.py or docs mentioning "model" are unaffected.
+/model*/
+
 # OS / editor cruft
 .DS_Store
 *.swp
