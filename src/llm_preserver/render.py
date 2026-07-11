@@ -38,8 +38,13 @@ def clean_text(text: str, *, single_line: bool = False) -> str:
 
 
 def _value(field: object) -> str:
-    """Render a nullable record field for display."""
-    return _UNKNOWN if field is None else clean_text(str(field))
+    """Render a nullable record field for display.
+
+    Always single-line: record scalars are hub-derived, and a value
+    carrying a newline (``"apache-2.0\\n## forged"``) must not inject
+    markdown structure into the generated document.
+    """
+    return _UNKNOWN if field is None else clean_text(str(field), single_line=True)
 
 
 def _cell(text: str) -> str:
@@ -66,12 +71,12 @@ def _artifact_section(artifact: ArtifactEntry) -> list[str]:
     ]
     if artifact.files:
         lines += [
-            "| File | SHA256 | Size (bytes) | Source |",
-            "| --- | --- | --- | --- |",
+            "| File | SHA256 | Size (bytes) | Source | Provenance |",
+            "| --- | --- | --- | --- | --- |",
         ]
         lines += [
             f"| {_cell(entry.path)} | {_value(entry.sha256)} "
-            f"| {_value(entry.size)} | {entry.source} |"
+            f"| {_value(entry.size)} | {entry.source} | {_value(entry.provenance)} |"
             for entry in artifact.files
         ]
         lines.append("")
@@ -106,7 +111,7 @@ def render_model_record(record: ModelRecord, *, file_header: bool = True) -> str
         f"# {clean_text(record.name)}",
         "",
         f"- Hub id: {clean_text(record.hub_id)}",
-        f"- Roles: {', '.join(record.roles)}",
+        f"- Roles: {', '.join(record.roles) or '(no role)'}",
         f"- Capabilities: {_value(capabilities)}",
         f"- Pipeline tag: {_value(record.pipeline_tag)}",
         f"- License: {_value(record.license)}",

@@ -63,6 +63,15 @@ def test_markdown_includes_artifact_details():
     assert FULL_COMMIT_HASH in markdown
 
 
+def test_multiline_hub_value_cannot_forge_markdown_structure():
+    # Record scalars are hub-derived; a value carrying newlines must
+    # not inject headings (or any line structure) into the rendering.
+    record = make_record().model_copy(update={"license": "apache-2.0\n\n## forged heading"})
+    markdown = render_model_record(record)
+    assert not any(line.startswith("## forged") for line in markdown.splitlines())
+    assert "forged heading" in markdown  # content survives, structure doesn't
+
+
 def test_control_characters_in_record_fields_are_stripped():
     # A hostile record must not be able to inject ANSI/OSC escapes
     # into terminal output — C0 (\x1b, \x07) and C1 (\x9d OSC, \x90

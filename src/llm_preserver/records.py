@@ -9,6 +9,8 @@ omitted, so schema evolution is add-a-field, never rename.
 
 import datetime
 import json
+import re
+from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
 from typing import Literal
 
@@ -16,7 +18,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 RECORD_FILENAME = "model-record.json"
 RENDERED_FILENAME = "MODEL-RECORD.md"
-RECORD_SCHEMA_VERSION = 1
+RECORD_SCHEMA_VERSION = 2
+"""Schema v2 (spec 0003): per-file provenance, ``hashed-locally``
+provenance state, and optional-empty ``roles``. v1 records still load —
+every v2 change is a widening (new optional field, new enum value,
+relaxed constraint)."""
 MAX_METADATA_BYTES = 1_000_000
 """Upper bound for record/marker files — far above any real record.
 
@@ -27,11 +33,20 @@ Metadata files are parsed even from archives the user did not author
 
 Role = Literal["chat", "coding", "embedding", "reranker", "multimodal"]
 ArtifactFormat = Literal["gguf", "hf-snapshot", "mlx"]
-Provenance = Literal["verified", "unverified"]
+Provenance = Literal["verified", "hashed-locally", "unverified"]
 FileSource = Literal["original", "generated"]
 
 _COMMIT_HASH_PATTERN = r"^[0-9a-fA-F]{40}$"
 _SHA256_PATTERN = r"^[0-9a-fA-F]{64}$"
+
+ID_COMPONENT_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+"""One segment of a ``<creator>/<model>`` id.
+
+Hub namespaces and repo names match this; anything else (``..``,
+absolute paths, extra slashes) could address files outside an
+archive's ``models/`` tree and is rejected before path construction.
+The single definition shared by the CLI (``show``) and pull grouping.
+"""
 
 
 class _PreservingModel(BaseModel):
@@ -57,12 +72,24 @@ class FileEntry(_PreservingModel):
         source: Whether the file is *original* (sacred, never
             regenerable: weights, tokenizer, license) or *generated*
             (regenerable from originals plus the record).
+        provenance: How this file's hash was established (schema v2):
+            ``verified`` when the local SHA256 matched a hub-declared
+            hash, ``hashed-locally`` when the hub published no hash to
+            check against, ``unverified`` for imports with no source
+            check. None means unknown (e.g. a v1 record).
+        revision: Full commit hash *this file* was downloaded (or
+            adopted) at. Distinct from the artifact-level ``revision``,
+            which tracks the most recent pull: per-file pins mean a
+            merged artifact never implies older files were resolved at
+            a newer commit. None when unknown (e.g. a v1 record).
     """
 
     path: str
     sha256: str | None = Field(default=None, pattern=_SHA256_PATTERN)
     size: int | None = Field(default=None, ge=0)
     source: FileSource
+    provenance: Provenance | None = None
+    revision: str | None = Field(default=None, pattern=_COMMIT_HASH_PATTERN)
 
     @field_validator("path")
     @classmethod
@@ -93,9 +120,12 @@ class ArtifactEntry(_PreservingModel):
             *actual* source, which for third-party quants differs from
             the model's own hub id. None for imports with no known
             source.
-        revision: Full commit hash the files were resolved from. A
-            branch name is a moving pointer, not provenance, and is
-            rejected. None when unknown (e.g. unverified cache import).
+        revision: Full commit hash of the *most recent pull* into this
+            artifact. A branch name is a moving pointer, not
+            provenance, and is rejected. Each file carries its own
+            ``FileEntry.revision`` pin — this field says when the
+            artifact was last touched, not what every file was checked
+            against. None when unknown (e.g. unverified cache import).
         download_date: Date the artifact entered the archive.
         runtime_tested: Runtime/hardware the artifact was smoke-tested
             on, or None if untested.
@@ -127,8 +157,11 @@ class ModelRecord(_PreservingModel):
             also names the model directory (ADR 0001) — even when every
             archived artifact came from third-party repos.
         roles: Curator-assigned purposes — why the model is on the
-            shelf. Nonempty; the first entry is the primary role and
-            drives ``status`` grouping. Distinct from ``capabilities``:
+            shelf. May be empty (schema v2): roles are judgment the
+            tool never fabricates, so a freshly pulled model can carry
+            none yet. The first entry is the primary role and drives
+            ``status`` grouping; role-less models group under a
+            visible "(no role)" bucket. Distinct from ``capabilities``:
             roles are human judgment, capabilities are machine facts.
         capabilities: Machine-derived feature flags (e.g. ``tools``,
             ``vision``, ``thinking``, ``embedding``), recorded from
@@ -148,7 +181,7 @@ class ModelRecord(_PreservingModel):
     record_schema_version: int = RECORD_SCHEMA_VERSION
     name: str
     hub_id: str
-    roles: list[Role] = Field(min_length=1)
+    roles: list[Role] = Field(default_factory=list)
     capabilities: list[str] | None = None
     pipeline_tag: str | None = None
     license: str | None = None
@@ -156,6 +189,26 @@ class ModelRecord(_PreservingModel):
     context_length: int | None = Field(default=None, ge=0)
     notes: str | None = None
     artifacts: list[ArtifactEntry] = Field(default_factory=list)
+
+
+def derive_artifact_provenance(files: Sequence[FileEntry]) -> Provenance:
+    """Derive an artifact's provenance from its per-file flags.
+
+    ``verified`` iff every file was independently verified against a
+    hub-declared hash; any other file state (hashed-locally, unknown)
+    demotes the artifact to ``hashed-locally``. This keeps ``verified``
+    strictly honest while a hash-less README cannot pretend the weights
+    were never checked — per-file flags carry the detail (spec 0003).
+
+    Args:
+        files: The artifact's file entries.
+
+    Returns:
+        The artifact-level provenance flag.
+    """
+    if files and all(entry.provenance == "verified" for entry in files):
+        return "verified"
+    return "hashed-locally"
 
 
 def save_record(record: ModelRecord, model_dir: Path) -> Path:

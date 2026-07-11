@@ -1,10 +1,10 @@
-"""Typer CLI: init, status, show.
+"""Archive-reading commands: init, status, show.
 
-All commands take the archive path explicitly (no global config, spec
-0001) and operate only inside it.
+These commands never touch the network; they read (or create) the
+archive on local disk only.
 """
 
-import re
+import os
 from pathlib import Path
 from typing import Annotated
 
@@ -18,7 +18,9 @@ from llm_preserver.archive import (
     inventory,
     require_archive,
 )
+from llm_preserver.cli.app import ArchivePath, app, fail
 from llm_preserver.records import (
+    ID_COMPONENT_RE,
     RECORD_FILENAME,
     RECORD_SCHEMA_VERSION,
     ModelRecord,
@@ -27,28 +29,6 @@ from llm_preserver.records import (
 )
 from llm_preserver.render import clean_text, render_model_record
 
-_ID_COMPONENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
-"""One segment of a ``<creator>/<model>`` id.
-
-Hub namespaces and repo names match this; anything else (``..``,
-absolute paths, extra slashes) could address files outside the
-archive's ``models/`` tree and is rejected before path construction.
-"""
-
-app = typer.Typer(
-    name="llm-preserver",
-    help="Archive local LLMs for long-term offline use.",
-    no_args_is_help=True,
-)
-
-ArchivePath = Annotated[Path, typer.Argument(help="Archive root directory.")]
-
-
-def _fail(message: str) -> typer.Exit:
-    """Print an error to stderr and return a nonzero Exit to raise."""
-    typer.echo(f"error: {clean_text(message, single_line=True)}", err=True)
-    return typer.Exit(code=1)
-
 
 @app.command()
 def init(path: ArchivePath) -> None:
@@ -56,8 +36,25 @@ def init(path: ArchivePath) -> None:
     try:
         init_archive(path)
     except ArchiveError as exc:
-        raise _fail(str(exc)) from exc
+        raise fail(str(exc)) from exc
     typer.echo(f"archive ready at {path}")
+    if not os.environ.get("LLM_PRESERVER_ARCHIVE"):
+        # POSIX `export` syntax on purpose — no shell detection; fish
+        # etc. users translate. Absolute path so the hint survives cd.
+        typer.echo(
+            "hint: set LLM_PRESERVER_ARCHIVE to omit the archive path on"
+            " future commands, e.g.\n"
+            f'  export LLM_PRESERVER_ARCHIVE="{path.resolve()}"'
+        )
+
+
+def _roleless_cell(summary: ModelSummary) -> str:
+    """Roles cell for a model with none: a visible "(no role)" bucket.
+
+    Only for models with a readable record (spec 0003) — a missing or
+    unreadable record means the roles are unknown, not absent.
+    """
+    return "-" if summary.missing_record or summary.record_error else "(no role)"
 
 
 def _completeness(summary: ModelSummary) -> str:
@@ -83,7 +80,7 @@ def status(path: ArchivePath) -> None:
         require_archive(path)
         summaries = inventory(path)
     except ArchiveError as exc:
-        raise _fail(str(exc)) from exc
+        raise fail(str(exc)) from exc
     if not summaries:
         typer.echo("archive is empty (no models)")
         return
@@ -91,7 +88,7 @@ def status(path: ArchivePath) -> None:
         (
             clean_text(summary.model_id, single_line=True),
             ",".join(summary.formats) or "-",
-            ",".join(summary.roles) or "-",
+            ",".join(summary.roles) or _roleless_cell(summary),
             str(summary.total_size),
             _completeness(summary),
         )
@@ -115,13 +112,13 @@ def _validation_summary(exc: ValidationError) -> str:
 def _load_model_record(path: Path, model_id: str) -> ModelRecord:
     """Load one model's record for `show`, mapping failures to exits."""
     creator, sep, model = model_id.partition("/")
-    if not sep or not _ID_COMPONENT.fullmatch(creator) or not _ID_COMPONENT.fullmatch(model):
-        raise _fail(f"model id must look like <creator>/<model>, got {model_id!r}")
+    if not sep or not ID_COMPONENT_RE.fullmatch(creator) or not ID_COMPONENT_RE.fullmatch(model):
+        raise fail(f"model id must look like <creator>/<model>, got {model_id!r}")
     model_dir = path / "models" / creator / model
     if not model_dir.is_dir():
-        raise _fail(f"no model directory for {model_id} in {path}")
+        raise fail(f"no model directory for {model_id} in {path}")
     if not (model_dir / RECORD_FILENAME).is_file():
-        raise _fail(f"{model_id} has no {RECORD_FILENAME}")
+        raise fail(f"{model_id} has no {RECORD_FILENAME}")
     try:
         return load_record(model_dir)
     except ValidationError as exc:
@@ -131,18 +128,18 @@ def _load_model_record(path: Path, model_id: str) -> ModelRecord:
             if claimed is not None and claimed > RECORD_SCHEMA_VERSION
             else ""
         )
-        raise _fail(f"record for {model_id} is invalid{hint}: {_validation_summary(exc)}") from exc
+        raise fail(f"record for {model_id} is invalid{hint}: {_validation_summary(exc)}") from exc
     except (ValueError, OSError) as exc:
-        raise _fail(f"record for {model_id} is unreadable: {exc}") from exc
+        raise fail(f"record for {model_id} is unreadable: {exc}") from exc
 
 
 @app.command()
-def show(path: ArchivePath, model_id: Annotated[str, typer.Argument()]) -> None:
+def show(model_id: Annotated[str, typer.Argument()], path: ArchivePath) -> None:
     """Print everything archived for one model (<creator>/<model>)."""
     try:
         require_archive(path)
     except ArchiveError as exc:
-        raise _fail(str(exc)) from exc
+        raise fail(str(exc)) from exc
     record = _load_model_record(path, model_id)
     if record.record_schema_version > RECORD_SCHEMA_VERSION:
         typer.echo(

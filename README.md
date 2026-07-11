@@ -26,8 +26,16 @@ it once" becomes "I can still run this in two years."
 git clone https://github.com/bbirkinbine/llm-preserver.git
 cd llm-preserver
 uv sync                # install deps into a managed venv
-uv run llm-preserver   # CLI entry point (not implemented yet — see docs/specs/)
+
+uv run llm-preserver init ~/models   # create an archive
+uv run llm-preserver pull unsloth/Qwen3-4B-GGUF ~/models --include '*Q4_K_M*'
+uv run llm-preserver status ~/models # inventory: what's on the shelf
+uv run llm-preserver show Qwen/Qwen3-4B ~/models   # one model's record
 ```
+
+Full command reference — selection patterns, model grouping, roles,
+re-pull/idempotency behavior, exit codes, gated-repo auth — in
+[`docs/cli.md`](docs/cli.md).
 
 ## Repository layout
 

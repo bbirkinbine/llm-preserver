@@ -167,6 +167,12 @@ standing consent to resolve `[ask-user]` findings too.
   `.claude/rules/git-workflow.md`). Write the minimum code to make the
   tests pass. External-authority values follow
   `.claude/rules/python-code.md` → "External-reference provenance".
+- **Usage docs ride the feature.** `docs/cli.md` is the user-facing
+  command reference; any branch that adds or changes a CLI command,
+  flag, or exit code updates it (and the README quick start when the
+  surface changes) in the same change. `--help` stays the generated
+  source of truth for syntax; `docs/cli.md` explains behavior
+  (idempotency, auth, fault domains) that `--help` can't.
 - **Verify.** Run `/review-check` (ruff lint, ruff format, mypy,
   pytest), then `/review` on the diff; `/review-adversarial` as well on
   meaningful features when installed. Add `/security` and/or
@@ -323,39 +329,42 @@ parallelize only with partitioned file ownership.
   data; never delete, move, or "clean up" archive contents. Tests use
   tmp dirs, never a real archive.
 
-## Open work / current state (updated 2026-07-09, end of session 2)
+## Open work / current state (updated 2026-07-11, end of session 3)
 
-- No implementation code yet — planning phase. Repo is **private** on
-  GitHub, public later (pre-flip scrub checklist applies then). CI
-  green.
-- **ADR 0001 (`docs/adr/0001-model-storage.md`) is `accepted`**
-  (Brian, 2026-07-09). The gate on spec 0001 is lifted.
-- **Spec 0001 is implemented on branch
-  `spec-0001-archive-init-and-manifest`** (uncommitted): plan
-  approved, tests-first (65 passing), `/review-check` green, two
-  rounds of `/review` + `/review-adversarial` + `/security` resolved —
-  including four review-time decisions by Brian (read-path
-  marker/schema gate, `save_record` writes JSON + markdown together,
-  `extra="allow"` on records, per-record `record_schema_version`),
-  recorded in spec 0001. Next: Brian reviews the diff → commit → PR.
-- Specs: `0000-product.md` (evergreen; session-2 revisions: neutral
-  problem framing, explicit-selection non-goal, roadmap bullets
-  renamed to download *shape* — selective pull / full snapshot — with
-  design notes on quant selection UX, `base_model` grouping, and
-  cache-import provenance), `0001` archive init + manifest (draft,
-  ready to plan; record now includes a per-artifact provenance flag
-  and a per-model detail view), `0002` runtime views (draft, blocked
-  on 0001 and the download specs). Unnumbered features live in the
-  0000 roadmap — numbers are consumed only at spec creation.
-- Design stance recorded in the 0000 roadmap: the tool takes exact
-  hub repo ids only — no fuzzy name resolution, no LLM inside the
-  tool; deterministic product, so no `/eval` / `evaluator`.
-- The temporary docs-only-to-main exception was removed from
-  `.claude/rules/git-workflow.md` when spec 0001's Implement phase
-  started (sunset clause fired) — every change now uses the full
-  branch flow.
+- **Spec 0001 is merged** (PR #3, squash, 2026-07-10): archive init,
+  model records, status/show CLI. ADR 0001 `accepted`.
+- **Spec 0003 (selective pull) is implemented on branch
+  `spec-0003-selective-pull`** (uncommitted, awaiting Brian's commit
+  word): tests-first, 154 passing, gate green; one round of
+  `/review` + `/review-adversarial` + `/security` fully resolved
+  (17 auto-fixes incl. a path-escape security fix) plus five
+  review adjudications by Brian recorded in the spec (doc files per
+  source repo + `--refresh-docs`, reconcile-by-hash,
+  per-file revision, non-null merge rule, v1 merge key). Schema is
+  v2. Live-verified against the real hub (Qwen3-0.6B-GGUF pull,
+  idempotent re-pull, manifest verified with system shasum).
+  Late additions, all tested: `LLM_PRESERVER_ARCHIVE` env fallback
+  (archive path is the *last* positional — Click binds
+  left-to-right; found live by Brian), init's export hint, cli.py →
+  `cli/` package split, `docs/cli.md` usage doc (new standing rule:
+  usage docs ride the feature).
+- **Next after 0003 merges: spec 0004 — full snapshot** (Brian,
+  2026-07-11; archival of original safetensors is the primary goal).
+  Design inputs from session 3: original repo is its own canonical
+  model (no `base_model` hoop — consider defaulting the grouping to
+  the repo id with confirmation), reuses 0003's machinery, sharded
+  weights, disk-space preflight, `hf-snapshot/` slot already in the
+  schema.
+- Specs: `0000` evergreen; `0002` runtime views (draft, blocked on
+  the download specs); `0003` selective pull (implemented, pending
+  commit/PR). Roadmap additions in session 3: HF cache as a third
+  cache-import source; managed remove/retire in Later.
+- Design stance: exact hub repo ids only — no fuzzy name resolution,
+  no LLM inside the tool; deterministic product, so no `/eval`.
 - Public-facing framing rule: avoid "against future access
   restrictions" / threat-prediction phrasing in repo docs — neutral
   durability/offline language only (Brian, 2026-07-09).
-- Dependabot PRs #1 (setup-uv v7) and #2 (actions/checkout v7) are
-  merged (2026-07-09); no PRs open.
+- Brian's context: archive will likely live on the Asustor NAS
+  (`/volume1/models`, per the vault's AI Security Lab note); his
+  hardware is an M2 Max 96GB + RTX 3090 24GB — the Q8-on-Mac /
+  Q4-on-3090 split shapes the docs' examples.

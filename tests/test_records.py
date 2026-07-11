@@ -75,9 +75,13 @@ def test_rejects_invalid_role():
         make_model_record(roles=["poetry"])
 
 
-def test_rejects_empty_roles():
-    with pytest.raises(ValidationError):
-        make_model_record(roles=[])
+def test_roles_may_be_empty():
+    # Schema v2 (spec 0003): roles is curator judgment the tool never
+    # fabricates, so a freshly pulled model may carry no role yet.
+    # (Replaces the v1 test_rejects_empty_roles — spec 0003 amends the
+    # required-nonempty rule.)
+    record = make_model_record(roles=[])
+    assert record.roles == []
 
 
 def test_accepts_multiple_roles():
@@ -156,9 +160,11 @@ def test_save_writes_generated_markdown_alongside_json(tmp_path):
 
 
 def test_record_json_carries_schema_version(tmp_path):
+    # Spec 0003 bumps the record schema to v2 (per-file provenance,
+    # "hashed-locally", optional-empty roles).
     save_record(make_model_record(), tmp_path)
     data = json.loads((tmp_path / "model-record.json").read_text())
-    assert data["record_schema_version"] == 1
+    assert data["record_schema_version"] == 2
 
 
 def test_unknown_fields_survive_round_trip(tmp_path):
@@ -174,6 +180,10 @@ def test_unknown_fields_survive_round_trip(tmp_path):
 
     rewritten = json.loads((tmp_path / "model-record.json").read_text())
     assert rewritten["future_field"] == "keep me"
+
+
+# Schema-v2 (spec 0003) tests — per-file provenance, v1 compatibility,
+# concurrent-write safety — live in test_records_v2.py (300-line rule).
 
 
 def test_null_fields_are_written_to_json_not_omitted(tmp_path):

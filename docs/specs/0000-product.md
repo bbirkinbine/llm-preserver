@@ -21,7 +21,6 @@ config, chat template, license/model card, source URL, checksums, and
 a runtime that can load it. `ollama pull` / LM Studio caches are
 runtime-locked working copies, not archives.
 
-
 ## Success metrics
 
 - Every archived model can be smoke-tested offline ("Return exactly:
@@ -110,17 +109,27 @@ Planned features, spec pending (in rough priority order):
   *shape* (selected files vs. whole tree), not by weight format;
   format is a record field and a subdirectory (ADR 0001), so new
   formats need no new spec or code path.
-- **Verify** — re-hash the archive against records/manifests, report
-  drift/bitrot (BagIt-style complete vs. valid).
+- **Verify** — audit the archive against records/manifests,
+  BagIt-style: *complete* (every recorded file exists on disk —
+  catches out-of-band deletion, since the tool itself never deletes)
+  and *valid* (every file re-hashes to its recorded SHA256 — catches
+  bitrot and tampering). Read-only report; repair actions are the
+  user's call. Pull deliberately does only a per-file existence
+  check on its own skip path (spec 0003) — whole-archive drift
+  detection lives here.
 - **Smoke test** — offline smoke test integration (ollama /
   llama-cli), recorded per model.
-- **Cache import** — import/inventory existing Ollama and LM Studio
-  caches. Two halves: *inventory* (read-only scan — what the caches
-  hold, what isn't archived yet) and *import* (copy into the
-  archive). Caches are partial sources: LM Studio keeps real GGUF
-  filenames and the HF repo id in its path but no license/model
-  card/commit pin; Ollama stores digest-named blobs whose library
-  models are Ollama-quantized with no hub provenance at all. Import
+- **Cache import** — import/inventory existing Ollama, LM Studio,
+  and Hugging Face caches. Two halves: *inventory* (read-only scan —
+  what the caches hold, what isn't archived yet) and *import* (copy
+  into the archive). Caches are partial sources: the HF cache
+  (`hf download` / `huggingface_hub`) is the richest — its layout
+  preserves repo id and commit hash, though hashes were never
+  verified by us and license/docs are only present if the user
+  pulled them; LM Studio keeps real GGUF filenames and the HF repo
+  id in its path but no license/model card/commit pin; Ollama stores
+  digest-named blobs whose library models are Ollama-quantized with
+  no hub provenance at all. Import
   therefore computes what it can locally (SHA256s, GGUF-embedded
   metadata), backfills model-level docs from the hub when the source
   repo is resolvable, and records the rest as explicit nulls with a
@@ -128,5 +137,17 @@ Planned features, spec pending (in rough priority order):
   import). A fresh pull is always preferred when the model is still
   downloadable; import is the rescue path for models that no longer
   are.
-- Later: runtime shelf helpers (archiving installers/builds), backup
-  tiering report.
+- Later: quant-selection UX sugar — the interactive listing should
+  annotate recognized quant labels (deterministic lookup table:
+  bits/weight, quality tier, "common default" marker) and/or a
+  `--quant Q4_K_M` flag as sugar over `--include`; first live use
+  produced a Q4_0-instead-of-Q4_K_M mispull (2026-07-11) because the
+  labels alone are indistinguishable to a non-expert. Same feature:
+  a deterministic companion-file warning — when `pipeline_tag` is a
+  vision task and the repo ships `mmproj-*` files but the selection
+  includes none, say so (advisory only; never auto-grab — projector
+  precision is still the user's pick). Runtime shelf
+  helpers (archiving installers/builds), backup tiering report,
+  managed remove/retire (the only sanctioned way to
+  delete from the archive — updates record and directory together,
+  with confirmation; hand-deletion is what verify exists to catch).
