@@ -59,21 +59,26 @@ def _doc_subdir_for(repo_id: str) -> str:
     return f"{namespace}--{repo_name}"
 
 
-def checked_target_path(subdir: str, repo_id: str, hub_path: str) -> str:
+def checked_target_path(
+    subdir: str, repo_id: str, hub_path: str, relocate_docs: bool = True
+) -> str:
     """Build the model-dir-relative target path, rejecting unsafe names.
 
-    Docs land under ``<format>/docs/<namespace>--<repo>/`` — collision
-    free across source repos; everything else lands at
-    ``<format>/<file>``. The hub path is validated *alone* (an absolute
-    ``/etc/evil`` must fail on its own — concatenation would mask the
-    leading slash) and then as the full target, both through the record
-    schema's path validator so the write path and the record enforce
-    the same rules.
+    With ``relocate_docs`` (the selective-pull default, spec 0003),
+    docs land under ``<format>/docs/<namespace>--<repo>/`` — collision
+    free across source repos. A whole-tree snapshot passes False and
+    keeps every file at its in-tree path (tree fidelity, spec 0004);
+    each snapshot owns its format subdirectory, so in-tree docs cannot
+    collide. Everything else lands at ``<format>/<file>``. The hub path
+    is validated *alone* (an absolute ``/etc/evil`` must fail on its
+    own — concatenation would mask the leading slash) and then as the
+    full target, both through the record schema's path validator so
+    the write path and the record enforce the same rules in both modes.
 
     Raises:
         PullUserError: If the hub filename cannot be archived safely.
     """
-    if is_doc_file(hub_path):
+    if relocate_docs and is_doc_file(hub_path):
         target_rel = f"{subdir}/docs/{_doc_subdir_for(repo_id)}/{hub_path}"
     else:
         target_rel = f"{subdir}/{hub_path}"
@@ -104,6 +109,61 @@ def select_files(files: Sequence[RepoFile], include: Sequence[str]) -> list[Repo
         if is_doc_file(repo_file.path)
         or any(fnmatch.fnmatch(repo_file.path, pattern) for pattern in include)
     ]
+
+
+def require_nondoc_selection(
+    selected: Sequence[RepoFile],
+    available: Sequence[RepoFile],
+    repo_id: str,
+    include: Sequence[str],
+) -> None:
+    """Reject selections whose only content is the always-riding docs.
+
+    Docs ride along with every pull, so a zero-match ``--include`` (a
+    typo, a case-sensitive fnmatch miss, blank interactive input) still
+    yields a non-empty selection — archiving only a README and stamping
+    a wrong-format artifact. That is a user-input fault, not a pull.
+
+    Args:
+        selected: The files the selection picked.
+        available: All files in the repo, for the error message.
+        repo_id: The repo being pulled, for the error message.
+        include: The patterns that produced the selection.
+
+    Raises:
+        PullUserError: If no non-documentation file was selected.
+    """
+    if any(not is_doc_file(repo_file.path) for repo_file in selected):
+        return
+    listing = ", ".join(
+        repo_file.path for repo_file in available if not is_doc_file(repo_file.path)
+    )
+    raise PullUserError(
+        f"no files in {repo_id} match include patterns {list(include)!r} "
+        "(docs always ride along but cannot be the whole pull); adjust --include — "
+        f"available files: {listing or 'none'}"
+    )
+
+
+def require_case_distinct_targets(selected: Sequence[RepoFile]) -> None:
+    """Reject selections that collide on case-insensitive filesystems.
+
+    Two paths differing only by case (``README.md`` / ``readme.md``)
+    map to one file on APFS/NTFS: the second move would consume the
+    first's inode and leave a half-moved, unrecorded file.
+
+    Raises:
+        PullUserError: Naming both colliding paths.
+    """
+    seen: dict[str, str] = {}
+    for repo_file in selected:
+        folded = repo_file.path.lower()
+        if folded in seen and seen[folded] != repo_file.path:
+            raise PullUserError(
+                f"selection contains paths that collide on case-insensitive filesystems: "
+                f"{seen[folded]!r} and {repo_file.path!r}; narrow --include to one of them"
+            )
+        seen[folded] = repo_file.path
 
 
 def selects_all_weights(files: Sequence[RepoFile], selected: Sequence[RepoFile]) -> bool:

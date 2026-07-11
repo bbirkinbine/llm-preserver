@@ -129,6 +129,15 @@ def test_rejects_control_characters_in_file_path():
         make_file_entry(path="a.gguf |\n| forged-row.gguf")
 
 
+def test_rejects_c1_control_characters_in_file_path():
+    # C1 range (0x80-0x9f) carries OSC/DCS introducers just like C0;
+    # a filename must not smuggle them into rendered output.
+    with pytest.raises(ValidationError):
+        make_file_entry(path="a\x85b.gguf")
+    with pytest.raises(ValidationError):
+        make_file_entry(path="a\x9db.gguf")
+
+
 def test_round_trip_through_model_dir_is_lossless(tmp_path):
     record = make_model_record(
         license=None,

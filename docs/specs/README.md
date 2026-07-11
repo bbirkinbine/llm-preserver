@@ -33,6 +33,7 @@ line; the source of truth is the spec file, this is a rendered cache. Run
 - [0001 — Archive init and model-record manifest](0001-archive-init-and-manifest.md)  (draft)
 - [0002 — Runtime views](0002-runtime-views.md)  (draft) — depends on 0001 (blocked)
 - [0003 — Selective Pull](0003-selective-pull.md)  (draft)
+- [0004 — Full Snapshot](0004-full-snapshot.md)  (draft)
 <!-- specs-status:end -->
 
 ## Numbering

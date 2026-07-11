@@ -23,22 +23,27 @@ from llm_preserver.hub import (
     PullError,
     PullIntegrityError,
     PullUserError,
-    RepoFile,
     RepoInfo,
 )
-from llm_preserver.pull_plan import (
+from llm_preserver.pull_grouping import (
     ConfirmCallback,
-    PlannedDownload,
     load_existing_record,
-    plan_downloads,
+    require_single_snapshot_source,
     resolve_model_id,
-    sha256_of,
+)
+from llm_preserver.pull_plan import PlannedDownload, plan_downloads, sha256_of
+from llm_preserver.pull_preflight import (
+    already_staged_bytes,
+    human_size,
+    require_disk_space,
+    total_selected_size,
 )
 from llm_preserver.pull_record import update_record, write_manifest
 from llm_preserver.records import FileEntry, Role, save_record
 from llm_preserver.selection import (
     infer_format_subdir,
-    is_doc_file,
+    require_case_distinct_targets,
+    require_nondoc_selection,
     select_files,
     selects_all_weights,
 )
@@ -57,44 +62,21 @@ def _validated_roles(roles: Sequence[str]) -> list[Role]:
     return cast(list[Role], list(roles))
 
 
-def _require_nondoc_selection(
-    selected: Sequence[RepoFile], info: RepoInfo, repo_id: str, include: Sequence[str]
-) -> None:
-    """Reject selections whose only content is the always-riding docs.
+def _snapshot_confirmation(to_download: int, selected: int, needed_bytes: int, repo_id: str) -> str:
+    """Compose the --all confirmation: what will actually download.
 
-    Docs ride along with every pull, so a zero-match ``--include`` (a
-    typo, a case-sensitive fnmatch miss, blank interactive input) still
-    yields a non-empty selection — archiving only a README and stamping
-    a wrong-format artifact. That is a user-input fault, not a pull.
+    Shows the remaining work (spec 0004 adjudications) — download count
+    out of the tree total, net bytes still needed, and the
+    already-covered count when any file is skipped. Never filenames:
+    listing 500 shards is noise.
     """
-    if any(not is_doc_file(repo_file.path) for repo_file in selected):
-        return
-    available = ", ".join(
-        repo_file.path for repo_file in info.files if not is_doc_file(repo_file.path)
+    plural = "file" if selected == 1 else "files"
+    covered = selected - to_download
+    already = f"; {covered} already archived" if covered else ""
+    return (
+        f"pull {to_download} of {selected} {plural} "
+        f"({human_size(needed_bytes)} to download{already}) from {repo_id}?"
     )
-    raise PullUserError(
-        f"no files in {repo_id} match include patterns {list(include)!r} "
-        "(docs always ride along but cannot be the whole pull); adjust --include — "
-        f"available files: {available or 'none'}"
-    )
-
-
-def _require_case_distinct_targets(selected: Sequence[RepoFile]) -> None:
-    """Reject selections that collide on case-insensitive filesystems.
-
-    Two paths differing only by case (``README.md`` / ``readme.md``)
-    map to one file on APFS/NTFS: the second move would consume the
-    first's inode and leave a half-moved, unrecorded file.
-    """
-    seen: dict[str, str] = {}
-    for repo_file in selected:
-        folded = repo_file.path.lower()
-        if folded in seen and seen[folded] != repo_file.path:
-            raise PullUserError(
-                f"selection contains paths that collide on case-insensitive filesystems: "
-                f"{seen[folded]!r} and {repo_file.path!r}; narrow --include to one of them"
-            )
-        seen[folded] = repo_file.path
 
 
 def _discard_corrupt_staged_file(staging_dir: Path, local: Path, hub_path: str) -> None:
@@ -162,9 +144,12 @@ def _download_and_archive(
     """Stage, hash, verify, and move every planned download."""
     staging_dir.mkdir(parents=True, exist_ok=True)
     staged: list[tuple[PlannedDownload, Path, str]] = []
-    for planned in to_download:
+    for index, planned in enumerate(to_download, start=1):
         hub_path = planned.repo_file.path
-        logger.debug("downloading %s at %s into %s", hub_path, info.commit, staging_dir)
+        # "n of m" on every pull (spec 0004, ratified 2026-07-11): a
+        # non-TTY run still shows which shard is in flight.
+        logger.info("downloading %d of %d: %s", index, len(to_download), hub_path)
+        logger.debug("revision %s, staging %s", info.commit, staging_dir)
         local = client.download(
             repo_id=repo_id, filename=hub_path, revision=info.commit, dest_dir=staging_dir
         )
@@ -190,6 +175,7 @@ def pull_model(
     roles: Sequence[str] = (),
     repo_info: RepoInfo | None = None,
     refresh_docs: bool = False,
+    select_all: bool = False,
     confirm: ConfirmCallback,
 ) -> Path:
     """Pull selected files from a hub repo into the archive.
@@ -199,6 +185,7 @@ def pull_model(
         repo_id: Exact hub repo id (``namespace/repo``) — never fuzzy.
         client: The hub seam (real ``HubClient`` or a test double).
         include: fnmatch patterns selecting files; docs always ride.
+            Ignored under ``select_all`` (the CLI rejects the combination).
         model: ``<creator>/<model>`` override for the canonical model
             directory; None infers it from ``base_model`` metadata.
         roles: Roles to assign at pull time (curator judgment; may be
@@ -209,7 +196,12 @@ def pull_model(
         refresh_docs: Replace changed upstream *doc* files (unlock,
             replace, re-record, re-lock). Weight paths never honor
             this flag — a changed weight remains a hard stop.
-        confirm: Yes/no prompt callback for grouping and every-weight
+        select_all: Full snapshot (spec 0004): the selection is the
+            repo's whole tree, kept at its in-tree paths; one
+            file-count + total-size confirmation replaces the per-file
+            prompts, and a disk-space preflight refuses before any
+            bytes download.
+        confirm: Yes/no prompt callback for grouping and size/weight
             confirmations.
 
     Returns:
@@ -223,17 +215,28 @@ def pull_model(
     require_archive(archive_root)
     role_list = _validated_roles(roles)
     info = repo_info if repo_info is not None else client.repo_info(repo_id)
-    creator, name = resolve_model_id(model, info, repo_id, confirm)
-    selected = select_files(info.files, include)
-    _require_nondoc_selection(selected, info, repo_id, include)
-    _require_case_distinct_targets(selected)
-    if selects_all_weights(info.files, selected) and not confirm(
-        f"selection covers every weight file in {repo_id}; pull them all?"
-    ):
-        raise PullUserError("every-weight pull declined: narrow --include and re-run")
+    if not info.files:
+        raise PullUserError(f"{repo_id} has no files at revision {info.commit}: nothing to archive")
+    # Grouping direction is a property of the repo's whole tree, not of
+    # which files were selected (spec 0004 adjudications).
+    tree_format = infer_format_subdir([f.path for f in info.files], repo_id)
+    creator, name = resolve_model_id(model, info, repo_id, confirm, tree_format)
+    if select_all:
+        selected = list(info.files)
+    else:
+        selected = select_files(info.files, include)
+        require_nondoc_selection(selected, info.files, repo_id, include)
+        if selects_all_weights(info.files, selected) and not confirm(
+            f"selection covers every weight file in {repo_id}; pull them all?"
+        ):
+            raise PullUserError("every-weight pull declined: narrow --include and re-run")
+    require_case_distinct_targets(selected)
     subdir = infer_format_subdir([f.path for f in selected], repo_id)
     model_dir = archive_root / "models" / creator / name
     record = load_existing_record(model_dir)
+    if select_all:
+        # One source repo per format subdirectory (spec 0004).
+        require_single_snapshot_source(record, subdir, repo_id)
     plan = plan_downloads(
         selected,
         subdir,
@@ -242,11 +245,26 @@ def pull_model(
         repo_id=repo_id,
         commit=info.commit,
         refresh_docs=refresh_docs,
+        relocate_docs=not select_all,  # snapshots keep the tree verbatim
     )
+    staging_dir = archive_root / STAGING_DIRNAME / creator / name
+    needed = 0
+    if select_all:
+        # Plan → preflight → confirm (spec 0004 adjudications): refuse
+        # an over-budget pull before asking anyone to confirm it. Only
+        # the files this run must fetch count, and bytes already in
+        # staging (interrupted-pull leftovers the client reuses) are
+        # not charged twice.
+        needed, _ = total_selected_size([planned.repo_file for planned in plan.to_download])
+        needed = max(needed - already_staged_bytes(staging_dir, plan.to_download), 0)
+        require_disk_space(archive_root, needed)
     if not plan.to_download and not plan.adopted:
         logger.info("nothing to pull: every selected file is already archived in %s", model_dir)
         return model_dir
-    staging_dir = archive_root / STAGING_DIRNAME / creator / name
+    if select_all and not confirm(
+        _snapshot_confirmation(len(plan.to_download), len(selected), needed, repo_id)
+    ):
+        raise PullUserError("full-snapshot pull declined: nothing downloaded")
     try:
         new_entries: list[FileEntry] = list(plan.adopted)
         if plan.to_download:

@@ -10,10 +10,15 @@ Pins the spec-0003 plan seam:
 - ``infer_format_subdir(paths, source_repo_id)`` — ADR 0001 format
   subdirectory: ``.gguf`` → gguf; ``mlx-community/*`` source repo →
   mlx; else hf-snapshot.
+- ``checked_target_path(..., relocate_docs=True)`` — spec 0004: False
+  keeps docs at their in-tree paths (snapshot tree fidelity); path
+  safety applies either way.
 """
 
+import pytest
+
 import llm_preserver.selection as selection
-from llm_preserver.hub import RepoFile
+from llm_preserver.hub import PullUserError, RepoFile
 
 SHA = "0" * 64
 
@@ -97,3 +102,30 @@ def test_other_repo_defaults_to_hf_snapshot_subdir():
 def test_gguf_extension_wins_over_mlx_repo_namespace():
     # Rule order from the plan: .gguf first, then mlx-community/*.
     assert selection.infer_format_subdir(["tiny.gguf"], "mlx-community/tiny-gguf") == "gguf"
+
+
+def test_checked_target_path_relocates_docs_by_default():
+    # Regression pin (spec 0003 behavior, unchanged default).
+    target = selection.checked_target_path("gguf", "bartowski/tiny-chat-GGUF", "README.md")
+    assert target == "gguf/docs/bartowski--tiny-chat-GGUF/README.md"
+
+
+def test_relocate_docs_false_keeps_docs_at_their_in_tree_path():
+    target = selection.checked_target_path(
+        "hf-snapshot", "acme/tiny-orig", "README.md", relocate_docs=False
+    )
+    assert target == "hf-snapshot/README.md"
+
+
+def test_relocate_docs_false_preserves_nested_doc_paths_verbatim():
+    target = selection.checked_target_path(
+        "hf-snapshot", "acme/tiny-orig", "docs/LICENSE", relocate_docs=False
+    )
+    assert target == "hf-snapshot/docs/LICENSE"
+
+
+def test_relocate_docs_false_still_rejects_unsafe_hub_paths():
+    with pytest.raises(PullUserError):
+        selection.checked_target_path(
+            "hf-snapshot", "acme/tiny-orig", "../escape.md", relocate_docs=False
+        )
