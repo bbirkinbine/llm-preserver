@@ -5,7 +5,7 @@ What's next, in rough order. Feature detail lives in
 and the numbered specs; this file is the short-term working list.
 Check items off as they ship; update when priorities shift.
 
-## Next spec (0006) — pick one
+## Next spec (0007) — pick one
 
 - [ ] **Verify** (recommended next): audit the archive against
   records/manifests, BagIt-style — *complete* (every recorded file
@@ -24,12 +24,9 @@ Check items off as they ship; update when priorities shift.
   (a 0000 success metric: the archive is *tested*, not just
   downloaded). Pairs with runtime views — views make models
   loadable in place, smoke test proves they load.
-- [ ] **Guided discovery workflow** (product call first): from a
-  model name, list the hub model tree's quant children
-  (deterministic `base_model` metadata, no LLM), pick the exact repo,
-  then the normal interactive selection. Revisits the
-  exact-repo-ids-only stance — needs a 0000 adjudication before a
-  spec.
+- [ ] **Interactive listing TUI** (promoted from smaller items —
+  see its entry below for scope): after 0006's live testing, the
+  numbered-pick UX is workable but the scroll pain is real.
 
 ## Shipped
 
