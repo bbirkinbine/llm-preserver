@@ -337,11 +337,30 @@ parallelize only with partitioned file ownership.
   data; never delete, move, or "clean up" archive contents. Tests use
   tmp dirs, never a real archive.
 
-## Open work / current state (updated 2026-07-13, end of session 7)
+## Open work / current state (updated 2026-07-13, end of session 8)
 
-- **Specs 0001, 0003, 0004, 0005, 0006 are all merged.** The loop is
-  live-verified end to end: discover (name → tree → pull) or pull by
-  exact id → advisories/--plan → status/show.
+- **Specs 0001, 0003, 0004, 0005, 0006, 0007 are all merged.** The
+  loop is live-verified end to end: discover (name → tree → pull) or
+  pull by exact id → advisories/--plan → status/show, with a printed
+  resume command surviving any interrupted transfer.
+- **Session 8 (2026-07-13, small-tier, PR #9): spec 0007
+  resume-command hint.** Interactively shaped pulls print the exact
+  direct `pull` command (absolute path, quoted patterns, confirmed
+  grouping as `--model`) after the confirms; Ctrl-C during any
+  transfer reprints it as the final line, exit 130. Two live-use
+  adjudications: (1) the Ctrl-C print is unconditional — a resumed
+  (user-typed) pull's interrupt printing nothing read as a miss;
+  (2) shell-history injection is impossible (child processes cannot
+  touch the parent shell's history), so the interrupt-time final-line
+  print is the deliberate substitute. Security review added
+  `looks_like_repo_id` validation at hint composition (quoting cannot
+  defuse an argv token — a hub id like `--yes` must not become a
+  flag on paste) and sanitize-before-quote. Queued in TODO: extend
+  `clean_text` to bidi/zero-width chars (Low/theoretical).
+  `pull_exec.py` → `pull_exec/` package (plumbing/prompts/flow).
+  README documents `uv tool install --editable .` — the hint assumes
+  the CLI is on PATH, and `uv run` only works from the project dir.
+  436 tests.
 - **Session 7 (2026-07-13, trivial-tier, PR #8):** `-h` now works as
   a help alias on every command (`help_option_names` on the root
   Typer app propagates to subcommands); the Typer-provided
@@ -375,7 +394,7 @@ parallelize only with partitioned file ownership.
   staged/unstaged state (ruff autofix conflicts on stash restore) —
   commit with `git stash push --keep-index --include-untracked`,
   which also proves each commit green in isolation.
-- **Next spec (0007): pick from TODO.md** — verify (still
+- **Next spec (0008): pick from TODO.md** — verify (still
   recommended: real content is accumulating, bitrot detection earns
   its keep), runtime views (0002, unblocked), managed remove/retire,
   smoke test, or the interactive-listing TUI (three independent
@@ -383,7 +402,7 @@ parallelize only with partitioned file ownership.
   goal-definitive archiving (capability report in `status`),
   file-kind dictionary, live-hub canary (0000 roadmap).
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
-  (draft, unblocked); 0005/0006 shipped.
+  (draft, unblocked); 0005/0006/0007 shipped.
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to
