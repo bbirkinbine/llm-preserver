@@ -8,6 +8,7 @@ tests live in test_cli_pull.py.
 import contextlib
 import json
 
+import click
 from typer.testing import CliRunner
 
 from llm_preserver.cli import app
@@ -278,7 +279,7 @@ def test_h_short_flag_shows_help_at_top_level():
     result = runner.invoke(app, ["-h"])
 
     assert result.exit_code == 0
-    assert "Usage: llm-preserver" in combined_output(result)
+    assert "Usage: llm-preserver" in click.unstyle(combined_output(result))
 
 
 def test_h_short_flag_works_on_every_subcommand():
@@ -286,4 +287,4 @@ def test_h_short_flag_works_on_every_subcommand():
         result = runner.invoke(app, [command, "-h"])
 
         assert result.exit_code == 0, f"{command} -h failed: {combined_output(result)}"
-        assert f"llm-preserver {command}" in combined_output(result)
+        assert f"llm-preserver {command}" in click.unstyle(combined_output(result))
