@@ -3,8 +3,9 @@
 Archives local LLMs for long-term offline use: pulls model weights
 (GGUF quants, full Hugging Face snapshots) into a runtime-independent
 local archive along with tokenizer/config files, licenses, model
-cards, SHA256 checksums, and offline smoke tests — so "I downloaded
-it once" becomes "I can still run this in two years."
+cards, and SHA256 checksums — so "I downloaded it once" becomes
+"I can still run this in two years." (Archive verification and
+offline smoke tests are on the roadmap.)
 
 > ## Status
 >
@@ -17,8 +18,9 @@ it once" becomes "I can still run this in two years."
 - Python 3.12+ and [`uv`](https://github.com/astral-sh/uv)
 - Disk space for the model archive (models run tens to hundreds of GB;
   point the archive at a big disk or NAS)
-- Optional: an inference runtime to smoke-test archived models
-  (`ollama` and/or a `llama.cpp` build)
+- Optional: an inference runtime to run archived models
+  (`ollama` and/or a `llama.cpp` build; smoke-test integration is a
+  planned feature)
 
 ## Quick start
 
@@ -37,9 +39,9 @@ Add `--plan` to any `pull` to see exactly what it would download —
 files, sizes, disk check, companion advisories — without moving a
 byte; `--whole-repo` archives a repo's entire tree (the
 full-precision masters). Only know the model's *name*?
-`llm-preserver discover 'qwen3 coder'` searches the hub, walks the
-model tree (originals, quants, fine-tunes), and lands in the same
-pull flow — no browser needed. Full command reference — selection patterns,
+`llm-preserver discover 'qwen3 coder' ~/models` searches the hub,
+walks the model tree (originals, quants, fine-tunes), and lands in
+the same pull flow — no browser needed. Full command reference — selection patterns,
 model grouping, roles, re-pull/idempotency behavior, exit codes,
 gated-repo auth — in [`docs/cli.md`](docs/cli.md).
 
