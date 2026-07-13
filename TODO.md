@@ -47,13 +47,40 @@ Check items off as they ship; update when priorities shift.
 
 ## Smaller items (from live use)
 
-- [ ] Quant-label selection UX: annotate recognized quant labels in
-  the interactive listing (deterministic table) and/or `--quant`
-  sugar. In the 0000 roadmap "Later" list. Live-use additions
-  (2026-07-12): the listing prints raw byte counts where the plan
-  report prints human sizes — use `human_size` there too; empty
-  pattern input at the prompt errors (exit 2) instead of
-  re-prompting.
+- [ ] Goal-definitive archiving (live-use 2026-07-13: "my goal was
+  fine-tuning and I couldn't tell if I'd archived enough"). Two
+  halves, both deterministic from existing data: (a) post-pull
+  master *offer* in discover — when a quant pull completes and the
+  full-precision master isn't archived, ask "also archive
+  <master> (<size>) — needed for future fine-tuning? [y/N]" (human
+  pick, never auto-add; turns the advisory into a decision point);
+  (b) capability report in `status` derived from each record —
+  runnable / re-quantizable (bf16+imatrix present) / fine-tunable
+  (safetensors master present), with the exact missing pull named.
+  The `docs/cli.md` "Archiving for a goal" table is the interim
+  reference.
+- [ ] Interactive listing TUI (future spec candidate; live-use
+  2026-07-13): discovery's accumulate-paging re-renders the whole
+  fetched list on every `m` (80+ lines after two pages), and pull's
+  file listing has the same long-scroll problem. A terminal UI —
+  scrollable viewport sized to the terminal, arrow-key
+  highlight-and-enter selection, optional type-to-filter — replaces
+  numbered picks as presentation only; the deterministic
+  facts/no-ranking invariants and the pipe-testable pick model both
+  need a story (TUI harness for tests, plain fallback for dumb
+  terminals). New dependency (`textual` or `prompt_toolkit`) goes
+  through the dependency-hygiene skill first.
+- [ ] File-kind dictionary in the listing (grew from the quant-label
+  UX item; 0000 roadmap "Later"): annotate recognized quant labels
+  (deterministic provenance-pinned table: bits/weight, quality tier,
+  "common default" marker), tag bf16/f16 GGUFs as full-precision
+  re-quantization sources, and/or `--quant` sugar. Companion-kind
+  annotations (imatrix/mmproj/mtp, from the advisory rules table)
+  shipped in the listing 2026-07-13 — this item is the rest of the
+  dictionary. Live-use additions (2026-07-12): the listing prints
+  raw byte counts where the plan report prints human sizes — use
+  `human_size` there too; empty pattern input at the prompt errors
+  (exit 2) instead of re-prompting.
 - [ ] Example-run cookbook (`docs/examples.md`): one worked pull per
   repo archetype — GGUF quant repo, original safetensors
   (`--whole-repo`),

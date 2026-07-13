@@ -233,6 +233,11 @@ flow of [0004](0004-full-snapshot.md).
   - All hub-derived text (report lines, advisory messages) passes
     through the `clean_text` sanitizer before reaching a terminal;
     the disk verdict and refusal derive from one disk read.
+- Amended by 0006 (2026-07-13): the declared `base_model` is
+  rename-resolved with one light metadata call before grouping and
+  advisories use it, so the master advisory and grouping proposal
+  never recommend a stale pre-rename id — see spec 0006's review
+  adjudications for the rationale and fallback behavior.
 
 ## External references
 
