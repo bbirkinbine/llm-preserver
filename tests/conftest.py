@@ -31,8 +31,11 @@ class FakeHubClient:
     """In-memory double for the spec-0003 hub seam; zero network.
 
     Implements the same surface as ``llm_preserver.hub.HubClient``:
-    ``repo_info(repo_id)`` and ``download(repo_id, filename, revision,
-    dest_dir)``. Serves bytes from memory, records every download call
+    ``repo_info(repo_id)``, ``download(repo_id, filename, revision,
+    dest_dir)``, and the spec-0006 discovery methods
+    (``search_models``, ``list_children``, ``model_summary``, serving
+    canned ``ModelSummary`` data through a real ``HubPager``). Serves
+    bytes from memory, records every download call
     in ``download_calls``, and leaves the same ``.cache/huggingface/``
     bookkeeping the real client writes into a local dir, so tests can
     assert it never reaches the archive. Per the seam contract, the
@@ -56,6 +59,12 @@ class FakeHubClient:
         repo_info_error=None,
         download_error=None,
         fail_after_downloads=0,
+        search_results=None,
+        children=None,
+        summaries=None,
+        search_error=None,
+        list_children_error=None,
+        model_summary_error=None,
     ):
         self.files = list(files)
         self.repo_id = repo_id
@@ -66,11 +75,25 @@ class FakeHubClient:
         self.repo_info_error = repo_info_error
         self.download_error = download_error
         self.fail_after_downloads = fail_after_downloads
+        # Discovery (spec 0006): canned ModelSummary rows, verbatim
+        # order; children keyed by (repo_id, relation); summaries keyed
+        # by repo_id. Per-method injected errors raise at call time.
+        self.search_results = list(search_results) if search_results is not None else []
+        self.children = dict(children) if children is not None else {}
+        self.summaries = dict(summaries) if summaries is not None else {}
+        self.search_error = search_error
+        self.list_children_error = list_children_error
+        self.model_summary_error = model_summary_error
         self.download_calls: list[str] = []
+        self.repo_info_calls: list[str] = []
+        self.search_calls: list[str] = []
+        self.list_children_calls: list[tuple[str, str]] = []
+        self.model_summary_calls: list[str] = []
 
     def repo_info(self, repo_id: str):
         from llm_preserver.hub import RepoFile, RepoInfo
 
+        self.repo_info_calls.append(repo_id)
         if self.repo_info_error is not None:
             raise self.repo_info_error
         return RepoInfo(
@@ -106,6 +129,37 @@ class FakeHubClient:
         bookkeeping.parent.mkdir(parents=True, exist_ok=True)
         bookkeeping.write_text("etag bookkeeping\n", encoding="utf-8")
         return target
+
+    def search_models(self, query: str):
+        """Serve the canned search results verbatim — never re-sorted."""
+        from llm_preserver.hub_discovery import HubPager
+
+        self.search_calls.append(query)
+        if self.search_error is not None:
+            raise self.search_error
+        return HubPager(iter(self.search_results))
+
+    def list_children(self, repo_id: str, relation: str):
+        """Serve canned children for exactly ``(repo_id, relation)``."""
+        from llm_preserver.hub_discovery import HubPager
+
+        self.list_children_calls.append((repo_id, relation))
+        if self.list_children_error is not None:
+            raise self.list_children_error
+        return HubPager(iter(self.children.get((repo_id, relation), [])))
+
+    def model_summary(self, repo_id: str):
+        """Serve the canned summary; an unknown repo is the 404 user fault."""
+        from llm_preserver.hub import PullUserError
+
+        self.model_summary_calls.append(repo_id)
+        if self.model_summary_error is not None:
+            raise self.model_summary_error
+        if repo_id not in self.summaries:
+            raise PullUserError(
+                f"repo, revision, or file not found (or access not granted): {repo_id}"
+            )
+        return self.summaries[repo_id]
 
 
 @pytest.fixture(autouse=True)
