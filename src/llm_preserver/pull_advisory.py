@@ -214,9 +214,14 @@ def _cross_repo_advisories(
         advisories.append(Advisory(kind="adapter base model", message=message))
     if base_model and base_model != repo_id and base_model not in archived_repos:
         if _REPO_ID_RE.match(base_model):
+            # Careful wording (live confusion 2026-07-13): the parent
+            # is needed to fine-tune *the parent*, not this repo — an
+            # ancestry chain is per-level curation, never a dependency
+            # chain to the root.
             message = (
-                f"this repo derives from {base_model}; the full-precision master "
-                f"(needed for later fine-tuning) is not in the archive — "
+                f"this repo derives from {base_model}, which is not in the archive — "
+                f"archiving it preserves that model's full-precision weights (the "
+                f"fine-tunable form of {base_model}, not required for this pull) — "
                 f"run: llm-preserver pull {base_model} --whole-repo"
             )
         else:

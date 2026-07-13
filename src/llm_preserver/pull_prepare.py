@@ -13,11 +13,12 @@ import logging
 import shutil
 import tempfile
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from llm_preserver.archive import require_archive
 from llm_preserver.hub import HubClientProtocol, PullError, PullUserError, RepoFile, RepoInfo
+from llm_preserver.hub_discovery import looks_like_repo_id
 from llm_preserver.pull_advisory import Advisory, advisories_for, archived_hub_repos
 from llm_preserver.pull_grouping import (
     ConfirmCallback,
@@ -123,6 +124,33 @@ def _fetch_adapter_base(
     return (base if isinstance(base, str) and base else None), True
 
 
+def _resolved_base_model(client: HubClientProtocol, base_model: str | None) -> str | None:
+    """Resolve a declared base model to its current hub id.
+
+    Card metadata goes stale when a parent repo is renamed (the hub
+    redirects the old name); recording or proposing a dead name in a
+    preservation tool ages badly. One light metadata call resolves it
+    (adjudicated 2026-07-13 — the second sanctioned exception to the
+    one-metadata-call rule, same rationale as the adapter-config
+    fetch: accuracy beats purity, disclosed out loud). Any failure
+    falls back to the declared name: base resolution is advisory
+    input and must never abort a pull.
+    """
+    if not base_model or not looks_like_repo_id(base_model):
+        return base_model
+    try:
+        summary = client.model_summary(base_model)
+    except PullError:
+        return base_model
+    if summary.repo_id != base_model:
+        logger.info(
+            "declared base model %s was renamed on the hub — using its current id %s",
+            base_model,
+            summary.repo_id,
+        )
+    return summary.repo_id
+
+
 def prepare_pull(
     archive_root: Path,
     repo_id: str,
@@ -167,6 +195,10 @@ def prepare_pull(
     info = repo_info if repo_info is not None else client.repo_info(repo_id)
     if not info.files:
         raise PullUserError(f"{repo_id} has no files at revision {info.commit}: nothing to archive")
+    # Rename-resolve the declared base once, so grouping proposals,
+    # the mismatch warning, and the master advisory all speak the
+    # hub's current name (adjudicated 2026-07-13).
+    info = replace(info, base_model=_resolved_base_model(client, info.base_model))
     # Grouping direction is a property of the repo's whole tree, not of
     # which files were selected (spec 0004 adjudications).
     tree_format = infer_format_subdir([f.path for f in info.files], repo_id)

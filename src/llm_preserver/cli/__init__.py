@@ -1,4 +1,4 @@
-"""Typer CLI package: init, status, show, pull.
+"""Typer CLI package: init, status, show, pull, discover.
 
 Split from a single ``cli.py`` at the 300-line rule. The public API is
 unchanged: ``app`` (the Typer application, also the console-script
@@ -9,7 +9,7 @@ time).
 
 from llm_preserver.hub import HubClient
 
-from . import archive_cmds, pull_cmd  # noqa: F401  (importing registers the commands)
+from . import archive_cmds, discover_cmd, pull_cmd  # noqa: F401  (importing registers the commands)
 from .app import app
 
 __all__ = ["HubClient", "app"]

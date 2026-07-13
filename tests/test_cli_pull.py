@@ -253,3 +253,33 @@ def test_grouping_prompt_sanitizes_hostile_base_model(tmp_path, monkeypatch, fak
     assert "\x1b" not in output
     assert "\x07" not in output
     assert "evil" in output  # content survives, escapes do not
+
+
+def test_interactive_listing_annotates_recognized_companion_kinds(
+    tmp_path, monkeypatch, fake_hub_factory
+):
+    # The advisory rules table doubles as a file-kind legend where the
+    # human reads filenames (live-use ask 2026-07-13: "what is imatrix
+    # again?"). Plain weights get no note.
+    archive = init_archive_dir(tmp_path)
+    files = [
+        ("tiny-chat-Q4_K_M.gguf", b"q4 weight bytes", True),
+        ("tiny-chat.imatrix", b"imatrix bytes", False),
+        ("mmproj-F16.gguf", b"projector bytes", True),
+    ]
+    install_fake_hub(monkeypatch, fake_hub_factory(files=files))
+
+    result = runner.invoke(
+        app,
+        ["pull", "bartowski/tiny-chat-GGUF", str(archive), "--model", "acme/tiny-chat"],
+        input="\n",
+    )
+
+    output = combined_output(result)
+    listing = [line for line in output.splitlines() if "  " in line]
+    imatrix_line = next(line for line in listing if "tiny-chat.imatrix" in line)
+    assert "quantization calibration data" in imatrix_line
+    mmproj_line = next(line for line in listing if "mmproj-F16.gguf" in line)
+    assert "vision projector" in mmproj_line
+    q4_line = next(line for line in listing if "Q4_K_M" in line)
+    assert "—" not in q4_line.split("gguf", 1)[1] if "gguf" in q4_line else True
