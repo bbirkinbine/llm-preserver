@@ -28,14 +28,19 @@ Check items off as they ship; update when priorities shift.
 ## Shipped
 
 - 0001 archive init + records, 0003 selective pull, 0004 full
-  snapshot (`pull --all`). The core loop works end to end and is
-  live-verified: init → pull quants and masters → status/show.
+  snapshot (`pull --whole-repo`, shipped as `--all` and renamed by
+  0005). The core loop works end to end and is live-verified: init →
+  pull quants and masters → status/show.
 
 ## Smaller items (from live use)
 
 - [ ] Quant-label selection UX: annotate recognized quant labels in
   the interactive listing (deterministic table) and/or `--quant`
-  sugar. In the 0000 roadmap "Later" list.
+  sugar. In the 0000 roadmap "Later" list. Live-use additions
+  (2026-07-12): the listing prints raw byte counts where the plan
+  report prints human sizes — use `human_size` there too; empty
+  pattern input at the prompt errors (exit 2) instead of
+  re-prompting.
 - [ ] Companion-artifact advisory (specced: 0005, with `pull --plan`):
   a curated rules table (data, not
   inference — no LLM in the tool) mapping repo-tree filename patterns
@@ -67,7 +72,8 @@ Check items off as they ship; update when priorities shift.
   size confirm + preflight on selective pulls, base-model master
   advisory.
 - [ ] Example-run cookbook (`docs/examples.md`): one worked pull per
-  repo archetype — GGUF quant repo, original safetensors (`--all`),
+  repo archetype — GGUF quant repo, original safetensors
+  (`--whole-repo`),
   multimodal (weights + `mmproj`), sharded weights, adapter/LoRA,
   embedding/reranker, gated repo (`hf auth login`). Each example
   shows the non-interactive form (`--include` + `--model` + `--yes`)

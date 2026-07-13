@@ -1,6 +1,6 @@
 # 0005 — Companion Advisory And Pull Plan
 
-**Status:** draft
+**Status:** shipping
 **Last updated:** 2026-07-12
 
 ## Goal
@@ -22,12 +22,17 @@ Initial rules table:
 
 | Pattern (in repo tree) | Artifact kind | Advisory trigger |
 | --- | --- | --- |
-| `mmproj-*` | vision projector | tree ships it, selection excludes it |
-| `mtp-*` | speculative-decoding head | tree ships it, selection excludes it |
+| `*mmproj*` | vision projector | tree ships it, selection excludes it |
+| `*mtp-*` | speculative-decoding head | tree ships it, selection excludes it |
 | `*imatrix*` | quantization calibration data | tree ships it, selection excludes it |
+
+Substring patterns on purpose (review adjudication 2026-07-12):
+llama.cpp's own downloader classifies companions by substring, and
+real repos ship mid-name forms like `<model>-mmproj-f16.gguf`.
 | shard suffixes (`*-00001-of-00005*`-style) | sharded weight set | selection includes some but not all shards of a set |
 | `adapter_config.json` → `base_model_name_or_path` | adapter's base model (cross-repo) | named base model absent from the archive |
 | hub `base_model` metadata on a quant repo | full-precision master (cross-repo) | quant-repo pull, master repo absent from the archive |
+| hub `base_model` vs explicit `--model` | grouping mismatch | `--model` given, repo declares a `base_model`, and `--model` matches neither it nor the repo id |
 
 The `base_model` row answers "can I still fine-tune this later?": a
 quant-repo pull whose declared original is not archived prints the
@@ -36,13 +41,42 @@ tool already reads `base_model` for canonical-directory grouping
 (spec 0003) — same value, second use. Repos that declare no
 `base_model` get no advisory; the tool never guesses names.
 
+The grouping-mismatch row (added 2026-07-12 after a live footgun
+during manual verification): an explicit `--model` stays verbatim
+curator judgment (spec 0003 — never a prompt, never a block), but
+when the repo's declared `base_model` disagrees with it, the tool
+has proof in hand that the target directory is probably a
+copy-paste slip — a Qwen3-0.6B quant was archived into the
+Qwen3.6-35B-A3B model directory with no warning, two lines after an
+advisory that named the true base. Silent when `--model` equals the
+declared base (the correct quant grouping) or the repo id itself
+(the sanctioned derived-model/self grouping); anything else prints
+an advisory naming both values. Because this row flags likely
+*human error* rather than a missing companion, it carries severity
+`warning` (Brian, 2026-07-12): it sorts first in every advisory
+list, renders with a distinct `warning:` prefix (highlighted
+yellow/bold on a terminal in `--plan` output), and logs at WARNING
+level on real pulls, so it can't hide in the advisory wall.
+Warning-not-block is load-bearing: legitimate mismatches exist —
+verified live 2026-07-12 with a quant repo whose declared
+`base_model` is a stale pre-rename id (the hub 307-redirects it to
+the model's new home), so a curator passing the *current* canonical
+id triggers the warning while being right. Also sanctioned: spec
+0004's different-`--model`-home rule for second snapshots, curator
+naming schemes, and merge repos with multiple bases. Never promote
+this warning to a prompt or a refusal.
+
 **`pull --plan` (dry run):** resolve the repo tree with the one
 metadata call, apply the selection and the grouping rules, then print
 what *would* happen — selected files with sizes and the total, the
 canonical model directory, doc files that ride along,
 already-archived skips, the disk-preflight verdict, and any
 companion-artifact advisories — and exit without downloading or
-writing anything. Turns scripted pulls from "hope the pattern is
+writing anything. One adjudicated exception (2026-07-12): when the
+tree ships `adapter_config.json`, the plan fetches that small config
+file to read its base-model pointer — accuracy beats purity, and the
+plan output states the fetch explicitly. The archive itself is never
+touched. Turns scripted pulls from "hope the pattern is
 right" into "verify, then run." `--plan` composes with all three
 selection modes: `--include`, `--whole-repo`, and the interactive
 listing (list → type patterns → see the plan → exit), so the listing
@@ -92,14 +126,15 @@ flow of [0004](0004-full-snapshot.md).
 - `--plan` asks no *confirmation* prompts (the interactive selection
   prompt is input, not confirmation). Plan-affecting questions a real
   pull would ask (grouping confirmation, "selection covers every
-  weight?") are resolved to their default and printed as
-  `would ask: ...` lines in the output (adjudicated 2026-07-12).
+  weight?") are resolved to the proceed-enabling answer — the one
+  that lets planning continue — and printed as `would ask: ...`
+  lines in the output (adjudicated 2026-07-12).
 - Exit codes under `--plan`: 0 when the pull would proceed; the
   existing environment-fault exit code when the disk preflight would
   refuse — so a script can gate on it: plan exits 0, then run for
   real (adjudicated 2026-07-12).
 - A pull (real or `--plan`) of a selection that excludes an
-  `mmproj-*` file present in the tree prints an advisory naming the
+  `*mmproj*` file present in the tree prints an advisory naming the
   file, its kind, and the exact `--include` addition — reproducing
   the gemma incident in a test and showing it caught.
 - Pulling an adapter repo whose `adapter_config.json` names a base
@@ -110,6 +145,11 @@ flow of [0004](0004-full-snapshot.md).
   `pull <base-repo> --whole-repo` command) when that repo is absent
   from the archive, and prints none when it is archived or when the
   repo declares no `base_model`.
+- A pull (real or `--plan`) with an explicit `--model` that matches
+  neither the repo's declared `base_model` nor the repo id prints a
+  grouping-mismatch advisory naming both values; `--model` equal to
+  the declared base or to the repo id prints none, and the pull
+  itself proceeds unchanged either way (advisory only).
 - `pull --whole-repo` behaves exactly as `--all` did (spec 0004
   semantics unchanged); `--all` is gone from `--help`, `docs/cli.md`,
   and the README, and passing it fails as an unknown option.
@@ -176,8 +216,58 @@ flow of [0004](0004-full-snapshot.md).
   companion already archived from an earlier pull produces no
   advisory. An advisory means "you are missing this", never "this
   exists".
+- Review adjudications (2026-07-12, one round of /review +
+  /review-adversarial + /security fully resolved):
+  - Runnable `run: llm-preserver pull ...` remedies are emitted only
+    for well-formed hub repo ids; hostile metadata gets a non-command
+    advisory. `--include` remedies are shell-quoted.
+  - The plan report itself discloses the adapter-config fetch and its
+    closing line reads "no weights downloaded" when one happened.
+  - Adopt-only pulls (reconcile-by-hash, zero bytes moving) skip the
+    size confirmation.
+  - Accepted trade-off: archive-awareness matches companion basenames
+    across all of a model's artifacts, so two grouped quant repos
+    shipping same-named projectors share one advisory silence —
+    selecting the second copy would hit the reconcile hard stop
+    anyway.
+  - All hub-derived text (report lines, advisory messages) passes
+    through the `clean_text` sanitizer before reaching a terminal;
+    the disk verdict and refusal derive from one disk read.
 
 ## External references
 
-- (to be populated at implement time, per provenance rule — one row
-  per rules-table entry: source URL, retrieval date, license)
+All fetched in-session 2026-07-12. Primary sources are MIT
+(ggml-org/llama.cpp) or Apache-2.0 (huggingface/peft, transformers,
+hub-docs) — no copyleft sources.
+
+- **`mmproj-*` = multimodal/vision projector.** llama.cpp
+  `convert_hf_to_gguf.py` (`--mmproj`: "An 'mmproj-' prefix will be
+  added to the output file name"), `docs/multimodal.md`, and
+  `common/download.cpp` (`gguf_filename_is_model` excludes `mmproj`).
+  <https://github.com/ggml-org/llama.cpp> — MIT.
+- **`mtp-*` = multi-token-prediction (speculative-decoding) head.**
+  llama.cpp `common/download.cpp` hard-codes the prefix
+  (`find_best_sibling(files, model, "mtp-")`; `--mtp` flag help).
+  Recent convention (PR #22673, merged 2026-05-16); the head may
+  also be embedded in the main GGUF — the sidecar is optional.
+  <https://github.com/ggml-org/llama.cpp> — MIT.
+- **`*imatrix*` = importance-matrix quantization calibration data.**
+  llama.cpp `tools/imatrix/README.md` ("computes an importance
+  matrix ... used during quantization"); `download.cpp` treats
+  `imatrix`-named GGUFs as non-model companions.
+  <https://github.com/ggml-org/llama.cpp> — MIT.
+- **Shard naming.** HF transformers big-model sharding
+  (`model-00001-of-00006.safetensors`,
+  <https://huggingface.co/docs/transformers/main/en/big_models> —
+  Apache-2.0) and llama.cpp `src/llama.cpp`
+  `SPLIT_PATH_FORMAT = "%s-%05d-of-%05d.gguf"` — MIT.
+- **`adapter_config.json` → `base_model_name_or_path`.** peft
+  `src/peft/config.py` (field help "The name of the base model to
+  use"; `save_pretrained` writes `adapter_config.json`).
+  <https://github.com/huggingface/peft> — Apache-2.0.
+- **Hub `base_model` model-card metadata.** HF Hub docs, "Specifying
+  a base model": fine-tunes/adapters/quantizations declare
+  `base_model` in card metadata; machine-readable via
+  `huggingface_hub`.
+  <https://huggingface.co/docs/hub/model-cards> — Apache-2.0
+  (hub-docs).
