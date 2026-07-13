@@ -16,6 +16,7 @@ app = typer.Typer(
     name="llm-preserver",
     help="Archive local LLMs for long-term offline use.",
     no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 ArchivePath = Annotated[

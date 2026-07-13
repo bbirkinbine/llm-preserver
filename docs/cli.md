@@ -6,9 +6,15 @@ changes a command updates it in the same change. `--help` on any
 command is generated from the same source and is always current:
 
 ```bash
-uv run llm-preserver --help
-uv run llm-preserver pull --help
+uv run llm-preserver --help        # -h works everywhere too
+uv run llm-preserver pull -h
 ```
+
+Two top-level options come from the CLI framework (Typer) rather than
+a feature spec: `--install-completion` wires shell tab-completion for
+`llm-preserver` into the current shell (command and flag names complete
+with TAB afterwards), and `--show-completion` prints that completion
+script instead of installing it, for manual setup.
 
 Commands documented here: `init`, `pull` (selective, `--whole-repo`
 full snapshot, and `--plan` dry run), `discover`, `status`, `show`.
