@@ -180,7 +180,17 @@ standing consent to resolve `[ask-user]` findings too.
   TODO.md or older docs — updating impacted ones and creating new
   docs when the feature warrants (e.g. a new user-facing surface
   with behavior `--help` can't carry). A grep for the old flag/term
-  across `docs/`, `README.md`, and `TODO.md` is the minimum check.
+  across `docs/`, `README.md`, and `TODO.md` is the minimum check —
+  and grep for the spec number too: creating spec NNNN consumes the
+  number at creation, not at merge, so the next-spec pointers
+  (TODO.md's "Next spec" header, the CLAUDE.md open-work line)
+  update on the same branch (Brian, 2026-07-13).
+- **Close-out rides the feature PR** (Brian, 2026-07-13). The
+  status-to-shipped flip, the TODO.md Shipped entry, and the
+  CLAUDE.md session notes go on the feature branch as its last
+  commit once the PR is open (the PR number exists from that point;
+  "shipped" in a merged PR is self-fulfilling). Do not spawn a
+  separate close-out chore PR just for these.
 - **Verify.** Run `/review-check` (ruff lint, ruff format, mypy,
   pytest), then `/review` on the diff; `/review-adversarial` as well on
   meaningful features when installed. Add `/security` and/or
