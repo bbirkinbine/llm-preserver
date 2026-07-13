@@ -15,6 +15,7 @@ Everything drives the FakeHubClient from conftest; no network.
 
 import contextlib
 
+import click
 import pytest
 from typer.testing import CliRunner
 
@@ -135,7 +136,10 @@ def test_cli_all_flag_is_rejected_as_unknown_option(tmp_path, monkeypatch):
     )
 
     assert result.exit_code == 2
-    output = combined_output(result)
+    # Typer renders usage errors through rich, which styles the option
+    # name with ANSI codes on color-capable terminals (CI included) —
+    # unstyle before matching or the substring splits apart.
+    output = click.unstyle(combined_output(result))
     assert "no such option" in output.lower()
     assert "--all" in output
 
