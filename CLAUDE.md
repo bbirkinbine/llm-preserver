@@ -337,45 +337,50 @@ parallelize only with partitioned file ownership.
   data; never delete, move, or "clean up" archive contents. Tests use
   tmp dirs, never a real archive.
 
-## Open work / current state (updated 2026-07-13, end of session 5)
+## Open work / current state (updated 2026-07-13, end of session 6)
 
-- **Specs 0001, 0003, 0004, 0005 are all merged.** The core loop is
-  live-verified end to end: init → selective pull → whole-repo
-  snapshot → status/show, now with advisories and `--plan`.
-- **Spec 0005 shipped 2026-07-13** (rebase-merge — squash had been
-  the norm, but the three crafted commits were kept deliberately:
-  split / feature / docs): archive-aware companion advisories
-  (`*mmproj*`, `*mtp-*`, `*imatrix*`, shard sets, adapter base,
-  full-precision master), the `--model`-vs-`base_model` grouping
-  mismatch as a highlighted first-sorted *warning* (live footgun:
-  a copy-pasted `--model` filed a 0.6B quant under a 35B model dir),
-  `pull --plan` dry run (primary customer: scripted pulls; verify
-  then run; exit 0/3 gateable), `--all` → `--whole-repo` (no alias),
-  and size confirmation + disk preflight on every pull mode.
-  294 tests; one full review round (reviewer + adversarial +
-  security) with all adjudications recorded in the spec.
-- Hard-won facts from 0005 worth not relearning: rich treats GitHub
-  Actions as color-capable, so CLI usage-error asserts must
-  `click.unstyle()` output first (a locally-green test failed only
-  in CI); MTP heads are often embedded in the main GGUF rather than
-  shipped as `mtp-*` sidecars, so advisory silence there is correct;
-  warning-not-block on the grouping mismatch is load-bearing — a
-  live repo's declared `base_model` was a stale pre-rename id, so a
-  correct curator triggers the warning (recorded in the spec; never
-  promote it to a prompt/refusal).
-- **Next spec (0006): pick from TODO.md** — verify
-  (recommended: archive holds real content, bitrot detection earns
+- **Specs 0001, 0003, 0004, 0005, 0006 are all merged.** The loop is
+  live-verified end to end: discover (name → tree → pull) or pull by
+  exact id → advisories/--plan → status/show.
+- **Spec 0006 shipped 2026-07-13 (PR #7, rebase-merge, four
+  commits):** the `discover` command — hub search verbatim (relevance
+  order stated on screen) → model-tree navigation (ancestry ladder
+  root-at-top, your-path breadcrumb with stack-pop, stable `0` pull
+  key, `m` pages every relation, frame-separator rules, archive-mode
+  choice pick-files vs whole-repo) → the unmodified pull flow via the
+  extracted `cli/pull_exec` core with `model=None` (pull's
+  confirm-gated grouping decides the home — the review round's
+  unanimous finding: hub metadata must never name an archive
+  directory without a human yes). Hub seam grew search_models /
+  list_children / model_summary; `hub.py` split into the `hub/`
+  package. 417 tests. FIFTEEN live-use adjudications from Brian's
+  manual testing shaped the UX — the manual-verify loop out-found
+  the review round on usability; budget real time for it.
+- Hard-won facts from 0006: the hub's model-tree index (`baseModels`
+  expand) is *rename-resolved* by the hub while card `base_model`
+  goes stale — two sources, different freshness; pulls now
+  rename-resolve the declared base with one disclosed light call
+  (second sanctioned exception to one-metadata-call, after the
+  adapter-config fetch). The 0000 non-goal was revised (2026-07-13):
+  deterministic discovery is in scope — the invariant is no LLM and
+  no tool judgment, not "no search". Pre-commit hooks choke on mixed
+  staged/unstaged state (ruff autofix conflicts on stash restore) —
+  commit with `git stash push --keep-index --include-untracked`,
+  which also proves each commit green in isolation.
+- **Next spec (0007): pick from TODO.md** — verify (still
+  recommended: real content is accumulating, bitrot detection earns
   its keep), runtime views (0002, unblocked), managed remove/retire,
-  smoke test, or guided discovery (needs a 0000 product adjudication
-  on the exact-repo-ids stance first).
-- Specs: `0000` evergreen; `0002` runtime views (draft, unblocked);
-  `0005` shipped. Roadmap: HF cache as a third cache-import source;
-  managed remove/retire in Later.
-- Standing-rule additions this session: docs sweep after every spec
-  (grep for renamed flags/terms across docs/, README, TODO), and
-  usage docs ride the feature (both above).
-- Design stance: exact hub repo ids only — no fuzzy name resolution,
-  no LLM inside the tool; deterministic product, so no `/eval`.
+  smoke test, or the interactive-listing TUI (three independent
+  live-use requests during 0006). Also queued from live use:
+  goal-definitive archiving (capability report in `status`),
+  file-kind dictionary, live-hub canary (0000 roadmap).
+- Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
+  (draft, unblocked); 0005/0006 shipped.
+- Design stance (revised with 0000, 2026-07-13): no LLM and no tool
+  judgment inside the tool — deterministic product, so no `/eval`.
+  Discovery may pass through hub search/tree facts for the human to
+  pick from, but every pull still targets an exact repo id the
+  human chose, and the tool never ranks, selects, or auto-pulls.
 - Public-facing framing rule: avoid "against future access
   restrictions" / threat-prediction phrasing in repo docs — neutral
   durability/offline language only (Brian, 2026-07-09).

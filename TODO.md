@@ -41,6 +41,15 @@ Check items off as they ship; update when priorities shift.
   `--all` → `--whole-repo`, size confirmation + disk preflight on
   every pull mode. Live-verified against real Qwen3.6 repos,
   including the copy-pasted `--model` footgun it now catches.
+- 0006 guided discovery (merged 2026-07-13, PR #7, rebase-merge):
+  the `discover` command — hub search passed through verbatim →
+  model-tree navigation (ancestry ladder, breadcrumb, stable `0`
+  pull key, archive-mode choice) → the unmodified pull flow, with
+  declared base models rename-resolved (one disclosed light call)
+  so records carry current ids. Hub seam extended (search/children/
+  summary) and `hub.py` split into a package. Fifteen live-use
+  adjudications from manual testing shaped the UX; the full record
+  is in the spec.
 
 ## Smaller items (from live use)
 
