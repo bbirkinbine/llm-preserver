@@ -337,11 +337,19 @@ parallelize only with partitioned file ownership.
   data; never delete, move, or "clean up" archive contents. Tests use
   tmp dirs, never a real archive.
 
-## Open work / current state (updated 2026-07-13, end of session 6)
+## Open work / current state (updated 2026-07-13, end of session 7)
 
 - **Specs 0001, 0003, 0004, 0005, 0006 are all merged.** The loop is
   live-verified end to end: discover (name → tree → pull) or pull by
   exact id → advisories/--plan → status/show.
+- **Session 7 (2026-07-13, trivial-tier, PR #8):** `-h` now works as
+  a help alias on every command (`help_option_names` on the root
+  Typer app propagates to subcommands); the Typer-provided
+  `--install-completion` / `--show-completion` flags were kept and
+  documented in `docs/cli.md`. Second CI-only rich-ANSI test failure
+  became a standing rule: `.claude/rules/python-code.md` → "Asserting
+  on CLI output in tests" (`click.unstyle()` + the FORCE_COLOR repro
+  recipe). 419 tests.
 - **Spec 0006 shipped 2026-07-13 (PR #7, rebase-merge, four
   commits):** the `discover` command — hub search verbatim (relevance
   order stated on screen) → model-tree navigation (ancestry ladder

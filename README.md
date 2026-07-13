@@ -30,20 +30,25 @@ cd llm-preserver
 uv sync                # install deps into a managed venv
 
 uv run llm-preserver init ~/models   # create an archive
+uv run llm-preserver discover 'qwen3 coder' ~/models   # know only a name? search hub + model tree, then pull
 uv run llm-preserver pull unsloth/Qwen3-4B-GGUF ~/models --include '*Q4_K_M*'
 uv run llm-preserver status ~/models # inventory: what's on the shelf
 uv run llm-preserver show Qwen/Qwen3-4B ~/models   # one model's record
 ```
 
-Add `--plan` to any `pull` to see exactly what it would download —
-files, sizes, disk check, companion advisories — without moving a
-byte; `--whole-repo` archives a repo's entire tree (the
-full-precision masters). Only know the model's *name*?
-`llm-preserver discover 'qwen3 coder' ~/models` searches the hub,
-walks the model tree (originals, quants, fine-tunes), and lands in
-the same pull flow — no browser needed. Full command reference — selection patterns,
-model grouping, roles, re-pull/idempotency behavior, exit codes,
-gated-repo auth — in [`docs/cli.md`](docs/cli.md).
+- **`discover`** — covers the step before an exact repo id: searches
+  the hub, walks the model tree (originals, quants, fine-tunes — hub
+  facts only, the tool never ranks), and lands in the same pull flow.
+  No browser needed.
+- **`pull --plan`** — dry run: shows exactly what a pull would
+  download (files, sizes, disk check, companion advisories) without
+  moving a byte.
+- **`pull --whole-repo`** — archives a repo's entire tree instead of
+  selected files (the full-precision masters).
+
+Full command reference — selection patterns, model grouping, roles,
+re-pull/idempotency behavior, exit codes, gated-repo auth — in
+[`docs/cli.md`](docs/cli.md).
 
 ## Repository layout
 
