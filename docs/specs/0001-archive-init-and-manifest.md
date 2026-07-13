@@ -1,7 +1,7 @@
 # 0001 — Archive init and model-record manifest
 
-**Status:** draft
-**Last updated:** 2026-07-09
+**Status:** shipped
+**Last updated:** 2026-07-12
 
 ## Goal
 

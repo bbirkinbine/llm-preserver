@@ -1,7 +1,7 @@
 # 0003 — Selective Pull
 
-**Status:** draft
-**Last updated:** 2026-07-10
+**Status:** shipped
+**Last updated:** 2026-07-12
 
 ## Goal
 

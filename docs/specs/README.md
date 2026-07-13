@@ -30,10 +30,11 @@ line; the source of truth is the spec file, this is a rendered cache. Run
 <!-- specs-status:start -->
 <!-- Generated block — do not edit by hand; the specs-status hook overwrites it. Source of truth is each spec's **Status:** field. -->
 - [0000 — llm-preserver (product spec)](0000-product.md)  (evergreen)
-- [0001 — Archive init and model-record manifest](0001-archive-init-and-manifest.md)  (draft)
-- [0002 — Runtime views](0002-runtime-views.md)  (draft) — depends on 0001 (blocked)
-- [0003 — Selective Pull](0003-selective-pull.md)  (draft)
-- [0004 — Full Snapshot](0004-full-snapshot.md)  (draft)
+- [0002 — Runtime views](0002-runtime-views.md)  (draft) — depends on 0001
+- [0005 — Companion Advisory And Pull Plan](0005-companion-advisory-and-pull-plan.md)  (draft)
+- ~~[0001 — Archive init and model-record manifest](0001-archive-init-and-manifest.md)~~  (shipped)
+- ~~[0003 — Selective Pull](0003-selective-pull.md)~~  (shipped)
+- ~~[0004 — Full Snapshot](0004-full-snapshot.md)~~  (shipped)
 <!-- specs-status:end -->
 
 ## Numbering

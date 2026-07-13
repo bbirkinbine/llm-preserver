@@ -1,7 +1,7 @@
 # 0004 — Full Snapshot
 
-**Status:** draft
-**Last updated:** 2026-07-11
+**Status:** shipped
+**Last updated:** 2026-07-12
 
 ## Goal
 

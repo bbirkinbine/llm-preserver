@@ -36,7 +36,8 @@ Check items off as they ship; update when priorities shift.
 - [ ] Quant-label selection UX: annotate recognized quant labels in
   the interactive listing (deterministic table) and/or `--quant`
   sugar. In the 0000 roadmap "Later" list.
-- [ ] Companion-artifact advisory: a curated rules table (data, not
+- [ ] Companion-artifact advisory (specced: 0005, with `pull --plan`):
+  a curated rules table (data, not
   inference — no LLM in the tool) mapping repo-tree filename patterns
   to artifact kinds: `mmproj-*` → vision projector, `mtp-*` →
   speculative-decoding head, `*imatrix*` → quantization calibration
@@ -49,7 +50,7 @@ Check items off as they ship; update when priorities shift.
   Generalizes the vision-companion advisory from the 0000 roadmap
   "Later" list (live-hit 2026-07-12: gemma-4-31B-it Q4_K_M pull
   omitted `mmproj-F16.gguf` until a human noticed).
-- [ ] `pull --plan` (dry run): resolve the repo tree, apply
+- [ ] `pull --plan` (dry run; specced: 0005): resolve the repo tree, apply
   `--include` / `--all` selection and the grouping rules, then print
   what *would* happen — selected files with sizes and total, the
   canonical model directory, docs that ride along, already-archived
@@ -57,6 +58,14 @@ Check items off as they ship; update when priorities shift.
   downloading or writing. Turns scripted pulls from "hope the
   pattern is right" into "verify, then run"; pairs with the
   companion-artifact advisory above.
+- [ ] Guided discovery workflow (0006 candidate; product call first):
+  from a model name, list the hub model tree's quant children
+  (deterministic `base_model` metadata, no LLM), pick the exact repo,
+  then the normal interactive selection. Revisits the
+  exact-repo-ids-only stance — needs a 0000 adjudication before a
+  spec. Riders already in 0005: `--all` → `--whole-repo` rename,
+  size confirm + preflight on selective pulls, base-model master
+  advisory.
 - [ ] Example-run cookbook (`docs/examples.md`): one worked pull per
   repo archetype — GGUF quant repo, original safetensors (`--all`),
   multimodal (weights + `mmproj`), sharded weights, adapter/LoRA,
