@@ -58,13 +58,15 @@ def test_unanswerable_grouping_prompt_exits_2_naming_model_flag(
     assert not (archive / "models" / "acme").exists()
 
 
-def test_unanswerable_all_size_confirm_exits_2_naming_yes(tmp_path, monkeypatch, fake_hub_factory):
+def test_unanswerable_whole_repo_size_confirm_exits_2_naming_yes(
+    tmp_path, monkeypatch, fake_hub_factory
+):
     archive = init_archive_dir(tmp_path)
     install_fake_hub(monkeypatch, fake_hub_factory())
 
     result = runner.invoke(
         app,
-        ["pull", GGUF_REPO_ID, str(archive), "--all", "--model", "acme/tiny-chat"],
+        ["pull", GGUF_REPO_ID, str(archive), "--whole-repo", "--model", "acme/tiny-chat"],
         # --model skips grouping; the size confirm cannot be answered
     )
 
@@ -72,13 +74,15 @@ def test_unanswerable_all_size_confirm_exits_2_naming_yes(tmp_path, monkeypatch,
     assert "--yes" in combined_output(result)
 
 
-def test_all_with_yes_and_model_runs_without_any_prompt(tmp_path, monkeypatch, fake_hub_factory):
+def test_whole_repo_with_yes_and_model_runs_without_any_prompt(
+    tmp_path, monkeypatch, fake_hub_factory
+):
     archive = init_archive_dir(tmp_path)
     install_fake_hub(monkeypatch, fake_hub_factory())
 
     result = runner.invoke(
         app,
-        ["pull", GGUF_REPO_ID, str(archive), "--all", "--model", "acme/tiny-chat", "--yes"],
+        ["pull", GGUF_REPO_ID, str(archive), "--whole-repo", "--model", "acme/tiny-chat", "--yes"],
         # no input needed at all
     )
 
@@ -94,7 +98,7 @@ def test_yes_never_accepts_the_grouping_confirm(tmp_path, monkeypatch, fake_hub_
 
     result = runner.invoke(
         app,
-        ["pull", GGUF_REPO_ID, str(archive), "--all", "--yes"],
+        ["pull", GGUF_REPO_ID, str(archive), "--whole-repo", "--yes"],
         # grouping confirm still fires and cannot be answered
     )
 

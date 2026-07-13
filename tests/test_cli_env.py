@@ -65,7 +65,16 @@ def test_pull_omits_path_when_env_var_set(tmp_path, monkeypatch, fake_hub_factor
 
     result = runner.invoke(
         app,
-        ["pull", "bartowski/tiny-chat-GGUF", "--include", "*Q4_K_M*", "--model", "acme/tiny-chat"],
+        # --yes: the size confirmation rides every pull (spec 0005).
+        [
+            "pull",
+            "bartowski/tiny-chat-GGUF",
+            "--include",
+            "*Q4_K_M*",
+            "--model",
+            "acme/tiny-chat",
+            "--yes",
+        ],
         env={ENV_VAR: str(archive)},
     )
 
@@ -81,7 +90,16 @@ def test_show_omits_path_when_env_var_set(tmp_path, monkeypatch, fake_hub_factor
     monkeypatch.setattr(cli_module, "HubClient", lambda: client)
     pulled = runner.invoke(
         app,
-        ["pull", "bartowski/tiny-chat-GGUF", "--include", "*Q4_K_M*", "--model", "acme/tiny-chat"],
+        # --yes: the size confirmation rides every pull (spec 0005).
+        [
+            "pull",
+            "bartowski/tiny-chat-GGUF",
+            "--include",
+            "*Q4_K_M*",
+            "--model",
+            "acme/tiny-chat",
+            "--yes",
+        ],
         env={ENV_VAR: str(archive)},
     )
     assert pulled.exit_code == 0

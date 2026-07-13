@@ -1,4 +1,4 @@
-"""Edge tests for pull --all (spec 0004): resume preflight, odd trees.
+"""Edge tests for pull --whole-repo (spec 0004): resume preflight, odd trees.
 
 The disk preflight must not double-count bytes that already survived
 an interrupted pull in staging (the client reuses them on rerun); a
@@ -61,7 +61,7 @@ def fake_disk_free(monkeypatch, free):
 def test_resume_preflight_discounts_bytes_already_in_staging(
     archive, fake_hub_factory, monkeypatch
 ):
-    # An interrupted --all leaves fully downloaded files in staging;
+    # An interrupted --whole-repo leaves fully downloaded files in staging;
     # the record was never written, so the rerun re-plans the whole
     # tree. The preflight must charge only the bytes still missing —
     # the client reuses the staged files.
@@ -89,7 +89,7 @@ def test_resume_preflight_discounts_bytes_already_in_staging(
 
 
 def test_all_on_docs_only_repo_archives_the_tree(archive, fake_hub_factory):
-    # Under --all the tree is the artifact: a repo holding only docs is
+    # Under --whole-repo the tree is the artifact: a repo holding only docs is
     # a legitimate snapshot, not the selective shape's docs-only error.
     client = fake_hub_factory(
         files=[("README.md", b"# docs only\n", False), ("LICENSE", b"MIT\n", False)],

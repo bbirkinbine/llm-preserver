@@ -1,4 +1,4 @@
-"""Same-repo ordering tests: selective pull and --all interleaved.
+"""Same-repo ordering tests: selective pull and --whole-repo interleaved.
 
 docs/cli.md promises the selective/snapshot doc-placement difference is
 "additive duplication, never a conflict" when both shapes pull the same

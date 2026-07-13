@@ -209,7 +209,7 @@ def test_interrupted_pull_records_nothing(archive, fake_hub_factory):
     assert list((archive / "models").rglob("model-record.json")) == []
 
 
-def test_model_override_used_verbatim_without_confirmation(archive, fake_hub_factory):
+def test_model_override_used_verbatim_without_grouping_confirmation(archive, fake_hub_factory):
     prompts = []
 
     def confirm(prompt):
@@ -218,7 +218,10 @@ def test_model_override_used_verbatim_without_confirmation(archive, fake_hub_fac
 
     do_pull(archive, make_client(fake_hub_factory), model="custom/name", confirm=confirm)
     assert (archive / "models" / "custom" / "name" / "gguf" / Q4_NAME).is_file()
-    assert prompts == []
+    # --model skips the grouping confirm; the size confirmation that
+    # rides every pull (spec 0005) is the only prompt left.
+    assert len(prompts) == 1
+    assert prompts[0].startswith("pull ")
 
 
 def test_base_model_grouping_is_confirmed_with_user(archive, fake_hub_factory):

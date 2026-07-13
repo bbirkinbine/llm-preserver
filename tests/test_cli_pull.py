@@ -58,6 +58,8 @@ class FailingHubClient:
 
 
 def invoke_pull(archive, *extra_args):
+    # --yes auto-accepts the size confirmation that rides every pull
+    # (spec 0005); these tests pin other behavior and stay non-interactive.
     args = [
         "pull",
         "bartowski/tiny-chat-GGUF",
@@ -66,6 +68,7 @@ def invoke_pull(archive, *extra_args):
         "*Q4_K_M*",
         "--model",
         "acme/tiny-chat",
+        "--yes",
         *extra_args,
     ]
     return runner.invoke(app, args)
@@ -120,7 +123,7 @@ def test_pull_interactive_selection_lists_files_and_pulls(tmp_path, monkeypatch,
     result = runner.invoke(
         app,
         ["pull", "bartowski/tiny-chat-GGUF", str(archive), "--model", "acme/tiny-chat"],
-        input="*Q4_K_M*\n",
+        input="*Q4_K_M*\ny\n",  # patterns, then the size confirmation (spec 0005)
     )
 
     assert result.exit_code == 0

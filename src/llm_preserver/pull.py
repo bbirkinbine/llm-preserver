@@ -24,36 +24,20 @@ from llm_preserver.hub import (
     PullUserError,
     RepoInfo,
 )
-from llm_preserver.pull_grouping import (
-    ConfirmCallback,
-    load_existing_record,
-    require_single_snapshot_source,
-    resolve_model_id,
-)
-from llm_preserver.pull_plan import plan_downloads
-from llm_preserver.pull_preflight import (
-    already_staged_bytes,
-    human_size,
-    require_disk_space,
-    total_selected_size,
-)
+from llm_preserver.pull_grouping import ConfirmCallback
+from llm_preserver.pull_preflight import human_size, require_disk_budget
+from llm_preserver.pull_prepare import STAGING_DIRNAME, prepare_pull
 from llm_preserver.pull_record import update_record, write_manifest
 from llm_preserver.pull_transfer import download_and_archive
 from llm_preserver.records import FileEntry, Role, save_record
-from llm_preserver.selection import (
-    infer_format_subdir,
-    require_case_distinct_targets,
-    require_nondoc_selection,
-    select_files,
-    selects_all_weights,
-)
+from llm_preserver.render import clean_text
 
 logger = logging.getLogger(__name__)
 
-STAGING_DIRNAME = ".staging"
+__all__ = ["STAGING_DIRNAME", "pull_model"]
 
 
-def _validated_roles(roles: Sequence[str]) -> list[Role]:
+def validated_roles(roles: Sequence[str]) -> list[Role]:
     """Validate caller-supplied role names against the record vocabulary."""
     valid = get_args(Role)
     unknown = [role for role in roles if role not in valid]
@@ -62,13 +46,15 @@ def _validated_roles(roles: Sequence[str]) -> list[Role]:
     return cast(list[Role], list(roles))
 
 
-def _snapshot_confirmation(to_download: int, selected: int, needed_bytes: int, repo_id: str) -> str:
-    """Compose the --all confirmation: what will actually download.
+def _size_confirmation(to_download: int, selected: int, needed_bytes: int, repo_id: str) -> str:
+    """Compose the size confirmation: what will actually download.
 
-    Shows the remaining work (spec 0004 adjudications) — download count
-    out of the tree total, net bytes still needed, and the
-    already-covered count when any file is skipped. Never filenames:
-    listing 500 shards is noise.
+    Asked on every pull mode (spec 0004 for whole-repo; the spec 0005
+    rider extends it to selective pulls). Shows the remaining work —
+    download count out of the selection total, net bytes still needed,
+    and the already-covered count when any file is skipped. Never
+    filenames: listing 500 shards is noise. The ``pull `` prefix is
+    the seam the CLI's ``--yes`` classification keys on.
     """
     plural = "file" if selected == 1 else "files"
     covered = selected - to_download
@@ -110,11 +96,12 @@ def pull_model(
         refresh_docs: Replace changed upstream *doc* files (unlock,
             replace, re-record, re-lock). Weight paths never honor
             this flag — a changed weight remains a hard stop.
-        select_all: Full snapshot (spec 0004): the selection is the
-            repo's whole tree, kept at its in-tree paths; one
-            file-count + total-size confirmation replaces the per-file
-            prompts, and a disk-space preflight refuses before any
-            bytes download.
+        select_all: Full snapshot (spec 0004; CLI flag
+            ``--whole-repo``): the selection is the repo's whole
+            tree, kept at its in-tree paths. Every mode asks the
+            file-count + total-size confirmation and runs the
+            disk-space preflight before any bytes download (spec
+            0005 rider).
         confirm: Yes/no prompt callback for grouping and size/weight
             confirmations.
 
@@ -127,73 +114,75 @@ def pull_model(
         ArchiveError: If ``archive_root`` is not a usable archive.
     """
     require_archive(archive_root)
-    role_list = _validated_roles(roles)
-    info = repo_info if repo_info is not None else client.repo_info(repo_id)
-    if not info.files:
-        raise PullUserError(f"{repo_id} has no files at revision {info.commit}: nothing to archive")
-    # Grouping direction is a property of the repo's whole tree, not of
-    # which files were selected (spec 0004 adjudications).
-    tree_format = infer_format_subdir([f.path for f in info.files], repo_id)
-    creator, name = resolve_model_id(model, info, repo_id, confirm, tree_format)
-    if select_all:
-        selected = list(info.files)
-    else:
-        selected = select_files(info.files, include)
-        require_nondoc_selection(selected, info.files, repo_id, include)
-        if selects_all_weights(info.files, selected) and not confirm(
-            f"selection covers every weight file in {repo_id}; pull them all?"
-        ):
-            raise PullUserError("every-weight pull declined: narrow --include and re-run")
-    require_case_distinct_targets(selected)
-    subdir = infer_format_subdir([f.path for f in selected], repo_id)
-    model_dir = archive_root / "models" / creator / name
-    record = load_existing_record(model_dir)
-    if select_all:
-        # One source repo per format subdirectory (spec 0004).
-        require_single_snapshot_source(record, subdir, repo_id)
-    plan = plan_downloads(
-        selected,
-        subdir,
-        model_dir,
-        record,
-        repo_id=repo_id,
-        commit=info.commit,
+    role_list = validated_roles(roles)
+    prep = prepare_pull(
+        archive_root,
+        repo_id,
+        client,
+        include=include,
+        model=model,
+        repo_info=repo_info,
         refresh_docs=refresh_docs,
-        relocate_docs=not select_all,  # snapshots keep the tree verbatim
+        select_all=select_all,
+        confirm=confirm,
     )
-    staging_dir = archive_root / STAGING_DIRNAME / creator / name
-    needed = 0
-    if select_all:
-        # Plan → preflight → confirm (spec 0004 adjudications): refuse
-        # an over-budget pull before asking anyone to confirm it. Only
-        # the files this run must fetch count, and bytes already in
-        # staging (interrupted-pull leftovers the client reuses) are
-        # not charged twice.
-        needed, _ = total_selected_size([planned.repo_file for planned in plan.to_download])
-        needed = max(needed - already_staged_bytes(staging_dir, plan.to_download), 0)
-        require_disk_space(archive_root, needed)
-    if not plan.to_download and not plan.adopted:
-        logger.info("nothing to pull: every selected file is already archived in %s", model_dir)
-        return model_dir
-    if select_all and not confirm(
-        _snapshot_confirmation(len(plan.to_download), len(selected), needed, repo_id)
+    for advisory in prep.advisories:
+        # Advisory text embeds hub-supplied filenames/metadata; strip
+        # terminal control characters before it reaches a terminal.
+        # Warnings (likely human error) log at WARNING so they stand
+        # apart from the INFO advisory wall.
+        level = logging.WARNING if advisory.severity == "warning" else logging.INFO
+        logger.log(
+            level, "%s: %s", advisory.severity, clean_text(advisory.message, single_line=True)
+        )
+    # Plan → preflight → confirm on every mode (spec 0004 shape,
+    # extended to selective pulls by the spec 0005 rider): refuse an
+    # over-budget pull before asking anyone to confirm it. One disk
+    # read (prepare's) backs both the figure shown and the decision.
+    require_disk_budget(archive_root, prep.needed_bytes, prep.disk_free)
+    if not prep.plan.to_download and not prep.plan.adopted:
+        logger.info(
+            "nothing to pull: every selected file is already archived in %s", prep.model_dir
+        )
+        return prep.model_dir
+    # Adopt-only pulls (files already on disk, record catching up) move
+    # zero bytes; a "pull 0 files (0 B)?" prompt would block scripted
+    # re-pulls for nothing (adjudicated 2026-07-12).
+    if prep.plan.to_download and not confirm(
+        _size_confirmation(
+            len(prep.plan.to_download), len(prep.selected), prep.needed_bytes, repo_id
+        )
     ):
-        raise PullUserError("full-snapshot pull declined: nothing downloaded")
+        raise PullUserError("pull declined: nothing downloaded")
     try:
-        new_entries: list[FileEntry] = list(plan.adopted)
-        if plan.to_download:
+        new_entries: list[FileEntry] = list(prep.plan.adopted)
+        if prep.plan.to_download:
             new_entries.extend(
                 download_and_archive(
-                    client, repo_id, info, plan.to_download, staging_dir, model_dir
+                    client,
+                    repo_id,
+                    prep.info,
+                    prep.plan.to_download,
+                    prep.staging_dir,
+                    prep.model_dir,
                 )
             )
-        record = update_record(record, info, repo_id, creator, name, role_list, subdir, new_entries)
-        write_manifest(model_dir, record)
-        save_record(record, model_dir)
-        if plan.to_download:
+        record = update_record(
+            prep.record,
+            prep.info,
+            repo_id,
+            prep.creator,
+            prep.name,
+            role_list,
+            prep.subdir,
+            new_entries,
+        )
+        write_manifest(prep.model_dir, record)
+        save_record(record, prep.model_dir)
+        if prep.plan.to_download:
             # Staging now holds only the client's .cache/huggingface
             # bookkeeping, which must never reach the archive; drop it.
-            shutil.rmtree(staging_dir)
+            shutil.rmtree(prep.staging_dir)
     except PullError:
         raise
     except OSError as exc:
@@ -201,5 +190,5 @@ def pull_model(
             f"local filesystem failure during pull: {exc}; "
             "check disk space and permissions, then retry"
         ) from exc
-    logger.info("pulled %d file(s) from %s into %s", len(new_entries), repo_id, model_dir)
-    return model_dir
+    logger.info("pulled %d file(s) from %s into %s", len(new_entries), repo_id, prep.model_dir)
+    return prep.model_dir
