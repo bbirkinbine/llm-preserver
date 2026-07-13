@@ -272,3 +272,18 @@ def test_status_groups_roleless_models_under_no_role_bucket(
 
     assert result.exit_code == 0
     assert "(no role)" in combined_output(result)
+
+
+def test_h_short_flag_shows_help_at_top_level():
+    result = runner.invoke(app, ["-h"])
+
+    assert result.exit_code == 0
+    assert "Usage: llm-preserver" in combined_output(result)
+
+
+def test_h_short_flag_works_on_every_subcommand():
+    for command in ("init", "status", "show", "discover", "pull"):
+        result = runner.invoke(app, [command, "-h"])
+
+        assert result.exit_code == 0, f"{command} -h failed: {combined_output(result)}"
+        assert f"llm-preserver {command}" in combined_output(result)
