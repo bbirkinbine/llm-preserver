@@ -1,7 +1,7 @@
 # 0000 — llm-preserver (product spec)
 
 **Status:** evergreen
-**Last updated:** 2026-07-09
+**Last updated:** 2026-07-13
 
 > Distilled from the vault note "Local AI Model Preservation Plan"
 > (Obsidian, `Research/AI/`, 2026-07-09). That note is the design
@@ -46,10 +46,22 @@ runtime-locked working copies, not archives.
 - Not a model *server* or inference frontend — it archives and
   verifies; Ollama/LM Studio/llama.cpp do the running.
 - Not a mirror-everything crawler — models enter the archive by
-  explicit user selection (exact hub repo ids), one artifact at a
-  time; no discovery, search, or bulk-mirroring mode. Backup tiering
-  is a user-assigned label the tool reports on (see the tiering
-  report in the roadmap), not a policy it enforces.
+  explicit user selection, one artifact at a time; no bulk-mirroring
+  mode. Backup tiering is a user-assigned label the tool reports on
+  (see the tiering report in the roadmap), not a policy it enforces.
+  *Revised 2026-07-13:* the original phrasing also banned "discovery,
+  search" — the real intent was **no LLM wrapper and no tool
+  judgment deciding what to download**. Deterministic discovery is
+  in scope: the tool may pass through the hub's own free-text search
+  results and typed model-tree metadata (quantized / finetune /
+  adapter / merge relations) as facts for the *human* to pick from.
+  The invariant that stands: the tool never ranks by its own
+  judgment, never selects, and never pulls anything without an
+  explicit human pick of an exact repo id. Curated *data* tables
+  with pinned provenance (quant-label facts: bits/weight, quality
+  tier, common-default marker) are fine; a publisher-reputation
+  table ("trust this quantizer") is not — repo download counts are
+  the hub's own fact and carry that signal instead.
 - Not a redistribution platform — licenses are preserved and respected,
   not circumvented. Gated repos require the user's own accepted terms
   and token.
@@ -64,6 +76,14 @@ runtime-locked working copies, not archives.
 - Model sources: Hugging Face Hub first (covers GGUF repos and full
   snapshots). Ollama/LM Studio caches are *imports*, not sources of
   record.
+- Single upstream dependency: the hub is reached only through
+  `huggingface_hub` (HF's official client) and only via the `hub.py`
+  seam, so API churn has a one-module blast radius. The API is
+  stable in practice but carries no compatibility contract:
+  client-library drift is caught by Dependabot PRs + CI; server-side
+  and metadata drift surface only at runtime (fault domain 4 /
+  untrusted-metadata handling) — the live-hub canary in the roadmap
+  is the early-warning gap-filler.
 - Hardware targets for smoke tests: a consumer CUDA GPU and Apple
   Silicon (Metal/MLX) — but the archive format is runtime-independent.
 - The archive layout and record format are decided in ADR 0001
@@ -90,12 +110,36 @@ numbers):
   downloads selected files from an exact hub repo id with checksums,
   pinned commit, and a schema-v2 record; per-file provenance,
   fault-domain errors, `LLM_PRESERVER_ARCHIVE`, `docs/cli.md`.
-- `0004-full-snapshot.md` — whole-repo-tree download for high-value
-  models (original safetensors masters; MLX rides the same path into
-  `mlx/`). Same `pull` verb, different *shape*; reuses 0003's
-  machinery.
+- `0004-full-snapshot.md` — **shipped 2026-07-12 (PR #5)**:
+  whole-repo-tree download for high-value models (original
+  safetensors masters; MLX rides the same path into `mlx/`). Same
+  `pull` verb, different *shape*; reuses 0003's machinery. Flag
+  later renamed `--all` → `--whole-repo` by 0005.
+- `0005-companion-advisory-and-pull-plan.md` — **shipped
+  2026-07-13**: archive-aware companion/dependency advisories
+  (curated data rules, never auto-add; grouping-mismatch warning),
+  `pull --plan` dry run, size confirmation + disk preflight on every
+  pull mode.
 
 Planned features, spec pending (in rough priority order):
+
+- **Guided discovery** (0006 candidate; product stance revised
+  2026-07-13, see non-goals) — the deterministic path from "I only
+  know the model's name" to a completed, correctly-grouped pull
+  without leaving the tool: hub free-text search passed through
+  verbatim → pick the model → typed model-tree listing (derivatives
+  down, parent chain up — a user landing on a finetune sees what it
+  derives from) → the existing interactive file listing, annotated
+  with the curated quant-label table (absorbs the "Later"
+  quant-selection UX item below) plus hub facts (downloads,
+  publisher, size, gated). Success bar: a person who knows only a
+  model's name gets from name to a completed pull without opening a
+  browser. Caveat to design for: `base_model` metadata can be stale
+  (renamed upstream repos) — present it honestly, never auto-follow.
+- **Live-hub canary** — a scheduled (not per-PR) CI job running a
+  cheap read-only real-hub operation (`pull --plan` on one small
+  known repo) so server-side API/metadata drift is an email, not a
+  failed pull; CI's deterministic offline suite stays untouched.
 
 - **Verify** — audit the archive against records/manifests,
   BagIt-style: *complete* (every recorded file exists on disk —
@@ -130,11 +174,10 @@ Planned features, spec pending (in rough priority order):
   bits/weight, quality tier, "common default" marker) and/or a
   `--quant Q4_K_M` flag as sugar over `--include`; first live use
   produced a Q4_0-instead-of-Q4_K_M mispull (2026-07-11) because the
-  labels alone are indistinguishable to a non-expert. Same feature:
-  a deterministic companion-file warning — when `pipeline_tag` is a
-  vision task and the repo ships `mmproj-*` files but the selection
-  includes none, say so (advisory only; never auto-grab — projector
-  precision is still the user's pick). Runtime shelf
+  labels alone are indistinguishable to a non-expert. *Update
+  2026-07-13:* the label table is absorbed into guided discovery
+  (above); the companion-file warning half shipped in 0005 as the
+  generalized advisory rules. Runtime shelf
   helpers (archiving installers/builds), backup tiering report,
   managed remove/retire (the only sanctioned way to
   delete from the archive — updates record and directory together,
