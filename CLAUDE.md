@@ -173,6 +173,14 @@ standing consent to resolve `[ask-user]` findings too.
   surface changes) in the same change. `--help` stays the generated
   source of truth for syntax; `docs/cli.md` explains behavior
   (idempotency, auth, fault domains) that `--help` can't.
+- **Docs sweep before the spec is done** (Brian, 2026-07-12). After
+  implementing each spec, sweep every doc the change could have
+  touched — `docs/cli.md`, README, `docs/data-structures.md`,
+  `WORKFLOW.md`, other `docs/` files, and stale references in
+  TODO.md or older docs — updating impacted ones and creating new
+  docs when the feature warrants (e.g. a new user-facing surface
+  with behavior `--help` can't carry). A grep for the old flag/term
+  across `docs/`, `README.md`, and `TODO.md` is the minimum check.
 - **Verify.** Run `/review-check` (ruff lint, ruff format, mypy,
   pytest), then `/review` on the diff; `/review-adversarial` as well on
   meaningful features when installed. Add `/security` and/or

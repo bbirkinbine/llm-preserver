@@ -3,6 +3,10 @@
 **Status:** shipped
 **Last updated:** 2026-07-12
 
+> Historical note: this spec's `--all` flag was renamed to
+> `--whole-repo` by spec 0005 (semantics unchanged). Flag references
+> below are the surface as originally shipped.
+
 ## Goal
 
 Archive the *master copy* of a model: download a Hugging Face repo's

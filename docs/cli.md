@@ -10,8 +10,9 @@ uv run llm-preserver --help
 uv run llm-preserver pull --help
 ```
 
-Commands documented here: `init`, `pull` (selective and `--all` full
-snapshot), `status`, `show`. Planned features (verify, cache import,
+Commands documented here: `init`, `pull` (selective, `--whole-repo`
+full snapshot, and `--plan` dry run), `status`, `show`. Planned
+features (verify, cache import,
 runtime views) are listed in the roadmap in
 [`specs/0000-product.md`](specs/0000-product.md)
 and appear here when they ship.
@@ -122,8 +123,10 @@ Options:
 - `--include PATTERN` — fnmatch file selection; repeatable, patterns
   union. Case-sensitive. A selection that matches no weight/artifact
   files is an error, not a docs-only pull.
-- `--all` — full snapshot: download the repo's whole tree (see the
-  next section). Mutually exclusive with `--include`.
+- `--whole-repo` — full snapshot: download the named repo's whole
+  tree (see the dedicated section below). The scope is that one repo —
+  it never crosses repos (an advisory names the follow-up pull when a
+  related repo matters). Mutually exclusive with `--include`.
 - `--model CREATOR/MODEL` — canonical model directory override. Quant
   repos are grouped under the *original* model's directory; without
   this flag the tool infers the grouping from the repo's `base_model`
@@ -143,14 +146,43 @@ Options:
   newly downloaded and hashed version, re-locked, and the record and
   manifest are updated. Applies to doc paths only — a changed
   *weight* is always a hard stop, flag or no flag.
-- `--yes` — auto-accept the size confirmation (the `--all` totals
-  prompt). Never the grouping confirm: identity needs a deliberate
-  value, so scripted pulls pass `--model` for that.
+- `--plan` — dry run: print what the pull would do, then exit without
+  downloading or writing (see the dedicated section below).
+- `--yes` — auto-accept the size confirmation (the "pull N of M files
+  (X to download)…?" prompt, asked on every pull mode). Never the
+  grouping confirm: identity needs a deliberate value, so scripted
+  pulls pass `--model` for that.
 - `--verbose` — per-file progress, resolved commit, staging paths,
   and underlying client detail on failures.
 
 Behavior worth knowing:
 
+- **Every pull states its size before moving bytes.** Whatever the
+  mode — `--include`, interactive, `--whole-repo` — the pull runs a
+  disk preflight (refusing with exit 3 when the archive volume is
+  short) and asks one confirmation stating what this run will
+  download: "pull 2 of 2 files (4.6 GiB to download) from …?". `--yes`
+  auto-accepts exactly this prompt.
+- **Companion-artifact advisories.** Before the confirmation, the pull
+  checks the repo tree against a curated rules table (data, not
+  inference) and prints an advisory when your selection leaves a known
+  companion behind: `*mmproj*` vision projectors, `*mtp-*`
+  speculative-decoding heads, `*imatrix*` calibration data, and
+  partially selected shard sets — each naming the exact `--include`
+  fix. Three cross-repo checks ride along: an explicit `--model` that
+  contradicts the repo's declared `base_model` (catches a copy-pasted
+  `--model` filing one model under another's directory — the pull
+  still honors `--model`), an adapter repo whose declared base model
+  isn't archived, and a quant repo whose full-precision master isn't
+  archived — the latter two naming the follow-up `llm-preserver pull`
+  command. The grouping-mismatch check flags likely *human error*, so
+  it prints first with a distinct `warning:` prefix (highlighted on a
+  terminal) instead of `advisory:`. Advisories are archive-aware (a
+  companion archived by an earlier pull stays silent) and never change
+  the selection — the tool never auto-adds. When the tree ships an
+  `adapter_config.json`, the pull fetches that one small file (to a
+  temp dir, never the archive) to read its base-model pointer, and
+  says so.
 - **Non-interactive runs never hang or die vaguely.** When stdin
   cannot answer a confirmation (cron, CI, piped input exhausted), the
   pull exits 2 with a message naming the bypass: `--model` for the
@@ -189,17 +221,67 @@ reading source:
 | 4 | hub-side | 5xx or rate limiting — retry later; not your fault |
 | 5 | integrity | hash mismatch after download — the file never entered the archive |
 
-## pull --all — archive a whole repo (full snapshot)
+## pull --plan — dry run (verify, then run)
 
-Selective pull acquires runnable derivatives; `--all` acquires the
-master copy — the original full-precision tree that later formats
+`--plan` runs the whole decision half of a pull — resolve the tree,
+apply the selection and grouping rules, evaluate advisories, total
+the sizes, check disk — prints the itemized result, and exits without
+downloading or writing anything:
+
+```bash
+uv run llm-preserver pull unsloth/Qwen3.6-27B-MTP-GGUF ~/models \
+    --include '*Q8_0*' --model Qwen/Qwen3.6-27B --plan
+# plan: pull from unsloth/Qwen3.6-27B-MTP-GGUF into …/models/Qwen/Qwen3.6-27B
+#      28.9 GiB  Qwen3.6-27B-Q8_0.gguf
+#       12 KiB   README.md  — doc, rides along
+# total to download: 28.9 GiB (2 of 2 files)
+# disk preflight: ok (312.4 GiB free)
+# advisory: tree ships mmproj-F16.gguf (vision projector); the
+#   selection excludes it — add --include '*mmproj-F16.gguf'
+# plan only: nothing downloaded, nothing written
+```
+
+Interactive pulls barely need it — every pull already shows the size
+confirmation, and answering `n` walks away safely. `--plan` exists
+for the *scripted* form, where `--yes` leaves no moment to look:
+verify the command once with `--plan`, then run the identical command
+without it. Details:
+
+- Composes with every selection mode: `--include`, `--whole-repo`,
+  and the interactive listing (the pattern prompt still runs; the
+  plan prints instead of pulling).
+- Asks no confirmation prompts. Questions a real pull would ask
+  (grouping, "selection covers every weight?") are resolved to the
+  answer that lets planning continue and printed as `would ask:`
+  lines — scripted for real, those still need `--model` / a narrower
+  `--include`.
+- Exit codes are gateable: 0 when the pull would proceed; 3 (local
+  environment) after the report when the disk preflight would refuse.
+- The plan lists per-file sizes and marks already-archived skips —
+  unlike the size confirmation, which deliberately shows counts only.
+- One adjudicated exception to "downloads nothing": a repo shipping
+  `adapter_config.json` gets that one small file fetched (temp dir,
+  never the archive) so the adapter-base advisory is accurate; the
+  output says so.
+
+## pull --whole-repo — archive a whole repo (full snapshot)
+
+Selective pull acquires runnable derivatives; `--whole-repo` acquires
+the master copy — the original full-precision tree that later formats
 derive from. Quantization is one-way lossy, so the original is the
 only copy that can be re-quantized, fine-tuned, or loaded by
 non-GGUF stacks later.
 
+The scope is the *one repo you name*. On a quant repo it means every
+quantization in that repo (rarely what you want — pull one
+`--include` instead), and it never reaches across repos: archiving a
+quant does not fetch its original, which lives in a separate repo —
+the full-precision-master advisory names that follow-up pull when it
+applies.
+
 ```bash
 # archive the original Qwen3.6-27B tree (~54GB of safetensors shards):
-uv run llm-preserver pull Qwen/Qwen3.6-27B --all ~/models
+uv run llm-preserver pull Qwen/Qwen3.6-27B --whole-repo ~/models
 # → confirms the grouping (an original repo has no base_model, so the
 #   repo id itself is offered as the canonical model directory)
 # → refuses up front if the tree will not fit on the archive volume
@@ -228,15 +310,15 @@ Snapshot behavior:
   snapshot from a *different* source repo is refused (two verbatim
   trees cannot share one directory honestly) — archive it under a
   different `--model` home, or pull selected files instead. Re-running
-  a snapshot of the same repo, and mixing selective + `--all` of the
-  same repo, stay fine.
+  a snapshot of the same repo, and mixing selective + `--whole-repo`
+  of the same repo, stay fine.
 - **Disk preflight.** File sizes come from the same metadata call, so
   the pull refuses (exit 3, local environment) before downloading
   anything when free space at the archive path is short, stating
   required vs. available.
-- **Interrupted pulls are safe to re-run.** An interrupted `--all`
-  records nothing; re-running the same command re-plans the whole
-  tree. Resume comes from the download client reusing files already
+- **Interrupted pulls are safe to re-run.** An interrupted
+  `--whole-repo` records nothing; re-running the same command
+  re-plans the whole tree. Resume comes from the download client reusing files already
   fully downloaded into staging, and the disk preflight charges only
   the bytes still missing — a half-finished 300GB pull does not
   demand 300GB of free space again.

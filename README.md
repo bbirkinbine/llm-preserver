@@ -33,9 +33,12 @@ uv run llm-preserver status ~/models # inventory: what's on the shelf
 uv run llm-preserver show Qwen/Qwen3-4B ~/models   # one model's record
 ```
 
-Full command reference — selection patterns, model grouping, roles,
-re-pull/idempotency behavior, exit codes, gated-repo auth — in
-[`docs/cli.md`](docs/cli.md).
+Add `--plan` to any `pull` to see exactly what it would download —
+files, sizes, disk check, companion advisories — without moving a
+byte; `--whole-repo` archives a repo's entire tree (the
+full-precision masters). Full command reference — selection patterns,
+model grouping, roles, re-pull/idempotency behavior, exit codes,
+gated-repo auth — in [`docs/cli.md`](docs/cli.md).
 
 ## Repository layout
 
