@@ -337,36 +337,43 @@ parallelize only with partitioned file ownership.
   data; never delete, move, or "clean up" archive contents. Tests use
   tmp dirs, never a real archive.
 
-## Open work / current state (updated 2026-07-11, end of session 3)
+## Open work / current state (updated 2026-07-13, end of session 5)
 
-- **Spec 0001 is merged** (PR #3, squash, 2026-07-10): archive init,
-  model records, status/show CLI. ADR 0001 `accepted`.
-- **Spec 0003 (selective pull) is implemented on branch
-  `spec-0003-selective-pull`** (uncommitted, awaiting Brian's commit
-  word): tests-first, 154 passing, gate green; one round of
-  `/review` + `/review-adversarial` + `/security` fully resolved
-  (17 auto-fixes incl. a path-escape security fix) plus five
-  review adjudications by Brian recorded in the spec (doc files per
-  source repo + `--refresh-docs`, reconcile-by-hash,
-  per-file revision, non-null merge rule, v1 merge key). Schema is
-  v2. Live-verified against the real hub (Qwen3-0.6B-GGUF pull,
-  idempotent re-pull, manifest verified with system shasum).
-  Late additions, all tested: `LLM_PRESERVER_ARCHIVE` env fallback
-  (archive path is the *last* positional — Click binds
-  left-to-right; found live by Brian), init's export hint, cli.py →
-  `cli/` package split, `docs/cli.md` usage doc (new standing rule:
-  usage docs ride the feature).
-- **Next after 0003 merges: spec 0004 — full snapshot** (Brian,
-  2026-07-11; archival of original safetensors is the primary goal).
-  Design inputs from session 3: original repo is its own canonical
-  model (no `base_model` hoop — consider defaulting the grouping to
-  the repo id with confirmation), reuses 0003's machinery, sharded
-  weights, disk-space preflight, `hf-snapshot/` slot already in the
-  schema.
-- Specs: `0000` evergreen; `0002` runtime views (draft, blocked on
-  the download specs); `0003` selective pull (implemented, pending
-  commit/PR). Roadmap additions in session 3: HF cache as a third
-  cache-import source; managed remove/retire in Later.
+- **Specs 0001, 0003, 0004, 0005 are all merged.** The core loop is
+  live-verified end to end: init → selective pull → whole-repo
+  snapshot → status/show, now with advisories and `--plan`.
+- **Spec 0005 shipped 2026-07-13** (rebase-merge — squash had been
+  the norm, but the three crafted commits were kept deliberately:
+  split / feature / docs): archive-aware companion advisories
+  (`*mmproj*`, `*mtp-*`, `*imatrix*`, shard sets, adapter base,
+  full-precision master), the `--model`-vs-`base_model` grouping
+  mismatch as a highlighted first-sorted *warning* (live footgun:
+  a copy-pasted `--model` filed a 0.6B quant under a 35B model dir),
+  `pull --plan` dry run (primary customer: scripted pulls; verify
+  then run; exit 0/3 gateable), `--all` → `--whole-repo` (no alias),
+  and size confirmation + disk preflight on every pull mode.
+  294 tests; one full review round (reviewer + adversarial +
+  security) with all adjudications recorded in the spec.
+- Hard-won facts from 0005 worth not relearning: rich treats GitHub
+  Actions as color-capable, so CLI usage-error asserts must
+  `click.unstyle()` output first (a locally-green test failed only
+  in CI); MTP heads are often embedded in the main GGUF rather than
+  shipped as `mtp-*` sidecars, so advisory silence there is correct;
+  warning-not-block on the grouping mismatch is load-bearing — a
+  live repo's declared `base_model` was a stale pre-rename id, so a
+  correct curator triggers the warning (recorded in the spec; never
+  promote it to a prompt/refusal).
+- **Next spec (0006): pick from TODO.md** — verify
+  (recommended: archive holds real content, bitrot detection earns
+  its keep), runtime views (0002, unblocked), managed remove/retire,
+  smoke test, or guided discovery (needs a 0000 product adjudication
+  on the exact-repo-ids stance first).
+- Specs: `0000` evergreen; `0002` runtime views (draft, unblocked);
+  `0005` shipped. Roadmap: HF cache as a third cache-import source;
+  managed remove/retire in Later.
+- Standing-rule additions this session: docs sweep after every spec
+  (grep for renamed flags/terms across docs/, README, TODO), and
+  usage docs ride the feature (both above).
 - Design stance: exact hub repo ids only — no fuzzy name resolution,
   no LLM inside the tool; deterministic product, so no `/eval`.
 - Public-facing framing rule: avoid "against future access

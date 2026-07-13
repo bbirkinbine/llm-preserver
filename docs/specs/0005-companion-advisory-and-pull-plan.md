@@ -1,7 +1,7 @@
 # 0005 — Companion Advisory And Pull Plan
 
-**Status:** shipping
-**Last updated:** 2026-07-12
+**Status:** shipped
+**Last updated:** 2026-07-13
 
 ## Goal
 

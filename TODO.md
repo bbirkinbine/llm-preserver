@@ -5,7 +5,7 @@ What's next, in rough order. Feature detail lives in
 and the numbered specs; this file is the short-term working list.
 Check items off as they ship; update when priorities shift.
 
-## Next spec (0005) — pick one
+## Next spec (0006) — pick one
 
 - [ ] **Verify** (recommended next): audit the archive against
   records/manifests, BagIt-style — *complete* (every recorded file
@@ -24,6 +24,12 @@ Check items off as they ship; update when priorities shift.
   (a 0000 success metric: the archive is *tested*, not just
   downloaded). Pairs with runtime views — views make models
   loadable in place, smoke test proves they load.
+- [ ] **Guided discovery workflow** (product call first): from a
+  model name, list the hub model tree's quant children
+  (deterministic `base_model` metadata, no LLM), pick the exact repo,
+  then the normal interactive selection. Revisits the
+  exact-repo-ids-only stance — needs a 0000 adjudication before a
+  spec.
 
 ## Shipped
 
@@ -31,6 +37,13 @@ Check items off as they ship; update when priorities shift.
   snapshot (`pull --whole-repo`, shipped as `--all` and renamed by
   0005). The core loop works end to end and is live-verified: init →
   pull quants and masters → status/show.
+- 0005 companion advisories + `pull --plan` (merged 2026-07-13,
+  rebase-merge): archive-aware advisory rules (companions, shard
+  sets, adapter base, full-precision master, `--model` grouping
+  mismatch as a highlighted warning), the `--plan` dry run,
+  `--all` → `--whole-repo`, size confirmation + disk preflight on
+  every pull mode. Live-verified against real Qwen3.6 repos,
+  including the copy-pasted `--model` footgun it now catches.
 
 ## Smaller items (from live use)
 
@@ -41,36 +54,6 @@ Check items off as they ship; update when priorities shift.
   report prints human sizes — use `human_size` there too; empty
   pattern input at the prompt errors (exit 2) instead of
   re-prompting.
-- [ ] Companion-artifact advisory (specced: 0005, with `pull --plan`):
-  a curated rules table (data, not
-  inference — no LLM in the tool) mapping repo-tree filename patterns
-  to artifact kinds: `mmproj-*` → vision projector, `mtp-*` →
-  speculative-decoding head, `*imatrix*` → quantization calibration
-  data, shard suffixes → incomplete-set check. Cross-repo deps come
-  from machine-readable metadata (`adapter_config.json` →
-  `base_model_name_or_path`). At pull time, when the tree ships a
-  known companion kind the selection excludes — or an adapter's base
-  model is absent from the archive — print an advisory naming the
-  exact `--include` / follow-up pull; advisory only, never auto-add.
-  Generalizes the vision-companion advisory from the 0000 roadmap
-  "Later" list (live-hit 2026-07-12: gemma-4-31B-it Q4_K_M pull
-  omitted `mmproj-F16.gguf` until a human noticed).
-- [ ] `pull --plan` (dry run; specced: 0005): resolve the repo tree, apply
-  `--include` / `--all` selection and the grouping rules, then print
-  what *would* happen — selected files with sizes and total, the
-  canonical model directory, docs that ride along, already-archived
-  skips, and any companion-artifact advisories — and exit without
-  downloading or writing. Turns scripted pulls from "hope the
-  pattern is right" into "verify, then run"; pairs with the
-  companion-artifact advisory above.
-- [ ] Guided discovery workflow (0006 candidate; product call first):
-  from a model name, list the hub model tree's quant children
-  (deterministic `base_model` metadata, no LLM), pick the exact repo,
-  then the normal interactive selection. Revisits the
-  exact-repo-ids-only stance — needs a 0000 adjudication before a
-  spec. Riders already in 0005: `--all` → `--whole-repo` rename,
-  size confirm + preflight on selective pulls, base-model master
-  advisory.
 - [ ] Example-run cookbook (`docs/examples.md`): one worked pull per
   repo archetype — GGUF quant repo, original safetensors
   (`--whole-repo`),
@@ -78,10 +61,9 @@ Check items off as they ship; update when priorities shift.
   embedding/reranker, gated repo (`hf auth login`). Each example
   shows the non-interactive form (`--include` + `--model` + `--yes`)
   so scripted/cron runs have a copy-paste recipe per model type.
+  The `--plan` flag belongs in every recipe as the verify step.
 - [ ] `quantization` record field is never populated (artifact-level
   label extraction was never specced; per-file is likely the right
   shape now that one artifact can hold several quants).
-- [ ] Split `pull.py` (291) and `records.py` (296) — both near the
-  300-line cap; split before the next feature touches either.
-- [ ] Refresh the CLAUDE.md "Open work" session notes (still
-  describe 0004 as pending).
+- [ ] Split `records.py` (296) — near the 300-line cap; split before
+  the next feature touches it (`pull.py` was split by 0005).
