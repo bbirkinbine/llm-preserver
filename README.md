@@ -46,6 +46,21 @@ uv run llm-preserver show Qwen/Qwen3-4B ~/models   # one model's record
 - **`pull --whole-repo`** — archives a repo's entire tree instead of
   selected files (the full-precision masters).
 
+### Install the command on your PATH (optional, recommended)
+
+`uv run` works only from the project directory. To run `llm-preserver`
+from anywhere — which is also what the resume hint printed by
+interrupted pulls assumes — install it once as a uv tool:
+
+```bash
+uv tool install --editable .   # from the project directory
+llm-preserver status ~/models  # now works from any directory
+```
+
+`--editable` runs the live source tree, so pulling new commits needs
+no reinstall (re-run with `--reinstall` only when dependencies
+change). `uv tool update-shell` wires up PATH if the shim isn't found.
+
 Full command reference — selection patterns, model grouping, roles,
 re-pull/idempotency behavior, exit codes, gated-repo auth — in
 [`docs/cli.md`](docs/cli.md).

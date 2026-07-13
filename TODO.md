@@ -100,3 +100,11 @@ Check items off as they ship; update when priorities shift.
   shape now that one artifact can hold several quants).
 - [ ] Split `records.py` (296) — near the 300-line cap; split before
   the next feature touches it (`pull.py` was split by 0005).
+- [ ] Extend `render.clean_text`'s scrub beyond C0/C1 controls to
+  Unicode bidi/format characters (U+202A–202E, U+2066–2069,
+  zero-width set): hub-supplied text could visually reorder a
+  rendered line (trojan-source-style display spoofing). Flagged by
+  the 0007 security review as Low/theoretical; the resume hint
+  itself is closed by repo-id validation, but every `clean_text`
+  sink would benefit. Needs its own tests — the scrub is global
+  output behavior.
