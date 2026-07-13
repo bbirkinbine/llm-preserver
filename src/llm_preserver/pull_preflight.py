@@ -78,6 +78,31 @@ def already_staged_bytes(staging_dir: Path, to_download: Sequence[PlannedDownloa
     return total
 
 
+def require_disk_budget(archive_root: Path, needed_bytes: int, free_bytes: int) -> None:
+    """Refuse a pull whose bytes will not fit in the given free space.
+
+    Takes an already-measured free-space figure so one disk read backs
+    both the printed preflight verdict and the refusal decision — two
+    reads could disagree if free space moves between them.
+
+    Args:
+        archive_root: The archive the pull writes into (named in the
+            error only; not re-measured).
+        needed_bytes: Byte total of the files the pull must download.
+        free_bytes: Free space measured at ``archive_root``.
+
+    Raises:
+        PullEnvError: If ``free_bytes`` is below ``needed_bytes``,
+            stating required vs. available.
+    """
+    if needed_bytes > free_bytes:
+        raise PullEnvError(
+            f"not enough disk space at {archive_root}: this pull needs "
+            f"{human_size(needed_bytes)} but only {human_size(free_bytes)} is available; "
+            "free up space or point at a bigger volume"
+        )
+
+
 def require_disk_space(archive_root: Path, needed_bytes: int) -> None:
     """Refuse a pull whose bytes will not fit at the archive path.
 
@@ -89,10 +114,4 @@ def require_disk_space(archive_root: Path, needed_bytes: int) -> None:
         PullEnvError: If free space at ``archive_root`` is below
             ``needed_bytes``, stating required vs. available.
     """
-    free = shutil.disk_usage(archive_root).free
-    if needed_bytes > free:
-        raise PullEnvError(
-            f"not enough disk space at {archive_root}: this pull needs "
-            f"{human_size(needed_bytes)} but only {human_size(free)} is available; "
-            "free up space or point at a bigger volume"
-        )
+    require_disk_budget(archive_root, needed_bytes, shutil.disk_usage(archive_root).free)

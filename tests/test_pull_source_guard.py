@@ -1,6 +1,6 @@
 """One source repo per format subdirectory (spec 0004 adjudications).
 
-A tree-verbatim ``--all`` into a format subdirectory whose recorded
+A tree-verbatim ``--whole-repo`` into a format subdirectory whose recorded
 artifact came from a *different* source repo is refused with the ways
 out (--model, or a selective pull). Same-repo mixing stays additive;
 selective pulls keep their 0003 cross-repo behavior. FakeHubClient

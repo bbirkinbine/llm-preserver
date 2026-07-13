@@ -1,4 +1,4 @@
-"""Guard tests for pull --all (spec 0004): preflight, grouping, refresh.
+"""Guard tests for pull --whole-repo (spec 0004): preflight, grouping, refresh.
 
 The disk-space preflight refuses (local-environment domain) before any
 byte downloads; grouping defaults to the repo id when the repo declares
@@ -212,7 +212,7 @@ def test_all_pull_logs_n_of_m_counter_per_file(archive, fake_hub_factory, caplog
 
 def test_selective_pull_logs_n_of_m_counter_per_file(archive, fake_hub_factory, caplog):
     # Ratified at plan review: the counter logs on ALL pulls, not only
-    # --all — one download loop, no mode flag.
+    # --whole-repo — one download loop, no mode flag.
     client = make_snapshot_client(fake_hub_factory)
     with caplog.at_level(logging.INFO):
         pull.pull_model(

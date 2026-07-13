@@ -21,7 +21,10 @@ from llm_preserver.hub import (
     PullUserError,
     RepoInfo,
 )
-from llm_preserver.pull import pull_model
+from llm_preserver.pull import pull_model, validated_roles
+from llm_preserver.pull_preflight import require_disk_budget
+from llm_preserver.pull_prepare import prepare_pull
+from llm_preserver.pull_report import render_plan
 from llm_preserver.render import clean_text
 
 logger = logging.getLogger(__name__)
@@ -147,8 +150,8 @@ def pull(
     select_all: Annotated[
         bool,
         typer.Option(
-            "--all",
-            help="Full snapshot: download the repo's whole tree (excludes --include).",
+            "--whole-repo",
+            help="Full snapshot: download the named repo's whole tree (excludes --include).",
         ),
     ] = False,
     model: Annotated[
@@ -166,6 +169,13 @@ def pull(
             help="Replace changed upstream documentation files (never weights).",
         ),
     ] = False,
+    plan: Annotated[
+        bool,
+        typer.Option(
+            "--plan",
+            help="Dry run: print what the pull would do, then exit without downloading or writing.",
+        ),
+    ] = False,
     yes: Annotated[
         bool,
         typer.Option(
@@ -177,14 +187,14 @@ def pull(
         bool, typer.Option("--verbose", help="Show per-file progress and client detail.")
     ] = False,
 ) -> None:
-    """Pull selected files (or with --all, the whole tree) from a Hugging Face repo."""
+    """Pull selected files (or with --whole-repo, the whole tree) from a Hugging Face repo."""
     _setup_logging(verbose)
     if select_all and include:
         # Mutually exclusive shapes (spec 0004); refuse before any
         # network call or client construction.
         typer.echo(
-            "error [user input]: --all and --include are mutually exclusive; "
-            "pass --all for the whole tree or --include patterns for a selection",
+            "error [user input]: --whole-repo and --include are mutually exclusive; "
+            "pass --whole-repo for the whole tree or --include patterns for a selection",
             err=True,
         )
         raise typer.Exit(code=2)
@@ -200,6 +210,41 @@ def pull(
         if not select_all and not patterns:
             info = client.repo_info(repo_id)
             patterns = _prompt_for_selection(info, repo_id)
+        if plan:
+            # Dry run (spec 0005): prepare through the same code path a
+            # real pull executes, report, and exit — confirmations are
+            # recorded as would-ask lines, never asked. The preflight
+            # check runs after the report so an over-budget plan still
+            # prints before refusing (exit 3, scripts gate on it).
+            # Roles validate here too: plan exit 0 must mean the real
+            # command would proceed, and a bad --role would exit 2.
+            validated_roles(tuple(role or ()))
+            would_ask: list[str] = []
+
+            def record_prompt(prompt: str) -> bool:
+                would_ask.append(clean_text(prompt, single_line=True))
+                return True
+
+            prep = prepare_pull(
+                path,
+                repo_id,
+                client,
+                include=patterns,
+                model=model,
+                repo_info=info,
+                refresh_docs=refresh_docs,
+                select_all=select_all,
+                confirm=record_prompt,
+            )
+            for line in render_plan(prep, would_ask):
+                if line.startswith("warning:"):
+                    # Likely human error (e.g. grouping mismatch) —
+                    # highlight it; click strips color off-terminal.
+                    typer.secho(line, fg=typer.colors.YELLOW, bold=True)
+                else:
+                    typer.echo(line)
+            require_disk_budget(path, prep.needed_bytes, prep.disk_free)
+            return
         model_dir = pull_model(
             path,
             repo_id,

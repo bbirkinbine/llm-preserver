@@ -1,10 +1,12 @@
-"""Tests for llm_preserver.pull — the --all full-snapshot shape (spec 0004).
+"""Tests for llm_preserver.pull — the whole-repo full-snapshot shape.
 
-``pull --all`` archives a repo's whole tree at the pinned commit into
-the model's format subdirectory, preserving repo-relative paths (tree
-fidelity: in-tree docs stay put, unlike 0003's selective relocation).
-The per-file selection prompts are replaced by one file-count +
-total-size confirmation. Pins the seam from the spec-0004 plan:
+``pull --whole-repo`` (spec 0004's ``--all``, renamed by the spec-0005
+rider with no deprecation alias) archives a repo's whole tree at the
+pinned commit into the model's format subdirectory, preserving
+repo-relative paths (tree fidelity: in-tree docs stay put, unlike
+0003's selective relocation). The per-file selection prompts are
+replaced by one file-count + total-size confirmation. Pins the seam
+from the spec-0004 plan:
 
     pull_model(..., select_all=False)  # True → selection = whole tree
 
@@ -103,24 +105,42 @@ class ExplodingHubClient:
         raise AssertionError("download must not be called")
 
 
-def test_cli_all_with_include_exits_2_naming_both_flags(tmp_path, monkeypatch):
-    # --all and --include are mutually exclusive (spec 0004); the
-    # conflict is a user-input fault raised before any network call.
+def test_cli_whole_repo_with_include_exits_2_naming_both_flags(tmp_path, monkeypatch):
+    # --whole-repo and --include are mutually exclusive (spec 0004,
+    # flag renamed by spec 0005); the conflict is a user-input fault
+    # raised before any network call.
     archive_dir = init_archive_dir(tmp_path)
     install_fake_hub(monkeypatch, ExplodingHubClient())
 
     result = runner.invoke(
         app,
-        ["pull", GGUF_REPO_ID, str(archive_dir), "--all", "--include", "*.gguf"],
+        ["pull", GGUF_REPO_ID, str(archive_dir), "--whole-repo", "--include", "*.gguf"],
     )
 
     assert result.exit_code == 2
     output = combined_output(result)
-    assert "--all" in output
+    assert "--whole-repo" in output
     assert "--include" in output
 
 
-def test_cli_all_pulls_whole_tree_without_interactive_selection(
+def test_cli_all_flag_is_rejected_as_unknown_option(tmp_path, monkeypatch):
+    # Spec 0005 rider: --all renamed to --whole-repo with no
+    # deprecation alias — the old spelling is a plain usage error.
+    archive_dir = init_archive_dir(tmp_path)
+    install_fake_hub(monkeypatch, ExplodingHubClient())
+
+    result = runner.invoke(
+        app,
+        ["pull", GGUF_REPO_ID, str(archive_dir), "--all", "--model", "acme/tiny-chat"],
+    )
+
+    assert result.exit_code == 2
+    output = combined_output(result)
+    assert "no such option" in output.lower()
+    assert "--all" in output
+
+
+def test_cli_whole_repo_pulls_whole_tree_without_interactive_selection(
     tmp_path, monkeypatch, fake_hub_factory
 ):
     archive_dir = init_archive_dir(tmp_path)
@@ -128,7 +148,7 @@ def test_cli_all_pulls_whole_tree_without_interactive_selection(
 
     result = runner.invoke(
         app,
-        ["pull", GGUF_REPO_ID, str(archive_dir), "--all", "--model", "acme/tiny-chat"],
+        ["pull", GGUF_REPO_ID, str(archive_dir), "--whole-repo", "--model", "acme/tiny-chat"],
         input="y\n",  # the single size + count confirmation
     )
 
@@ -231,7 +251,7 @@ def test_declined_all_confirmation_downloads_and_writes_nothing(archive, fake_hu
 
 
 def test_all_never_triggers_the_every_weight_confirmation(archive, fake_hub_factory):
-    # --all inevitably selects every weight; the 0003 every-weight
+    # --whole-repo inevitably selects every weight; the 0003 every-weight
     # prompt is replaced by the single size + count confirm — never both.
     prompts = []
 
