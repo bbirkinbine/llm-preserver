@@ -11,8 +11,8 @@ uv run llm-preserver pull --help
 ```
 
 Commands documented here: `init`, `pull` (selective, `--whole-repo`
-full snapshot, and `--plan` dry run), `status`, `show`. Planned
-features (verify, cache import,
+full snapshot, and `--plan` dry run), `discover`, `status`, `show`.
+Planned features (verify, cache import,
 runtime views) are listed in the roadmap in
 [`specs/0000-product.md`](specs/0000-product.md)
 and appear here when they ship.
@@ -71,6 +71,20 @@ The map:
 
 When unsure, run `pull <repo-id>` with no `--include`: the file
 listing with sizes *is* the decision aid.
+
+**Archiving for a goal.** What a model needs in the archive depends
+on what you want to still be able to do with it later:
+
+| Goal | Archive this | How |
+| --- | --- | --- |
+| Run it locally | one quant that fits your hardware | `pull <quant-repo> --include '*Q4_K_M*'` |
+| Re-make any quant later, offline | the repo's bf16/f16 GGUF plus its `*imatrix*` file | `pull <quant-repo> --include '*bf16*,*imatrix*'` |
+| Fine-tune it later | the model's own full-precision safetensors | `pull <original-repo> --whole-repo` |
+
+The three compose: a quant for today, bf16+imatrix for quant
+independence, the safetensors master for training. The
+full-precision-master advisory names the exact `--whole-repo`
+command whenever a quant pull leaves the third row uncovered.
 
 ## pull — download files from a Hugging Face repo
 
@@ -183,6 +197,13 @@ Behavior worth knowing:
   `adapter_config.json`, the pull fetches that one small file (to a
   temp dir, never the archive) to read its base-model pointer, and
   says so.
+- **Renamed parents resolve to their current name.** A repo's card
+  can declare its base model by a pre-rename name the hub now
+  redirects; the pull spends one light metadata check resolving it
+  (announced with an INFO line), so grouping proposals, advisories,
+  and archive records carry the current id — a name that still
+  resolves years later. If the declared base can't be resolved, the
+  declared name stands and the pull proceeds normally.
 - **Non-interactive runs never hang or die vaguely.** When stdin
   cannot answer a confirmation (cron, CI, piped input exhausted), the
   pull exits 2 with a message naming the bypass: `--model` for the
@@ -336,6 +357,71 @@ Snapshot behavior:
 - **Gated originals** (Llama-style license acceptance) work exactly
   like gated quants: accept the license on the hub once, then
   `hf auth login` — no tool flags.
+
+## discover — find a model by name and pull it
+
+For when you know a model's *name* but not the exact repo id — the
+step `pull` can't help with. `discover` closes the browser trip:
+
+```bash
+uv run llm-preserver discover 'qwen3 0.6b gguf' ~/models
+# hub search results for 'qwen3 0.6b gguf':
+#   1. Qwen/Qwen3-Embedding-0.6B-GGUF  —  181142 downloads · 2025-07-14
+#   2. Qwen/Qwen3-0.6B-GGUF            —  38687 downloads · 2025-05-09
+#   ...
+# showing 20 — more available (m)
+# pick a model to explore (number; m = more, q = quit): 13
+# model tree for unsloth/Qwen3-0.6B-GGUF:
+# up — ancestry, root at top (picking a number climbs the tree):
+#   1. Qwen/Qwen3-0.6B-Base  —  1062579 downloads   [original — no parent]
+#   2.    └─ Qwen/Qwen3-0.6B —  27809311 downloads
+#            └─ unsloth/Qwen3-0.6B-GGUF  [this repo — you are here]
+# down — derivatives of this repo (picking drills into one):
+# quantized versions:
+#   3. ...
+#   0. pull this repo (unsloth/Qwen3-0.6B-GGUF)
+# hop the tree by number — 0 = pull unsloth/Qwen3-0.6B-GGUF (m = more, q = quit): 0
+# → the normal pull flow: file listing, advisories, size confirmation
+```
+
+Discovery is open-ended navigation, not a fixed number of steps: you
+can hop the tree as long as you like, and the session ends only when
+you pick the "pull this repo" line (which starts the normal pull) or
+type `q`. Three stages, every step a numbered pick:
+
+1. **Search** — the hub's own free-text results, passed through
+   verbatim (the hub's relevance order — the tool never re-ranks).
+   Each row shows hub facts: downloads, last-updated, and a `gated`
+   marker where the repo needs accepted terms (`hf auth login` as
+   usual). An empty result set exits 0 — refine the query and re-run.
+2. **Model tree** — the picked repo's parents (repeated `base_model`
+   hops; a renamed parent shows both ids, a dead one says "not found
+   on the hub" — stale hub metadata is shown, never guessed around)
+   and its derivative children grouped by relation (quantized /
+   finetune / adapter / merge), hub-sorted by downloads. Sections are
+   direction-labeled (up = parents, down = derivatives), a
+   `your path:` breadcrumb shows the repos you've hopped through
+   (hopping back to one pops the path), and `0` is always the
+   pull-this-repo key — stable no matter how many pages you fetch. Pick a number to hop
+   anywhere; both listings page with `m`.
+3. **Pull** — "pull this repo" first asks *how* to archive:
+   `1 = pick files` (quant repos — choose your quant from the
+   listing) or `2 = whole-repo snapshot` (originals/masters — the
+   tree is the artifact, spec 0004 semantics). Then the exact `pull`
+   flow: file listing (mode 1 only), advisories, the normal grouping
+   confirmation (pull proposes the canonical home — the declared
+   base for a quant, the repo's own id for an original or fine-tune
+   — and you answer y/n), then the size confirmation. No `--model` flag needed, hub
+   metadata never names an archive directory without your yes, and
+   the grouping-mismatch warning stays silent because there is no
+   override to mismatch.
+
+`--plan` makes the final pull the dry run (verify, then re-run for
+real); `--verbose` as in `pull`. Failures map to the same exit codes
+as `pull` (network 3, hub-side 4). Discovery is deliberately
+interactive-only: scripts already have exact repo ids, `--include`,
+`--yes`, and `--plan`. The tool shows facts and takes your picks — it
+never recommends, scores, or auto-selects.
 
 ## status — inventory table
 
