@@ -1,6 +1,6 @@
 # 0007 — Resume Command Hint
 
-**Status:** shipping
+**Status:** shipped
 **Last updated:** 2026-07-13
 
 ## Goal

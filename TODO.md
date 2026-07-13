@@ -5,7 +5,7 @@ What's next, in rough order. Feature detail lives in
 and the numbered specs; this file is the short-term working list.
 Check items off as they ship; update when priorities shift.
 
-## Next spec (0007) — pick one
+## Next spec (0008) — pick one
 
 - [ ] **Verify** (recommended next): audit the archive against
   records/manifests, BagIt-style — *complete* (every recorded file
@@ -50,6 +50,18 @@ Check items off as they ship; update when priorities shift.
   summary) and `hub.py` split into a package. Fifteen live-use
   adjudications from manual testing shaped the UX; the full record
   is in the spec.
+- 0007 resume-command hint (merged 2026-07-13, PR #9, rebase-merge):
+  interactively shaped pulls (discover handoff, interactive file
+  listing) print the exact direct `pull` command after the
+  confirmations — absolute archive path, quoted `--include`
+  patterns, the confirmed grouping replayed as `--model` — and
+  Ctrl-C during *any* transfer reprints it as the final line (exit
+  130). Hub repo ids validate before entering the pasteable line;
+  `pull_exec.py` split into a package. Live-verified twice,
+  including the interrupt-a-resumed-pull case that flipped the
+  Ctrl-C print to unconditional. README now documents
+  `uv tool install --editable .` (the hint assumes the CLI is on
+  PATH).
 
 ## Smaller items (from live use)
 
