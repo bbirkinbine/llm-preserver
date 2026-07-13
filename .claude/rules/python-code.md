@@ -20,6 +20,19 @@ paths:
   `structlog` is a good default for services; stdlib `logging` is fine for
   small libraries and CLIs. Avoid `print` for non-CLI diagnostics.
 
+## Asserting on CLI output in tests
+
+- **`click.unstyle()` the output before any substring assert on CLI
+  output** (help screens, usage errors, anything rich renders). rich
+  emits ANSI style codes when it detects a color-capable environment —
+  GitHub Actions qualifies, local pytest does not — so a plain
+  substring assert passes locally and fails only in CI. Bitten twice
+  (spec 0005 `--all` rejection test; the `-h` help tests): the codes
+  land mid-substring and split the text being asserted.
+- Reproduce the CI rendering locally with
+  `FORCE_COLOR=1 GITHUB_ACTIONS=true TERM=xterm-256color uv run pytest ...`
+  before pushing a fix.
+
 ## External-reference provenance (implement phase)
 
 Any value or claim whose correctness depends on matching an external
