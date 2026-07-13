@@ -246,6 +246,9 @@ def _run_discovery(path: Path, client: HubClientProtocol, query: str, plan: bool
             select_all=whole_repo,
             plan=plan,
             repo_info=info,
+            # The discover invocation is what shell history holds; the
+            # resume hint is the only record of the pull shape (0007).
+            resume_hint=True,
         )
         return
 

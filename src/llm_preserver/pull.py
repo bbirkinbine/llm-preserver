@@ -12,7 +12,7 @@ hard stop, never a silent overwrite (see ``pull_plan``).
 
 import logging
 import shutil
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import cast, get_args
 
@@ -77,6 +77,7 @@ def pull_model(
     refresh_docs: bool = False,
     select_all: bool = False,
     confirm: ConfirmCallback,
+    on_transfer_start: Callable[[str], None] | None = None,
 ) -> Path:
     """Pull selected files from a hub repo into the archive.
 
@@ -104,6 +105,12 @@ def pull_model(
             0005 rider).
         confirm: Yes/no prompt callback for grouping and size/weight
             confirmations.
+        on_transfer_start: Called once with the resolved canonical
+            model directory (``<creator>/<model>``) after every
+            confirmation succeeds and before the first download begins
+            — the moment the resume hint is both accurate (grouping
+            settled) and useful (spec 0007). Not called for adopt-only
+            pulls: there is no transfer to interrupt.
 
     Returns:
         The model directory the pull landed in.
@@ -154,6 +161,8 @@ def pull_model(
         )
     ):
         raise PullUserError("pull declined: nothing downloaded")
+    if prep.plan.to_download and on_transfer_start is not None:
+        on_transfer_start(f"{prep.creator}/{prep.name}")
     try:
         new_entries: list[FileEntry] = list(prep.plan.adopted)
         if prep.plan.to_download:

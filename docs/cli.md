@@ -231,6 +231,30 @@ Behavior worth knowing:
   client's bars show two phases per large file — "downloading bytes"
   then "reconstructing file" — that's its Xet chunk transfer, not
   two downloads.)
+- **The resume-command hint.** When the pull's shape came from the
+  interactive file listing (patterns you typed at the prompt, so your
+  shell history doesn't have them), the pull prints one line right
+  after the confirmations, before the first byte moves:
+  `to continue this pull later: llm-preserver pull <repo-id> <path>
+  --include '<pattern>' --model <creator>/<model>`. It is the exact
+  direct command that reproduces this pull — absolute archive path
+  (works without `LLM_PRESERVER_ARCHIVE` and from any directory),
+  shell-quoted patterns, and the grouping you just confirmed replayed
+  as `--model` so the continue lands in the same model directory.
+  Because re-pulls are idempotent, running it later downloads only
+  what is still missing. Ctrl-C during the transfer prints the hint
+  as the final line — directly above your next shell prompt — and
+  exits 130 (128 + SIGINT); that interrupt-time print happens on
+  *every* pull, including one whose shape you typed yourself (where
+  it usefully carries the resolved `--model` your history entry may
+  lack). Only the transfer-start print is skipped when you typed
+  `--include`/`--whole-repo` yourself: that command is already in
+  your history. The hint spells the command `llm-preserver …` — paste
+  it as-is after installing the CLI on your PATH (README → "Install
+  the command on your PATH"), or prefix `uv run` and run it from the
+  project directory. Note the line carries your machine's absolute
+  archive path — worth trimming if you paste terminal output into a
+  public issue.
 - **Gated/private repos** use Hugging Face's own login: run
   `hf auth login` once (or set `HF_TOKEN`). The tool takes no token
   flags and never stores or logs the token. Logging in also helps
@@ -247,6 +271,7 @@ reading source:
 | 3 | local environment | network unreachable, disk full — check your machine |
 | 4 | hub-side | 5xx or rate limiting — retry later; not your fault |
 | 5 | integrity | hash mismatch after download — the file never entered the archive |
+| 130 | interrupted | Ctrl-C during the transfer — paste the resume hint (printed as the last line) to continue |
 
 ## pull --plan — dry run (verify, then run)
 
@@ -420,7 +445,13 @@ type `q`. Three stages, every step a numbered pick:
    — and you answer y/n), then the size confirmation. No `--model` flag needed, hub
    metadata never names an archive directory without your yes, and
    the grouping-mismatch warning stays silent because there is no
-   override to mismatch.
+   override to mismatch. Once the confirmations pass, the pull prints
+   the **resume-command hint** — the direct `llm-preserver pull …`
+   line that reproduces this exact pull without re-driving the
+   navigation (see the pull section). Only the `discover` invocation
+   is in your shell history, so this line is the one record of the
+   pull you assembled; interrupt the download with Ctrl-C and it
+   reprints as the final line, ready to paste when you come back.
 
 `--plan` makes the final pull the dry run (verify, then re-run for
 real); `--verbose` as in `pull`. Failures map to the same exit codes
