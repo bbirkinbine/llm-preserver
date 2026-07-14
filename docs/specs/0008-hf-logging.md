@@ -1,6 +1,6 @@
 # 0008 — Hf Logging
 
-**Status:** shipped (2026-07-13, PR #11)
+**Status:** shipped
 **Last updated:** 2026-07-13
 
 ## Goal

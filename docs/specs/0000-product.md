@@ -98,8 +98,9 @@ Drafted specs (local-only numbering; a number is consumed only when
 a spec file is created, so planned features below carry names, not
 numbers):
 
-- `0001-archive-init-and-manifest.md` — archive layout, model-record
-  schema, `init` / `status` commands.
+- `0001-archive-init-and-manifest.md` — **shipped 2026-07-10
+  (PR #3)**: archive layout, model-record schema, `init` / `status`
+  commands.
 - `0002-runtime-views.md` — models are too large to shuttle between
   bulk storage and local disks, so generate disposable symlink/config
   views that let runtimes run models *in place* from the (payload-
@@ -120,35 +121,34 @@ numbers):
   (curated data rules, never auto-add; grouping-mismatch warning),
   `pull --plan` dry run, size confirmation + disk preflight on every
   pull mode.
+- `0006-guided-discovery.md` — **shipped 2026-07-13 (PR #7)**: the
+  deterministic path from "I only know the model's name" to a
+  completed, correctly-grouped pull — hub search passed through
+  verbatim → typed model-tree navigation → the existing pull flow.
+  Product stance revised alongside it: deterministic discovery is in
+  scope; the invariant is no LLM and no tool judgment (see
+  non-goals).
+- `0007-resume-command-hint.md` — **shipped 2026-07-13 (PR #9)**:
+  interactively shaped pulls print the exact direct `pull` command;
+  Ctrl-C during any transfer reprints it as the final line.
+- `0008-hf-logging.md` — **shipped 2026-07-13 (PR #11)**:
+  `--hf-logging` surfaces the HF client's own transfer telemetry
+  (stalls, retries, rate limits) on `pull` and `discover`.
+- `0009-verify.md` — **shipped 2026-07-13 (PR #12)**: the
+  whole-archive drift detector, BagIt-style — *complete* (every
+  recorded file exists on disk; catches out-of-band deletion, since
+  the tool itself never deletes) and *valid* (every file re-hashes
+  to its recorded SHA256; catches bitrot and tampering). Report plus
+  exit-code cron contract; repair actions are the user's call. Pull
+  deliberately does only a per-file existence check on its own skip
+  path (spec 0003) — whole-archive drift detection lives here.
 
 Planned features, spec pending (in rough priority order):
 
-- **Guided discovery** (0006 candidate; product stance revised
-  2026-07-13, see non-goals) — the deterministic path from "I only
-  know the model's name" to a completed, correctly-grouped pull
-  without leaving the tool: hub free-text search passed through
-  verbatim → pick the model → typed model-tree listing (derivatives
-  down, parent chain up — a user landing on a finetune sees what it
-  derives from) → the existing interactive file listing, annotated
-  with the curated quant-label table (absorbs the "Later"
-  quant-selection UX item below) plus hub facts (downloads,
-  publisher, size, gated). Success bar: a person who knows only a
-  model's name gets from name to a completed pull without opening a
-  browser. Caveat to design for: `base_model` metadata can be stale
-  (renamed upstream repos) — present it honestly, never auto-follow.
 - **Live-hub canary** — a scheduled (not per-PR) CI job running a
   cheap read-only real-hub operation (`pull --plan` on one small
   known repo) so server-side API/metadata drift is an email, not a
   failed pull; CI's deterministic offline suite stays untouched.
-
-- **Verify** — audit the archive against records/manifests,
-  BagIt-style: *complete* (every recorded file exists on disk —
-  catches out-of-band deletion, since the tool itself never deletes)
-  and *valid* (every file re-hashes to its recorded SHA256 — catches
-  bitrot and tampering). Read-only report; repair actions are the
-  user's call. Pull deliberately does only a per-file existence
-  check on its own skip path (spec 0003) — whole-archive drift
-  detection lives here.
 - **Smoke test** — offline smoke test integration (ollama /
   llama-cli), recorded per model.
 - **Cache import** — import/inventory existing Ollama, LM Studio,

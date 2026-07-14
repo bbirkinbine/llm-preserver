@@ -347,12 +347,12 @@ parallelize only with partitioned file ownership.
   data; never delete, move, or "clean up" archive contents. Tests use
   tmp dirs, never a real archive.
 
-## Open work / current state (updated 2026-07-13, end of session 9)
+## Open work / current state (updated 2026-07-13, end of session 10)
 
-- **Specs 0001, 0003, 0004, 0005, 0006, 0007 are all merged; 0008
-  shipped (PR #11).** The loop is live-verified end to end: discover
-  (name → tree → pull) or pull by exact id → advisories/--plan →
-  status/show, with a printed resume command surviving any
+- **Specs 0001, 0003, 0004, 0005, 0006, 0007, 0008, and 0009 are all
+  merged.** The loop is live-verified end to end: discover (name →
+  tree → pull) or pull by exact id → advisories/--plan →
+  status/show → verify, with a printed resume command surviving any
   interrupted transfer.
 - **Session 9 (2026-07-13, medium-tier, PR #11): spec 0008
   `--hf-logging`.** Vendor-telemetry passthrough on pull/discover:
@@ -458,7 +458,7 @@ parallelize only with partitioned file ownership.
   (capability report in `status`), file-kind dictionary, live-hub
   canary (0000 roadmap).
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
-  (draft, unblocked); 0005/0006/0007/0008 shipped.
+  (draft, unblocked); 0005/0006/0007/0008/0009 shipped.
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

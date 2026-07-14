@@ -37,8 +37,8 @@ line; the source of truth is the spec file, this is a rendered cache. Run
 - ~~[0005 — Companion Advisory And Pull Plan](0005-companion-advisory-and-pull-plan.md)~~  (shipped)
 - ~~[0006 — Guided Discovery](0006-guided-discovery.md)~~  (shipped)
 - ~~[0007 — Resume Command Hint](0007-resume-command-hint.md)~~  (shipped)
-- [0008 — Hf Logging](0008-hf-logging.md)  (shipped (2026-07-13, PR #11))
-- [0009 — Verify](0009-verify.md)  (shipped (2026-07-13, PR #12))
+- ~~[0008 — Hf Logging](0008-hf-logging.md)~~  (shipped)
+- ~~[0009 — Verify](0009-verify.md)~~  (shipped)
 <!-- specs-status:end -->
 
 ## Numbering

@@ -2,9 +2,9 @@
 
 Visual reference for the on-disk and in-memory structures the tool is
 built on. This is the foundation layer (spec 0001, layout decided by
-ADR 0001 — `docs/adr/0001-model-storage.md`); every later feature
-(download, verify, smoke test, runtime views) reads or writes these
-same structures. Diagrams are Mermaid — GitHub and VS Code's markdown
+ADR 0001 — `docs/adr/0001-model-storage.md`); every later feature —
+pull and verify (shipped), smoke test and runtime views (planned) —
+reads or writes these same structures. Diagrams are Mermaid — GitHub and VS Code's markdown
 preview render them natively.
 
 Source of truth for the schemas is the code
@@ -245,7 +245,7 @@ sequenceDiagram
     Note over FS: JSON lands last — a failure in between<br/>leaves only a stale regenerable rendering
 ```
 
-The same convention extends to future download specs: payload files
+The same convention extends to pull (specs 0003/0004): payload files
 first, record last, so the record only ever describes files that exist.
 
 `init` is idempotent and defensive: re-running on an existing archive
@@ -298,11 +298,11 @@ flowchart LR
         INIT["init: skeleton + marker<br/>(spec 0001)"]
         REC["records: schema + JSON round-trip<br/>+ generated markdown (spec 0001)"]
         STATUS["status / show: inventory + detail<br/>(spec 0001)"]
+        DL["pull: selective + whole-repo<br/>(specs 0003/0004)"]
         VER["verify: re-hash disk against records<br/>(spec 0009)"]
     end
 
     subgraph FUTURE ["planned layers (0000-product roadmap)"]
-        DL["download specs<br/>(GGUF pull, HF snapshot)"]
         SMOKE["smoke-test spec"]
         IMPORT["cache-import spec"]
         VIEWS["runtime views (spec 0002)"]

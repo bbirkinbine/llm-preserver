@@ -22,11 +22,12 @@ that's two places to drift out of sync. This section holds only the
 - Transient blockers (a flaky external dependency, a pinned-back
   version waiting on an upstream fix).
 
-As of 2026-07-09: baseline pushed to `main` (private GitHub repo), CI
-green, no feature branches. Two Dependabot PRs open (CI-green action
-bumps) awaiting Brian. The single gating item — ADR 0001 under review
-— and the temporary docs-only-to-main exception are tracked in
-`CLAUDE.md` → Open work.
+As of 2026-07-14: `main` is the only branch; CI green; no PRs in
+flight. Specs 0001 and 0003–0009 have shipped (the full loop: init →
+discover/pull → status/show → verify); ADR 0001 is accepted. No
+deploys, migrations, or transient blockers. The docs-only-to-main
+exception from bootstrap week is over — all changes branch first
+(`no-commit-to-branch` enforces it).
 
 ---
 

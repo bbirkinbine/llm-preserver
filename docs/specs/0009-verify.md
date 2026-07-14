@@ -1,6 +1,6 @@
 # 0009 — Verify
 
-**Status:** shipped (2026-07-13, PR #12)
+**Status:** shipped
 **Last updated:** 2026-07-13
 
 ## Goal
