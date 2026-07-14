@@ -541,7 +541,13 @@ hash. Fully offline; it never contacts the hub.
 
 One result line per model (valid models included — an audit should
 read as "everything was checked"), with per-file detail lines under
-any model that drifted, then an archive-wide totals summary. The
+any model that drifted, then an archive-wide totals summary. Run
+interactively, verify also shows live progress on stderr — a
+`checking <model> (N files, X GiB recorded)` line as each model
+starts, and an in-place `hashing <file>: 12.4 GiB / 28.9 GiB` counter
+while a large file streams through the hash — so a long run never
+looks hung. Piped or cron runs get none of this: without a terminal
+on stderr the output is exactly the report below, nothing more. The
 categories:
 
 - **valid** — every recorded file exists and re-hashes to its recorded

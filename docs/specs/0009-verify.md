@@ -106,7 +106,16 @@ per-model `manifest-sha256.txt` fixity sidecar reserved there.
 - Hashing multi-GB files takes real time: verify streams files in
   chunks (no whole-file reads into memory) and shows per-model
   progress so a long run is visibly alive. Ctrl-C exits cleanly
-  (exit 130) without leaving a partially written sidecar.
+  (exit 130) without leaving a partially written sidecar. Refined
+  from live use (adjudicated 2026-07-13: result-lines-only left the
+  user "staring at nothing" during large hashes): when stderr is a
+  terminal, verify prints a `checking <model> (N files, X GiB
+  recorded)` line as each model starts and an in-place
+  `hashing <file>: done / total` byte counter (redrawn at most twice
+  a second) while each file hashes. When stderr is not a terminal
+  (cron, pipes), no progress output is emitted at all — the report
+  and exit codes stay byte-identical to a progress-free run, so the
+  cron contract is untouched.
 - The whole-archive report prints **one result line per model,
   valid models included**, then the totals summary (adjudicated
   2026-07-13): an audit should read as "everything was checked", and

@@ -218,7 +218,7 @@ def test_unreadable_payload_is_a_per_file_error_not_a_crash(
     real = hashing.sha256_of
     unreadable = archive / "models" / "acme" / "tiny-chat" / PAYLOAD_REL
 
-    def failing(path: Path) -> str:
+    def failing(path: Path, progress: Callable[[int], None] | None = None) -> str:
         if Path(path) == unreadable:
             raise OSError("Input/output error")
         return real(path)
@@ -243,7 +243,7 @@ def test_interrupt_mid_hash_exits_130_without_sidecar_debris(
     (model_dir / MANIFEST_FILENAME).write_text(STALE_MANIFEST, encoding="utf-8")
     hashing = importlib.import_module("llm_preserver.hashing")
 
-    def interrupted(path: Path) -> str:
+    def interrupted(path: Path, progress: Callable[[int], None] | None = None) -> str:
         raise KeyboardInterrupt
 
     monkeypatch.setattr(hashing, "sha256_of", interrupted)
