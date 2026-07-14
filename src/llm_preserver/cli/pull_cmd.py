@@ -64,9 +64,16 @@ def pull(
     verbose: Annotated[
         bool, typer.Option("--verbose", help="Show per-file progress and client detail.")
     ] = False,
+    hf_logging: Annotated[
+        bool,
+        typer.Option(
+            "--hf-logging",
+            help="Show the HF client's own transfer telemetry (stalls, retries, backoff).",
+        ),
+    ] = False,
 ) -> None:
     """Pull selected files (or with --whole-repo, the whole tree) from a Hugging Face repo."""
-    setup_logging(verbose)
+    setup_logging(verbose, hf_logging=hf_logging)
     if select_all and include:
         # Mutually exclusive shapes (spec 0004); refuse before any
         # network call or client construction.
@@ -92,4 +99,5 @@ def pull(
         refresh_docs=refresh_docs,
         plan=plan,
         yes=yes,
+        hf_logging=hf_logging,
     )

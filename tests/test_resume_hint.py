@@ -403,6 +403,32 @@ def test_role_and_refresh_docs_ride_along_in_the_hint(tmp_path, monkeypatch, fak
     assert "--refresh-docs" in hints[0]
 
 
+def test_hf_logging_rides_along_in_the_hint(tmp_path, monkeypatch, fake_hub_factory):
+    # Spec 0008: the flag exists for the stalled-transfer scenario the
+    # hint serves, so the continue command must not silently drop it.
+    archive = init_archive_dir(tmp_path)
+    install_fake_hub(monkeypatch, fake_hub_factory())
+
+    result = invoke_pull(archive, "--hf-logging", stdin=PULL_INTERACTIVE_STDIN)
+
+    assert result.exit_code == 0
+    hints = hint_lines(unstyled_output(result))
+    assert len(hints) == 1
+    assert "--hf-logging" in hints[0]
+
+
+def test_discover_hf_logging_rides_along_in_the_hint(tmp_path, monkeypatch, fake_hub_factory):
+    archive = init_archive_dir(tmp_path)
+    install_fake_hub(monkeypatch, quant_client(fake_hub_factory))
+
+    result = invoke_discover(archive, "--hf-logging", stdin=DISCOVER_PICK_FILES_STDIN)
+
+    assert result.exit_code == 0
+    hints = hint_lines(unstyled_output(result))
+    assert len(hints) == 1
+    assert "--hf-logging" in hints[0]
+
+
 # --- the hint round-trips: paste it and the pull completes --------------
 
 

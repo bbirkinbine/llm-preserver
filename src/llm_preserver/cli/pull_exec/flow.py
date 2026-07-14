@@ -39,6 +39,7 @@ def run_pull(
     yes: bool = False,
     repo_info: RepoInfo | None = None,
     resume_hint: bool = False,
+    hf_logging: bool = False,
 ) -> None:
     """Run the pull flow: interactive listing, plan or pull, exit mapping.
 
@@ -62,6 +63,9 @@ def run_pull(
             file listing shaped it — a user-typed shape is already in
             shell history. Ctrl-C prints the hint regardless: an
             interrupted transfer always ends with the continue line.
+        hf_logging: Whether --hf-logging is in effect this run; the
+            composed hint replays it (spec 0008 — the stalled-transfer
+            scenario the hint serves is the one the flag exists for).
 
     Raises:
         typer.Exit: The fault-domain exit for any pull failure, or
@@ -123,6 +127,7 @@ def run_pull(
                     select_all=select_all,
                     roles=roles,
                     refresh_docs=refresh_docs,
+                    hf_logging=hf_logging,
                 )
                 if plan_hint is not None:
                     typer.echo(plan_hint)
@@ -151,6 +156,7 @@ def run_pull(
                 model=resolved_model,
                 roles=roles,
                 refresh_docs=refresh_docs,
+                hf_logging=hf_logging,
             )
             if hint is not None and emit_hint:
                 typer.echo(hint)

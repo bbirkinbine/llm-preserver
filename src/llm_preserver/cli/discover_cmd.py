@@ -208,7 +208,9 @@ def _prompt_archive_mode() -> bool | None:
         typer.echo("enter 1, 2, or q")
 
 
-def _run_discovery(path: Path, client: HubClientProtocol, query: str, plan: bool) -> None:
+def _run_discovery(
+    path: Path, client: HubClientProtocol, query: str, plan: bool, hf_logging: bool = False
+) -> None:
     """Drive search → tree hops → the shared pull core.
 
     The trail is a stack of visited repo ids: hopping to a repo
@@ -249,6 +251,7 @@ def _run_discovery(path: Path, client: HubClientProtocol, query: str, plan: bool
             # The discover invocation is what shell history holds; the
             # resume hint is the only record of the pull shape (0007).
             resume_hint=True,
+            hf_logging=hf_logging,
         )
         return
 
@@ -269,9 +272,16 @@ def discover(
     verbose: Annotated[
         bool, typer.Option("--verbose", help="Show per-file progress and client detail.")
     ] = False,
+    hf_logging: Annotated[
+        bool,
+        typer.Option(
+            "--hf-logging",
+            help="Show the HF client's own transfer telemetry (stalls, retries, backoff).",
+        ),
+    ] = False,
 ) -> None:
     """Find a model by name and pull it — search, model tree, pull, no browser."""
-    setup_logging(verbose)
+    setup_logging(verbose, hf_logging=hf_logging)
     # Fail fast on a bad archive path — before any network call.
     try:
         require_archive(path)
@@ -279,6 +289,6 @@ def discover(
         raise fail(str(exc)) from exc
     client = make_hub_client()
     try:
-        _run_discovery(path, client, query, plan)
+        _run_discovery(path, client, query, plan, hf_logging=hf_logging)
     except PullError as exc:
         raise exit_for_pull_error(exc) from exc
