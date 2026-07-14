@@ -17,9 +17,9 @@ with TAB afterwards), and `--show-completion` prints that completion
 script instead of installing it, for manual setup.
 
 Commands documented here: `init`, `pull` (selective, `--whole-repo`
-full snapshot, and `--plan` dry run), `discover`, `status`, `show`.
-Planned features (verify, cache import,
-runtime views) are listed in the roadmap in
+full snapshot, and `--plan` dry run), `discover`, `status`, `show`,
+`verify`. Planned features (cache import, runtime views, smoke tests)
+are listed in the roadmap in
 [`specs/0000-product.md`](specs/0000-product.md)
 and appear here when they ship.
 
@@ -262,6 +262,16 @@ Behavior worth knowing:
   client's bars show two phases per large file — "downloading bytes"
   then "reconstructing file" — that's its Xet chunk transfer, not
   two downloads.)
+- **Abandoning an interrupted pull.** Downloads stage into
+  `<archive-root>/.staging/<creator>/<model>/` (a sibling of
+  `models/` — the model only appears under `models/` once every file
+  is staged, verified, and moved, which is why a mid-pull model is
+  invisible to `status`). The staging directory is deleted on pull
+  success; after an interrupt it holds the completed files and the
+  transfer client's partial-download bookkeeping. If you decide not
+  to finish the pull, delete that model's staging directory by hand —
+  nothing under `.staging/` is referenced by the archive, so removing
+  it only costs the resume head start.
 - **The resume-command hint.** When the pull's shape came from the
   interactive file listing (patterns you typed at the prompt, so your
   shell history doesn't have them), the pull prints one line right
@@ -513,3 +523,78 @@ uv run llm-preserver show Qwen/Qwen3.6-27B ~/models   # path optional with the e
 
 Prints everything archived for one model: artifacts, per-file
 provenance and hashes, pinned commits, license, source repos.
+
+## verify — audit the archive against its records
+
+```bash
+uv run llm-preserver verify ~/models          # full audit: re-hash everything
+uv run llm-preserver verify                   # same, archive from $LLM_PRESERVER_ARCHIVE
+uv run llm-preserver verify --quick           # existence + size only, seconds not hours
+uv run llm-preserver verify --model Qwen/Qwen3.6-27B   # one model, not the whole shelf
+```
+
+The whole-archive drift detector (spec 0009), BagIt-style: each
+model's record enumerates its *expected* files, and verify checks disk
+against it — existence, then size, then a full SHA256 re-hash, in that
+order, so a missing or truncated file is caught without paying for a
+hash. Fully offline; it never contacts the hub.
+
+One result line per model (valid models included — an audit should
+read as "everything was checked"), with per-file detail lines under
+any model that drifted, then an archive-wide totals summary. The
+categories:
+
+- **valid** — every recorded file exists and re-hashes to its recorded
+  SHA256.
+- **complete** — every recorded file exists at its recorded size, but
+  nothing was hash-validated: every `--quick` result caps out here,
+  and so does a full run over a record that carries no hashes at all
+  (e.g. a future unverified cache import) — "valid" is never claimed
+  for a model whose digests were not actually checked.
+- **incomplete** — recorded files are missing from disk (each is
+  named). The tool never deletes, so this means out-of-band deletion
+  or a partial copy.
+- **invalid** — everything is present, but at least one file's size or
+  hash disagrees with the record (expected and actual are shown), or a
+  file could not be read. Bitrot, tampering, or a failing disk.
+- **unhashed** (per-file, informational) — the record carries no
+  SHA256 for the file (e.g. an unverified cache import); existence and
+  size are still checked.
+- **unrecorded** (per-file, informational) — on disk but in no record:
+  something was hand-copied in. The tool's own generated files
+  (`model-record.json`, `MODEL-RECORD.md`, `manifest-sha256.txt`) are
+  exempt.
+
+Verify is read-only over payloads and records. Its one write is
+`manifest-sha256.txt` in each model directory: a regenerable,
+`sha256sum -c`-compatible sidecar (also written by `pull`), refreshed
+on every full run for every model with a readable record — drifted
+models included, since the manifest derives from the record, which
+remains the source of truth. A stale sidecar left by an older pull is
+overwritten. `--quick` writes nothing. When the sidecar cannot be
+written (a read-only-mounted archive, a full disk), verify prints a
+per-model "manifest not refreshed" warning on stderr and keeps going —
+the payload verdict and the exit code are unaffected, so a
+deliberately read-only mount still verifies. The sidecar means fixity
+stays checkable with coreutils alone:
+
+```bash
+cd ~/models/models/Qwen/Qwen3.6-27B && sha256sum -c manifest-sha256.txt
+```
+
+Exit codes are the cron contract — a scheduled run needs no output
+parsing:
+
+| Code | Meaning |
+| --- | --- |
+| 0 | clean — every checked model valid or complete; unhashed/unrecorded findings and manifest-refresh warnings are informational and do not change the code. An empty archive also exits 0, saying so explicitly |
+| 1 | archive/usage — path is not an archive; malformed `--model` syntax |
+| 2 | user input — `--model` names no archived model (the error lists the archive's model ids so a typo self-corrects). The CLI framework's own usage errors — a missing path with no `LLM_PRESERVER_ARCHIVE` set, an unknown flag — also exit 2, so treat 2 as "fix the invocation", not specifically "unknown model" |
+| 5 | integrity — drift found: any model incomplete, invalid, missing its record, or with an unreadable record or payload file |
+| 130 | interrupted — Ctrl-C; the in-progress model's sidecar is untouched |
+
+A full run re-reads every archived byte, so it is disk-bound: figure
+roughly 2.5 hours per terabyte over gigabit to a NAS, much faster on
+local storage. `--quick` catches deletion and truncation (not bitrot)
+in seconds and suits a pre-backup sanity pass; the full run is the
+quarterly fixity check.

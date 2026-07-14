@@ -429,13 +429,16 @@ parallelize only with partitioned file ownership.
   staged/unstaged state (ruff autofix conflicts on stash restore) —
   commit with `git stash push --keep-index --include-untracked`,
   which also proves each commit green in isolation.
-- **Next spec (0009): pick from TODO.md** — verify (still
-  recommended: real content is accumulating, bitrot detection earns
-  its keep), runtime views (0002, unblocked), managed remove/retire,
-  smoke test, or the interactive-listing TUI (three independent
-  live-use requests during 0006). Also queued from live use:
-  goal-definitive archiving (capability report in `status`),
-  file-kind dictionary, live-hub canary (0000 roadmap).
+- **Spec 0009 verify is in flight on `spec-0009-verify`** (branch
+  open 2026-07-13): the whole-archive fixity audit — complete vs
+  valid, `--quick`, `--model` scoping, exit-code cron contract,
+  atomic manifest regeneration.
+- **Next spec (0010): pick from TODO.md** — runtime views (0002,
+  unblocked), managed remove/retire, smoke test, or the
+  interactive-listing TUI (three independent live-use requests
+  during 0006). Also queued from live use: goal-definitive archiving
+  (capability report in `status`), file-kind dictionary, live-hub
+  canary (0000 roadmap).
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
   (draft, unblocked); 0005/0006/0007/0008 shipped.
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool

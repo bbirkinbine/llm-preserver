@@ -7,6 +7,8 @@ themselves (stage, hash, verify, move).
 
 import datetime
 import hashlib
+import os
+import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -108,20 +110,47 @@ def update_record(
     return record
 
 
-def write_manifest(model_dir: Path, record: ModelRecord) -> None:
+def write_manifest(model_dir: Path, record: ModelRecord, record_sha256: str | None = None) -> None:
     """Write ``manifest-sha256.txt`` covering payload plus the record.
 
     ``sha256sum -c``-compatible lines for every hashed file entry, plus
-    one for ``model-record.json`` itself — hashing the exact
-    serialization ``save_record`` writes next (the record stays the
-    last write; the manifest anticipates it byte-for-byte).
+    one for ``model-record.json`` itself. The write is atomic (tmp file
+    then rename), so an interrupted run never leaves a partial sidecar.
+
+    Args:
+        model_dir: The model directory receiving the sidecar.
+        record: The record whose hashed file entries become the lines.
+        record_sha256: Digest for the ``model-record.json`` line. Pull
+            omits it: the default hashes the exact serialization
+            ``save_record`` writes next (the record stays the last
+            write; the manifest anticipates it byte-for-byte). Verify
+            (spec 0009) passes the digest of the record bytes already
+            on disk — a loaded record's re-serialization need not be
+            byte-identical to the file it came from, and a manifest
+            line ``sha256sum -c`` rejects would defeat the sidecar.
     """
-    record_json = record.model_dump_json(indent=2) + "\n"
+    if record_sha256 is None:
+        record_json = record.model_dump_json(indent=2) + "\n"
+        record_sha256 = hashlib.sha256(record_json.encode("utf-8")).hexdigest()
     lines = [
         f"{entry.sha256}  {entry.path}"
         for artifact in record.artifacts
         for entry in artifact.files
         if entry.sha256 is not None
     ]
-    lines.append(f"{hashlib.sha256(record_json.encode('utf-8')).hexdigest()}  {RECORD_FILENAME}")
-    (model_dir / MANIFEST_FILENAME).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    lines.append(f"{record_sha256}  {RECORD_FILENAME}")
+    # mkstemp opens O_CREAT|O_EXCL: a pre-planted symlink at a
+    # predictable tmp name can never redirect this write outside the
+    # archive (verify runs against archives the user did not author).
+    handle_fd, tmp_name = tempfile.mkstemp(
+        dir=model_dir, prefix=MANIFEST_FILENAME + ".", suffix=".tmp"
+    )
+    manifest_tmp = Path(tmp_name)
+    try:
+        with os.fdopen(handle_fd, "w", encoding="utf-8") as handle:
+            handle.write("\n".join(lines) + "\n")
+        manifest_tmp.replace(model_dir / MANIFEST_FILENAME)
+    except BaseException:
+        # Interrupt or write/rename fault: never strand tmp debris.
+        manifest_tmp.unlink(missing_ok=True)
+        raise

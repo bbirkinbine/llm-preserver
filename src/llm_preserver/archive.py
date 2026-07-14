@@ -178,6 +178,36 @@ def _summarize_model_dir(model_dir: Path, model_id: str) -> ModelSummary:
     return _summarize_record(model_id, record)
 
 
+def iter_model_dirs(root: Path) -> list[tuple[str, Path]]:
+    """List ``(model_id, model_dir)`` for every model directory.
+
+    The one defensive walk of ``models/`` — shared by ``inventory``
+    and verify (spec 0009) so the symlink refusals cannot drift apart.
+
+    Args:
+        root: The archive root.
+
+    Returns:
+        One ``(<creator>/<model>, path)`` pair per model directory,
+        sorted by model id.
+
+    Raises:
+        ArchiveError: If ``models/`` is a symlink (same refusal as for
+            symlinked model directories — it could point anywhere on
+            the host).
+    """
+    models_root = root / "models"
+    if models_root.is_symlink():
+        raise ArchiveError(f"{models_root} is a symlink; refusing to walk it")
+    if not models_root.is_dir():
+        return []
+    return [
+        (f"{creator_dir.name}/{model_dir.name}", model_dir)
+        for creator_dir in sorted(_real_subdirs(models_root))
+        for model_dir in sorted(_real_subdirs(creator_dir))
+    ]
+
+
 def inventory(root: Path) -> list[ModelSummary]:
     """Walk ``models/`` and summarize every model directory.
 
@@ -196,17 +226,9 @@ def inventory(root: Path) -> list[ModelSummary]:
             symlinked model directories — it could point anywhere on
             the host).
     """
-    models_root = root / "models"
-    if models_root.is_symlink():
-        raise ArchiveError(f"{models_root} is a symlink; refusing to walk it")
-    if not models_root.is_dir():
-        return []
-    summaries = []
-    for creator_dir in sorted(_real_subdirs(models_root)):
-        for model_dir in sorted(_real_subdirs(creator_dir)):
-            model_id = f"{creator_dir.name}/{model_dir.name}"
-            summaries.append(_summarize_model_dir(model_dir, model_id))
-    return summaries
+    return [
+        _summarize_model_dir(model_dir, model_id) for model_id, model_dir in iter_model_dirs(root)
+    ]
 
 
 def _real_subdirs(parent: Path) -> list[Path]:

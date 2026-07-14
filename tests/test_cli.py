@@ -283,7 +283,7 @@ def test_h_short_flag_shows_help_at_top_level():
 
 
 def test_h_short_flag_works_on_every_subcommand():
-    for command in ("init", "status", "show", "discover", "pull"):
+    for command in ("init", "status", "show", "discover", "pull", "verify"):
         result = runner.invoke(app, [command, "-h"])
 
         assert result.exit_code == 0, f"{command} -h failed: {combined_output(result)}"

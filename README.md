@@ -4,8 +4,8 @@ Archives local LLMs for long-term offline use: pulls model weights
 (GGUF quants, full Hugging Face snapshots) into a runtime-independent
 local archive along with tokenizer/config files, licenses, model
 cards, and SHA256 checksums — so "I downloaded it once" becomes
-"I can still run this in two years." (Archive verification and
-offline smoke tests are on the roadmap.)
+"I can still run this in two years." (Offline smoke tests are on the
+roadmap.)
 
 > ## Status
 >
@@ -34,6 +34,7 @@ uv run llm-preserver discover 'qwen3 coder' ~/models   # know only a name? searc
 uv run llm-preserver pull unsloth/Qwen3-4B-GGUF ~/models --include '*Q4_K_M*'
 uv run llm-preserver status ~/models # inventory: what's on the shelf
 uv run llm-preserver show Qwen/Qwen3-4B ~/models   # one model's record
+uv run llm-preserver verify ~/models # audit: every file present, every hash intact
 ```
 
 - **`discover`** — covers the step before an exact repo id: searches
@@ -45,6 +46,10 @@ uv run llm-preserver show Qwen/Qwen3-4B ~/models   # one model's record
   moving a byte.
 - **`pull --whole-repo`** — archives a repo's entire tree instead of
   selected files (the full-precision masters).
+- **`verify`** — audits disk against the records: every recorded file
+  present (*complete*), every SHA256 intact (*valid*). `--quick` skips
+  hashing for a seconds-long structural check; the exit code makes it
+  cron-friendly.
 
 ### Install the command on your PATH (optional, recommended)
 
