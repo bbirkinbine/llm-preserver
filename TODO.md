@@ -61,6 +61,19 @@ Check items off as they ship; update when priorities shift.
   Ctrl-C print to unconditional. README now documents
   `uv tool install --editable .` (the hint assumes the CLI is on
   PATH).
+- 0009 verify (shipped 2026-07-13, PR #12): the whole-archive fixity
+  audit — complete (files present) vs valid (SHA256s intact), with
+  existence → size → hash fail-fast ordering, `--quick` (structural
+  check in seconds, never claims valid), `--model` scoping with
+  unknown-id self-correction, and the exit-code cron contract
+  (0/1/2/5/130; unhashed/unrecorded are informational). Full runs
+  atomically regenerate `manifest-sha256.txt` from the on-disk
+  record bytes so `sha256sum -c` passes with coreutils alone. Live
+  progress on a TTY only (checking line per model, in-place byte
+  counter per hash); cron output byte-identical to progress-free.
+  Security round: symlinked/escaping recorded paths refused as
+  drift; sidecar tmp write is O_EXCL. A read-only-mounted archive
+  verifies with a warning instead of crashing.
 - 0008 `--hf-logging` (shipped 2026-07-13, PR #11): vendor-telemetry
   passthrough on `pull` and `discover` — `RUST_LOG=info` set at
   command startup only when unset (an inherited filter wins, with a

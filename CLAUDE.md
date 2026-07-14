@@ -429,10 +429,28 @@ parallelize only with partitioned file ownership.
   staged/unstaged state (ruff autofix conflicts on stash restore) —
   commit with `git stash push --keep-index --include-untracked`,
   which also proves each commit green in isolation.
-- **Spec 0009 verify is in flight on `spec-0009-verify`** (branch
-  open 2026-07-13): the whole-archive fixity audit — complete vs
-  valid, `--quick`, `--model` scoping, exit-code cron contract,
-  atomic manifest regeneration.
+- **Session 10 (2026-07-13, medium-tier, PR #12): spec 0009 verify
+  shipped.** The whole-archive fixity audit: complete vs valid,
+  existence → size → hash fail-fast, `--quick`, `--model` scoping
+  (an option, not a positional — two optional positionals with the
+  env-var fallback are unparseable), exit codes 0/1/2/5/130 with
+  unhashed/unrecorded informational. Review round paid off: security
+  PoC-confirmed two symlink exploits (recorded paths followed out of
+  tree; a planted sidecar-`.tmp` symlink redirecting the manifest
+  write — now mkstemp O_EXCL), adversarial reproduced a crash on
+  read-only model dirs (now a per-model "manifest not refreshed"
+  warning, audit continues, exit unchanged). Hard-won facts: the
+  manifest's record line must hash the *on-disk* record bytes — a
+  loaded record's re-serialization is not byte-identical, and
+  `sha256sum -c` would reject the sidecar verify itself wrote; Click
+  usage errors exit 2, so exit 2 is the whole user-input domain, not
+  just "unknown --model"; a model whose record carries no hashes
+  reports `complete`, never `valid`. Live-use adjudication mid-PR:
+  result-lines-only progress left Brian "staring at nothing" during
+  large hashes — TTY runs now get a checking line per model and an
+  in-place byte counter (0.5s throttle); non-TTY output stays
+  byte-identical (the hash seam gained a `progress` kwarg; fakes
+  must accept it). 509 tests.
 - **Next spec (0010): pick from TODO.md** — runtime views (0002,
   unblocked), managed remove/retire, smoke test, or the
   interactive-listing TUI (three independent live-use requests
