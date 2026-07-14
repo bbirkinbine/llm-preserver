@@ -30,6 +30,7 @@ def compose_resume_hint(
     model: str | None = None,
     roles: Sequence[str] = (),
     refresh_docs: bool = False,
+    hf_logging: bool = False,
 ) -> str | None:
     """Compose the one-line direct ``pull`` command that resumes this pull.
 
@@ -54,6 +55,11 @@ def compose_resume_hint(
             hint must never bake in a directory nobody approved.
         roles: Roles assigned at pull time.
         refresh_docs: Whether --refresh-docs was in effect.
+        hf_logging: Whether --hf-logging was in effect; it rides along
+            because the stalled-transfer scenario the hint serves is
+            the one the flag exists for (spec 0008). ``--verbose``
+            deliberately does not — the hint replays the pull's shape
+            and this one diagnostic flag, nothing else.
 
     Returns:
         The full hint line, lead-in included — or None for a repo id
@@ -72,5 +78,7 @@ def compose_resume_hint(
         parts.extend(["--role", role])
     if refresh_docs:
         parts.append("--refresh-docs")
+    if hf_logging:
+        parts.append("--hf-logging")
     command = " ".join(shlex.quote(clean_text(part, single_line=True)) for part in parts)
     return f"{RESUME_HINT_LEAD_IN}: {command}"

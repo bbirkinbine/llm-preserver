@@ -174,6 +174,21 @@ Options:
   pulls pass `--model` for that.
 - `--verbose` — per-file progress, resolved commit, staging paths,
   and underlying client detail on failures.
+- `--hf-logging` — surface the Hugging Face client's own transfer
+  telemetry live: stall timeouts, retries, backoff waits, rate-limit
+  pauses. This is the client's telemetry passed through verbatim
+  (`--verbose` remains this tool's own diagnostics; the two compose).
+  One activation line prints at startup; after that, a healthy
+  transfer is silent — the vendor's info tier only speaks when
+  something stalls or retries, so a quiet run is good news, not a
+  broken flag.
+  No environment variables needed — though if you exported your own
+  `RUST_LOG` filter, it wins over the flag and the tool prints one
+  note saying so (an accidentally empty `RUST_LOG` would otherwise
+  silence the Xet layer with no explanation). Pinned to info level; the
+  client's debug tier (which logs request URLs) is deliberately not
+  reachable by any flag. Telemetry lines can still name hub hosts and
+  repo ids — skim before pasting output into a public issue.
 
 Behavior worth knowing:
 
@@ -221,6 +236,22 @@ Behavior worth knowing:
   archive never silently overwrites. For documentation files the stop
   names the way out ("re-run with --refresh-docs to replace this
   documentation file"); for weights there is no override.
+<!-- Stall math source: https://github.com/huggingface/xet-core
+  (Apache-2.0), xet_runtime/src/config/groups/client.rs —
+  read_timeout 300s, retry_max_attempts 5, retry_base_delay 3000ms;
+  fetched 2026-07-13. Re-verify there before editing the numbers. -->
+- **A frozen progress bar usually heals itself — give it minutes,
+  not seconds.** The byte-transfer layer tolerates 300 seconds of
+  connection silence before it counts a stall, then retries up to 5
+  times with exponential backoff (3-second base) — all silently at
+  default logging. A bar that stops moving is therefore often a stall
+  the client is already handling, and it can take ~6 minutes to prove
+  it: reach for `--hf-logging` (or patience) before Ctrl-C, and watch
+  the stall and retries explain themselves. If you do interrupt, the
+  resume hint below has your back. Power users can tune the client's
+  own knobs (`HF_XET_CLIENT_READ_TIMEOUT` and friends) as environment
+  variables — the tool passes its environment through to the client
+  and wraps none of them in flags.
 - **Interrupted pulls are safe to retry.** Re-run the same command;
   completed files in staging are reused (they tick by instantly with
   no progress bar), and the record is only ever written after every
@@ -241,6 +272,10 @@ Behavior worth knowing:
   (works without `LLM_PRESERVER_ARCHIVE` and from any directory),
   shell-quoted patterns, and the grouping you just confirmed replayed
   as `--model` so the continue lands in the same model directory.
+  `--hf-logging` rides along when the pull ran with it — the
+  stalled-transfer scenario the hint serves is the one that flag
+  exists for (`--verbose` does not; the hint replays the pull's
+  shape, not general diagnostics).
   Because re-pulls are idempotent, running it later downloads only
   what is still missing. Ctrl-C during the transfer prints the hint
   as the final line — directly above your next shell prompt — and
@@ -454,7 +489,7 @@ type `q`. Three stages, every step a numbered pick:
    reprints as the final line, ready to paste when you come back.
 
 `--plan` makes the final pull the dry run (verify, then re-run for
-real); `--verbose` as in `pull`. Failures map to the same exit codes
+real); `--verbose` and `--hf-logging` as in `pull`. Failures map to the same exit codes
 as `pull` (network 3, hub-side 4). Discovery is deliberately
 interactive-only: scripts already have exact repo ids, `--include`,
 `--yes`, and `--plan`. The tool shows facts and takes your picks — it
