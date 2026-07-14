@@ -131,10 +131,10 @@ Check items off as they ship; update when priorities shift.
   re-quantization sources, and/or `--quant` sugar. Companion-kind
   annotations (imatrix/mmproj/mtp, from the advisory rules table)
   shipped in the listing 2026-07-13 — this item is the rest of the
-  dictionary. Live-use additions (2026-07-12): the listing prints
-  raw byte counts where the plan report prints human sizes — use
-  `human_size` there too; empty pattern input at the prompt errors
-  (exit 2) instead of re-prompting.
+  dictionary. Live-use addition (2026-07-12): empty pattern input at
+  the prompt errors (exit 2) instead of re-prompting. (The other
+  2026-07-12 addition — human sizes in the listing — shipped
+  2026-07-13.)
 - [ ] Example-run cookbook (`docs/examples.md`): one worked pull per
   repo archetype — GGUF quant repo, original safetensors
   (`--whole-repo`),
