@@ -347,12 +347,37 @@ parallelize only with partitioned file ownership.
   data; never delete, move, or "clean up" archive contents. Tests use
   tmp dirs, never a real archive.
 
-## Open work / current state (updated 2026-07-13, end of session 8)
+## Open work / current state (updated 2026-07-13, end of session 9)
 
-- **Specs 0001, 0003, 0004, 0005, 0006, 0007 are all merged.** The
-  loop is live-verified end to end: discover (name → tree → pull) or
-  pull by exact id → advisories/--plan → status/show, with a printed
-  resume command surviving any interrupted transfer.
+- **Specs 0001, 0003, 0004, 0005, 0006, 0007 are all merged; 0008
+  shipped (PR #11).** The loop is live-verified end to end: discover
+  (name → tree → pull) or pull by exact id → advisories/--plan →
+  status/show, with a printed resume command surviving any
+  interrupted transfer.
+- **Session 9 (2026-07-13, medium-tier, PR #11): spec 0008
+  `--hf-logging`.** Vendor-telemetry passthrough on pull/discover:
+  `RUST_LOG=info` set at command startup only when unset (an
+  inherited filter wins, with one notice line naming it — an
+  accidentally empty `RUST_LOG` must not read as a broken flag),
+  `huggingface_hub` raised to exactly info via its typed
+  `set_verbosity`; debug (cURL/request URLs) unreachable by any flag
+  combination; no self-identification to the hub. Three checkpoint
+  adjudications: the override notice; the 0007 resume hint replays
+  `--hf-logging` (not `--verbose` — the hint serves the
+  stalled-transfer scenario the flag exists for); one activation
+  line because healthy transfers are provably silent at info (a
+  control run with `RUST_LOG=info` exported externally was equally
+  silent). Hard-won facts: `hf_xet` imports lazily inside the
+  download path — a tripwire test pins it, since an eager import at
+  startup would run the Rust env read before the flag's write; an
+  invalid `RUST_LOG` kills `uv run` itself before Python starts (uv
+  is a Rust binary reading the same variable; installed entry points
+  are unaffected); tracing tolerates invalid filters silently; Xet
+  console lines go to stdout (vendor default, no `with_writer`)
+  while tool and Python client diagnostics go to stderr. Live
+  hygiene sweep of flag-on output: clean (recorded in the spec).
+  Stall-time rendering is the one deferred criterion — the first
+  real stall (or a mid-transfer wifi toggle) closes it. 455 tests.
 - **Session 8 (2026-07-13, small-tier, PR #9): spec 0007
   resume-command hint.** Interactively shaped pulls print the exact
   direct `pull` command (absolute path, quoted patterns, confirmed
@@ -404,7 +429,7 @@ parallelize only with partitioned file ownership.
   staged/unstaged state (ruff autofix conflicts on stash restore) —
   commit with `git stash push --keep-index --include-untracked`,
   which also proves each commit green in isolation.
-- **Next spec (0008): pick from TODO.md** — verify (still
+- **Next spec (0009): pick from TODO.md** — verify (still
   recommended: real content is accumulating, bitrot detection earns
   its keep), runtime views (0002, unblocked), managed remove/retire,
   smoke test, or the interactive-listing TUI (three independent
@@ -412,7 +437,7 @@ parallelize only with partitioned file ownership.
   goal-definitive archiving (capability report in `status`),
   file-kind dictionary, live-hub canary (0000 roadmap).
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
-  (draft, unblocked); 0005/0006/0007 shipped.
+  (draft, unblocked); 0005/0006/0007/0008 shipped.
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

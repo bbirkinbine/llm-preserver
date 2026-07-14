@@ -5,7 +5,7 @@ What's next, in rough order. Feature detail lives in
 and the numbered specs; this file is the short-term working list.
 Check items off as they ship; update when priorities shift.
 
-## Next spec (0008) — pick one
+## Next spec (0009) — pick one
 
 - [ ] **Verify** (recommended next): audit the archive against
   records/manifests, BagIt-style — *complete* (every recorded file
@@ -62,6 +62,14 @@ Check items off as they ship; update when priorities shift.
   Ctrl-C print to unconditional. README now documents
   `uv tool install --editable .` (the hint assumes the CLI is on
   PATH).
+- 0008 `--hf-logging` (shipped 2026-07-13, PR #11): vendor-telemetry
+  passthrough on `pull` and `discover` — `RUST_LOG=info` set at
+  command startup only when unset (an inherited filter wins, with a
+  notice naming it), `huggingface_hub` raised to exactly info (debug
+  unreachable by any flag), no self-identification to the hub. One
+  activation line because healthy transfers are provably silent at
+  info; the 0007 resume hint replays the flag. A tripwire test pins
+  `hf_xet`'s lazy import — the ordering the whole flag rests on.
 
 ## Smaller items (from live use)
 
