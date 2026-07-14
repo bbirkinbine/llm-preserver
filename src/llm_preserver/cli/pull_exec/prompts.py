@@ -11,6 +11,7 @@ import typer
 
 from llm_preserver.hub import PullUserError, RepoInfo
 from llm_preserver.pull_advisory import COMPANION_RULES
+from llm_preserver.pull_preflight import human_size
 from llm_preserver.render import clean_text
 
 
@@ -68,8 +69,11 @@ def prompt_for_selection(info: RepoInfo, repo_id: str) -> list[str]:
     # class as the file paths below.
     typer.echo(f"files in {clean_text(repo_id, single_line=True)}:")
     for repo_file in info.files:
-        size = "?" if repo_file.size is None else str(repo_file.size)
-        line = f"  {size:>15}  {repo_file.path}{_kind_note(repo_file.path)}"
+        # Human sizes, matching the plan report: the listing is where a
+        # quant gets weighed against VRAM (live-use 2026-07-12 — a raw
+        # 19851335840 carries no fit signal).
+        size = "?" if repo_file.size is None else human_size(repo_file.size)
+        line = f"  {size:>10}  {repo_file.path}{_kind_note(repo_file.path)}"
         typer.echo(clean_text(line, single_line=True))
     raw = typer.prompt(
         # The leading * matters: patterns match the full repo path, so

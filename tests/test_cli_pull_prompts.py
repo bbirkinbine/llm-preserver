@@ -104,3 +104,33 @@ def test_yes_never_accepts_the_grouping_confirm(tmp_path, monkeypatch, fake_hub_
 
     assert result.exit_code == 2
     assert "--model" in combined_output(result)
+
+
+def test_interactive_listing_prints_human_sizes_not_raw_bytes(monkeypatch, capsys):
+    """The listing is the fit-vs-VRAM decision aid (live-use 2026-07-12):
+    19851335840 tells a human nothing; 18.5 GiB is the signal."""
+    import typer
+
+    from llm_preserver.cli.pull_exec.prompts import prompt_for_selection
+    from llm_preserver.hub import RepoFile, RepoInfo
+
+    info = RepoInfo(
+        commit="0" * 40,
+        files=[
+            RepoFile(path="tiny-chat-Q4_K_M.gguf", size=19851335840, sha256="a" * 64),
+            RepoFile(path="README.md", size=512, sha256=None),
+            RepoFile(path="mystery.bin", size=None, sha256=None),
+        ],
+        base_model=None,
+        pipeline_tag=None,
+        license=None,
+    )
+    monkeypatch.setattr(typer, "prompt", lambda *a, **k: "")
+
+    prompt_for_selection(info, "bartowski/tiny-chat-GGUF")
+
+    out = capsys.readouterr().out
+    assert "18.5 GiB" in out
+    assert "19851335840" not in out  # raw bytes are gone
+    assert "512 B" in out
+    assert "?" in out  # unknown size still renders as ?
