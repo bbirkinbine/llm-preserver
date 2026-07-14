@@ -85,6 +85,22 @@ Check items off as they ship; update when priorities shift.
 
 ## Smaller items (from live use)
 
+- [ ] `--json` on the read-only reporting commands (queued
+  2026-07-13, from the 0009 wrap-up: exit codes serve cron, but an
+  agent/script that wants the *details* would have to parse prose
+  we never promised stable). One flag, one JSON document on stdout,
+  human report unchanged without it; exit codes unchanged. In value
+  order: `verify` first (serialize the existing `VerifyReport` /
+  `ModelVerifyResult` dataclasses — thin layer, no new logic:
+  per-model `{model_id, state, problems[], unhashed[],
+  unrecorded[]}` plus totals), then `status` (inventory as data —
+  also the natural carrier for the future capability report), then
+  `pull --plan` (lets scripts gate a pull on fit/advisories before
+  committing bytes — pairs with the examples cookbook's
+  non-interactive recipes). `show --json` is nearly free (emit the
+  on-disk record) but low value — the record file is already JSON;
+  include it only for surface consistency. `discover` stays
+  human-interactive by design — no JSON there.
 - [ ] Goal-definitive archiving (live-use 2026-07-13: "my goal was
   fine-tuning and I couldn't tell if I'd archived enough"). Two
   halves, both deterministic from existing data: (a) post-pull
