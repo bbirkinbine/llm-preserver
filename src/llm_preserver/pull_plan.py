@@ -16,12 +16,12 @@ explicit choice for replacing changed upstream docs and never applies
 to weight paths (spec 0003, review adjudications 2026-07-10).
 """
 
-import hashlib
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from llm_preserver.hashing import sha256_of
 from llm_preserver.hub import (
     PullEnvError,
     PullIntegrityError,
@@ -31,8 +31,6 @@ from llm_preserver.records import FileEntry, ModelRecord
 from llm_preserver.selection import checked_target_path, is_doc_file
 
 logger = logging.getLogger(__name__)
-
-_HASH_CHUNK_BYTES = 1 << 20
 
 
 @dataclass(frozen=True)
@@ -66,15 +64,6 @@ class PullPlan:
 
     to_download: list[PlannedDownload]
     adopted: list[FileEntry]
-
-
-def sha256_of(path: Path) -> str:
-    """Stream-hash a file without loading it into memory."""
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        while chunk := handle.read(_HASH_CHUNK_BYTES):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _immutability_stop(target_rel: str, detail: str, hub_path: str) -> PullIntegrityError:

@@ -12,13 +12,14 @@ import logging
 from collections.abc import Sequence
 from pathlib import Path
 
+from llm_preserver.hashing import sha256_of
 from llm_preserver.hub import (
     HubClientProtocol,
     PullIntegrityError,
     PullUserError,
     RepoInfo,
 )
-from llm_preserver.pull_plan import PlannedDownload, sha256_of
+from llm_preserver.pull_plan import PlannedDownload
 from llm_preserver.records import FileEntry
 
 logger = logging.getLogger(__name__)

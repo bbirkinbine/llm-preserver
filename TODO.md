@@ -5,19 +5,18 @@ What's next, in rough order. Feature detail lives in
 and the numbered specs; this file is the short-term working list.
 Check items off as they ship; update when priorities shift.
 
-## Next spec (0009) — pick one
+## Next spec (0010) — pick one
 
-- [ ] **Verify** (recommended next): audit the archive against
-  records/manifests, BagIt-style — *complete* (every recorded file
-  exists) and *valid* (every file re-hashes to its recorded SHA256).
-  Read-only report. The archive now holds real Tier-1 content, so
-  drift/bitrot detection is earning its keep.
 - [ ] **Runtime views** (spec 0002, drafted): symlink/config views so
   runtimes run archived models in place. Its blocker (the download
   specs) is lifted — this is what makes the archive *usable* daily.
 - [ ] **Managed remove/retire**: the only sanctioned way to delete
   from the archive (record + directory updated together). Real
-  pruning needs exist from first live use.
+  pruning needs exist from first live use. Must also clear the
+  model's staging leftovers: interrupted pulls stage into
+  `<root>/.staging/<creator>/<model>` (sibling of `models/`, reused
+  on resume, deleted only on pull success), so removing a model
+  without sweeping its staging dir strands gigabytes invisibly.
 - [ ] **Smoke test**: load an archived model offline in a local
   runtime (llama.cpp / ollama), check a trivial deterministic
   prompt, record the result in the record's `runtime_tested` field
@@ -119,7 +118,14 @@ Check items off as they ship; update when priorities shift.
   label extraction was never specced; per-file is likely the right
   shape now that one artifact can hold several quants).
 - [ ] Split `records.py` (296) — near the 300-line cap; split before
-  the next feature touches it (`pull.py` was split by 0005).
+  the next feature touches it (`pull.py` was split by 0005). Fold in
+  while there (0009 adversarial review, Low): reserve the tool-owned
+  root filenames (`model-record.json`, `MODEL-RECORD.md`,
+  `manifest-sha256.txt`) in `FileEntry.path` validation — a
+  hand-crafted record naming one as a payload makes verify write a
+  manifest containing a bogus digest line for itself, which
+  `sha256sum -c` then fails forever. Unreachable via pull (payloads
+  nest under format dirs); only hand-edited or imported records.
 - [ ] Extend `render.clean_text`'s scrub beyond C0/C1 controls to
   Unicode bidi/format characters (U+202A–202E, U+2066–2069,
   zero-width set): hub-supplied text could visually reorder a
