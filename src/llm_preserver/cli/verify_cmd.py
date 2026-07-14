@@ -6,19 +6,99 @@ are the cron contract: 0 clean, 1 archive/usage, 2 unknown --model,
 5 drift, 130 interrupted.
 """
 
+import sys
+import time
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, TextIO
 
 import typer
 
 from llm_preserver.archive import ArchiveError, inventory
 from llm_preserver.cli.app import ArchivePath, app, fail
+from llm_preserver.pull_preflight import human_size
 from llm_preserver.records import ID_COMPONENT_RE
 from llm_preserver.render import clean_text
-from llm_preserver.verify import ModelVerifyResult, VerifyReport, verify_archive
+from llm_preserver.verify import (
+    ModelVerifyResult,
+    ProgressEvents,
+    VerifyReport,
+    verify_archive,
+)
 
 _STATE_LABELS = {"no-record": "no record", "record-unreadable": "record unreadable"}
+
+_RENDER_INTERVAL_SECONDS = 0.5
+
+
+class ProgressRenderer:
+    """Live status on stderr while verify walks and hashes.
+
+    Renders only when the stream is a terminal: a human staring at a
+    multi-gigabyte hash gets a ``checking`` line per model and an
+    in-place byte counter per file (adjudicated 2026-07-13 — silence
+    during a long hash reads as a hang). Cron and piped runs see no
+    progress output at all, so the report and exit-code contract stay
+    byte-identical to a progress-free run.
+    """
+
+    def __init__(self, stream: TextIO, now: Callable[[], float] = time.monotonic) -> None:
+        self._stream = stream
+        self._enabled = stream.isatty()
+        self._now = now
+        self._file_label: str | None = None
+        self._file_total: int | None = None
+        self._file_done = 0
+        self._last_render = 0.0
+        self._last_width = 0
+
+    def on_model_start(self, model_id: str, file_count: int, recorded_bytes: int) -> None:
+        """One ``checking …`` line per model, before its files run."""
+        if not self._enabled:
+            return
+        self.finish_line()
+        noun = "file" if file_count == 1 else "files"
+        line = f"checking {model_id} ({file_count} {noun}, {human_size(recorded_bytes)} recorded)"
+        self._stream.write(clean_text(line, single_line=True) + "\n")
+        self._stream.flush()
+
+    def on_file_start(self, rel_path: str, size: int | None) -> None:
+        """Arm the in-place byte counter for the file about to hash."""
+        if not self._enabled:
+            return
+        self._file_label = clean_text(rel_path, single_line=True)
+        self._file_total = size
+        self._file_done = 0
+        self._render_file_line()
+
+    def on_file_bytes(self, count: int) -> None:
+        """Advance the byte counter; redraw at most twice a second."""
+        if not self._enabled or self._file_label is None:
+            return
+        self._file_done += count
+        if self._now() - self._last_render >= _RENDER_INTERVAL_SECONDS:
+            self._render_file_line()
+
+    def finish_line(self) -> None:
+        """Terminate any in-place counter line before normal output."""
+        if not self._enabled:
+            return
+        if self._last_width:
+            self._stream.write("\n")
+            self._stream.flush()
+        self._file_label = None
+        self._last_width = 0
+
+    def _render_file_line(self) -> None:
+        total = f" / {human_size(self._file_total)}" if self._file_total is not None else ""
+        text = f"  hashing {self._file_label}: {human_size(self._file_done)}{total}"
+        # Carriage return + pad to the previous width: same-line update
+        # with no ANSI beyond what every terminal handles.
+        self._stream.write("\r" + text.ljust(self._last_width))
+        self._stream.flush()
+        self._last_width = len(text)
+        self._last_render = self._now()
 
 
 def _echo_result(result: ModelVerifyResult) -> None:
@@ -92,6 +172,12 @@ def verify(
     ] = False,
 ) -> None:
     """Audit the archive against its records (complete vs valid)."""
+    renderer = ProgressRenderer(sys.stderr)
+
+    def emit(result: ModelVerifyResult) -> None:
+        renderer.finish_line()
+        _echo_result(result)
+
     try:
         if model is not None:
             creator, sep, name = model.partition("/")
@@ -103,8 +189,19 @@ def verify(
                 raise fail(f"model id must look like <creator>/<model>, got {model!r}")
         if quick:
             typer.echo("quick check: hashes were not checked (existence and size only)")
-        report = verify_archive(path, model=model, quick=quick, on_result=_echo_result)
+        report = verify_archive(
+            path,
+            model=model,
+            quick=quick,
+            on_result=emit,
+            events=ProgressEvents(
+                on_model_start=renderer.on_model_start,
+                on_file_start=renderer.on_file_start,
+                on_file_bytes=renderer.on_file_bytes,
+            ),
+        )
     except KeyboardInterrupt:
+        renderer.finish_line()
         typer.echo("interrupted — audit incomplete", err=True)
         raise typer.Exit(code=130) from None
     except ArchiveError as exc:

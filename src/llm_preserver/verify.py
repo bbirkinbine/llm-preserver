@@ -36,6 +36,27 @@ DRIFT_STATES = frozenset({"incomplete", "invalid", "no-record", "record-unreadab
 _TOOL_OWNED = frozenset({RECORD_FILENAME, RENDERED_FILENAME, MANIFEST_FILENAME})
 
 
+@dataclass
+class ProgressEvents:
+    """Optional live-progress hooks fired while the audit runs.
+
+    The core fires them; rendering (and TTY policy) is the caller's.
+    All hooks are optional — an unset hook is simply skipped.
+
+    Attributes:
+        on_model_start: ``(model_id, file_count, recorded_bytes)``
+            before a model's files are checked.
+        on_file_start: ``(rel_path, recorded_size)`` before a file is
+            hashed (full runs only — quick never hashes).
+        on_file_bytes: Chunk byte counts while a file streams through
+            the hash — the feed a byte counter renders from.
+    """
+
+    on_model_start: Callable[[str, int, int], None] | None = None
+    on_file_start: Callable[[str, int | None], None] | None = None
+    on_file_bytes: Callable[[int], None] | None = None
+
+
 @dataclass(frozen=True)
 class FileProblem:
     """One recorded file that failed its check.
@@ -99,7 +120,7 @@ class VerifyReport:
 
 
 def _check_recorded_files(
-    model_dir: Path, record: ModelRecord, quick: bool
+    model_dir: Path, record: ModelRecord, quick: bool, events: ProgressEvents
 ) -> tuple[list[FileProblem], list[str], bool, bool]:
     """Check every recorded file.
 
@@ -159,8 +180,10 @@ def _check_recorded_files(
                 continue
             if quick:
                 continue
+            if events.on_file_start is not None:
+                events.on_file_start(entry.path, entry.size)
             try:
-                disk_hash = hashing.sha256_of(target)
+                disk_hash = hashing.sha256_of(target, progress=events.on_file_bytes)
             except OSError as exc:
                 problems.append(FileProblem(entry.path, f"unreadable: {exc}"))
                 continue
@@ -188,7 +211,9 @@ def _unrecorded_files(model_dir: Path, record: ModelRecord) -> list[str]:
     return sorted(found)
 
 
-def _verify_model(model_dir: Path, model_id: str, quick: bool) -> ModelVerifyResult:
+def _verify_model(
+    model_dir: Path, model_id: str, quick: bool, events: ProgressEvents
+) -> ModelVerifyResult:
     """Audit one model directory against its record."""
     if not (model_dir / RECORD_FILENAME).is_file():
         return ModelVerifyResult(model_id=model_id, state="no-record")
@@ -196,7 +221,12 @@ def _verify_model(model_dir: Path, model_id: str, quick: bool) -> ModelVerifyRes
         record = load_record(model_dir)
     except (ValidationError, ValueError, OSError):
         return ModelVerifyResult(model_id=model_id, state="record-unreadable")
-    problems, unhashed, any_missing, any_hashed = _check_recorded_files(model_dir, record, quick)
+    if events.on_model_start is not None:
+        entries = [entry for artifact in record.artifacts for entry in artifact.files]
+        events.on_model_start(model_id, len(entries), sum(entry.size or 0 for entry in entries))
+    problems, unhashed, any_missing, any_hashed = _check_recorded_files(
+        model_dir, record, quick, events
+    )
     if quick:
         state = "incomplete" if problems else "complete"
     elif any_missing:
@@ -239,6 +269,7 @@ def verify_archive(
     model: str | None = None,
     quick: bool = False,
     on_result: Callable[[ModelVerifyResult], None] | None = None,
+    events: ProgressEvents | None = None,
 ) -> VerifyReport:
     """Audit the archive (or one model) against its records.
 
@@ -250,7 +281,10 @@ def verify_archive(
             report ``complete``/``incomplete`` (never ``valid``) and
             never write or refresh a manifest sidecar.
         on_result: Optional callback invoked with each model's result
-            as it completes — the progress stream for long runs.
+            as it completes — the streaming report body.
+        events: Optional live-progress hooks (model start, file start,
+            hash byte counts) so a caller can keep a long run visibly
+            alive; rendering policy is entirely the caller's.
 
     Returns:
         The archive-wide report, models sorted by model id.
@@ -263,11 +297,12 @@ def verify_archive(
             interrupt never leaves a partial or refreshed manifest.
     """
     require_archive(root)
+    hooks = events if events is not None else ProgressEvents()
     report = VerifyReport(quick=quick)
     for model_id, model_dir in iter_model_dirs(root):
         if model is not None and model_id != model:
             continue
-        result = _verify_model(model_dir, model_id, quick)
+        result = _verify_model(model_dir, model_id, quick, hooks)
         report.models.append(result)
         if on_result is not None:
             on_result(result)

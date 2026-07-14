@@ -97,7 +97,7 @@ def hash_calls(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
     calls: list[Path] = []
     real = hashing.sha256_of
 
-    def counting(path: Path) -> str:
+    def counting(path: Path, progress: Callable[[int], None] | None = None) -> str:
         calls.append(Path(path))
         return real(path)
 
