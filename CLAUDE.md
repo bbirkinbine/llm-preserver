@@ -454,32 +454,45 @@ parallelize only with partitioned file ownership.
   in-place byte counter (0.5s throttle); non-TTY output stays
   byte-identical (the hash seam gained a `progress` kwarg; fakes
   must accept it). 509 tests.
-- **Spec 0010 managed remove (in progress, this branch):** the
-  `remove` command — whole-model and `--include` pattern-scoped
-  deletion, the one sanctioned delete path (record + files + staging
-  kept consistent). Preview-then-confirm, `--yes` skips the question
-  not the disclosure, crash-safe by deleting the source of truth
-  first, Ctrl-C reprints the re-run command. Landed two queued
-  chores first as their own commits: `records.py` split into a
-  package, and the tool-owned-filename reservation in
-  `FileEntry.path`. Shared helpers extracted for reuse:
+- **Session 11 (2026-07-15, medium-tier, PR #14): spec 0010 managed
+  remove shipped.** The `remove` command — whole-model and
+  `--include` pattern-scoped deletion, the one sanctioned delete path
+  (record + files + `.staging` kept consistent). Preview-then-confirm;
+  `--yes` skips the question, not the disclosure; a non-interactive
+  run without `--yes` refuses (exit 2) rather than act on a piped
+  answer (Brian's tightening call at the review checkpoint); crash-safe
+  by deleting the source of truth first; Ctrl-C reprints the re-run
+  command. Two queued chores landed first as their own commit:
+  `records.py` → `records/` package, and the tool-owned-filename
+  reservation in `FileEntry.path`. Shared helpers extracted for reuse:
   `model_scan.unrecorded_files`, `cli/model_errors` (id validation +
-  unknown-model listing). The review round paid off: security + a
-  self-audit PoC-confirmed three symlink-escape vectors on a copied
-  archive (intermediate-symlinked dir, symlinked creator dir,
-  symlinked MODEL-RECORD.md write) — all now refused/contained; the
-  adversarial round caught a pattern-mode record/disk mismatch on a
-  symlinked payload (now refused) and a read-only-dir traceback (now
-  a clean error). `remove.py` split into a `remove/` package. 561
-  tests.
+  unknown-model listing). The review round paid off hard: security +
+  adversarial + a self-audit PoC-confirmed **three symlink-escape
+  vectors** on a copied archive (recorded path through a symlinked
+  intermediate dir; a symlinked *creator* dir, which the leaf-only
+  `is_symlink()` check missed and `rmtree` would have followed out of
+  tree; a symlinked `MODEL-RECORD.md` that `save_record`'s plain
+  `write_text` wrote through) — all now refused/contained with
+  regression tests, matching verify's 0009 `resolve()`/`is_relative_to`
+  posture. Adversarial also caught a pattern-mode record/disk mismatch
+  on a symlinked recorded payload (silently de-listed but not deleted,
+  un-convergeable — now refused) and a read-only-dir traceback (now a
+  clean error). Hard-won facts: typer bundles its own click
+  (`typer._click`), so `typer.confirm` raises `typer.Abort` (not
+  `click.Abort`) and the test runner's streams are
+  `typer.testing._NamedTextIOWrapper` (patch that class, not click's,
+  to simulate a TTY); `rglob`/`rmtree` on 3.12 do not descend
+  symlinked dirs (the escape vector is record-derived paths, not the
+  sweep). `remove.py` split into a `remove/` package
+  (models/plan/execute). 562 tests. Deferred to smaller items:
+  artifact/`--format` pruning, retire/tombstone mode.
 - **Next spec (0011): pick from TODO.md** — runtime views (0002,
   unblocked), smoke test, or the interactive-listing TUI (three
   independent live-use requests during 0006). Also queued from live
   use: goal-definitive archiving (capability report in `status`),
   file-kind dictionary, live-hub canary (0000 roadmap).
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
-  (draft, unblocked); 0005/0006/0007/0008/0009 shipped; `0010`
-  managed remove (in progress).
+  (draft, unblocked); 0005/0006/0007/0008/0009/0010 shipped.
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to
