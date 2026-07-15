@@ -1,35 +1,36 @@
-"""Model-record schema and JSON round-trip.
+"""Model-record schema: the Pydantic models and their validation.
 
 The per-model ``model-record.json`` is the source of truth for
 everything archived about one logical model (ADR 0001). The schema is
 deliberately conservative: unknown-at-download-time fields are
 explicitly nullable and serialize as ``null`` rather than being
-omitted, so schema evolution is add-a-field, never rename.
+omitted, so schema evolution is add-a-field, never rename. Reading
+and writing the file lives in ``records.io``.
 """
 
 import datetime
-import json
 import re
 from collections.abc import Sequence
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-RECORD_FILENAME = "model-record.json"
-RENDERED_FILENAME = "MODEL-RECORD.md"
 RECORD_SCHEMA_VERSION = 2
 """Schema v2 (spec 0003): per-file provenance, ``hashed-locally``
 provenance state, and optional-empty ``roles``. v1 records still load —
 every v2 change is a widening (new optional field, new enum value,
 relaxed constraint)."""
-MAX_METADATA_BYTES = 1_000_000
-"""Upper bound for record/marker files — far above any real record.
 
-Metadata files are parsed even from archives the user did not author
-(a copied NAS share); the cap keeps a hostile or corrupt multi-GB
-"record" from exhausting memory during an inventory walk.
-"""
+RECORD_FILENAME = "model-record.json"
+RENDERED_FILENAME = "MODEL-RECORD.md"
+MANIFEST_FILENAME = "manifest-sha256.txt"
+TOOL_OWNED_ROOT_FILENAMES = frozenset({RECORD_FILENAME, RENDERED_FILENAME, MANIFEST_FILENAME})
+"""Root files the tool writes; reserved in ``FileEntry.path`` (spec
+0010): a record claiming one as payload would make verify write a
+manifest carrying a bogus digest line for itself, which
+``sha256sum -c`` then fails forever. Only the exact root paths are
+reserved — a nested file sharing the name is a different file."""
 
 Role = Literal["chat", "coding", "embedding", "reranker", "multimodal"]
 ArtifactFormat = Literal["gguf", "hf-snapshot", "mlx"]
@@ -111,6 +112,8 @@ class FileEntry(_PreservingModel):
         as_posix = PurePosixPath(value)
         if as_posix.is_absolute() or ".." in as_posix.parts:
             raise ValueError("file path must stay relative to the model directory (no '..')")
+        if value in TOOL_OWNED_ROOT_FILENAMES:
+            raise ValueError(f"{value!r} is a tool-owned file, not an archivable payload path")
         return value
 
 
@@ -214,83 +217,3 @@ def derive_artifact_provenance(files: Sequence[FileEntry]) -> Provenance:
     if files and all(entry.provenance == "verified" for entry in files):
         return "verified"
     return "hashed-locally"
-
-
-def save_record(record: ModelRecord, model_dir: Path) -> Path:
-    """Write ``model-record.json`` and its generated markdown rendering.
-
-    Both files are written together in one call, markdown first and
-    JSON last: the JSON is the source of truth, so it is the commit
-    point (ADR 0001's write-record-last convention) — a failure in
-    between leaves only a stale, regenerable rendering, never
-    committed truth without its rendering. Nullable fields are
-    serialized as explicit ``null`` values so a reader can tell
-    "unknown" from "not part of this schema version".
-
-    Args:
-        record: The record to persist.
-        model_dir: The model directory (``models/<creator>/<model>``).
-
-    Returns:
-        The path of the written record file.
-
-    Raises:
-        OSError: If either file cannot be written.
-    """
-    # Local import: render depends on this module for the model types.
-    from llm_preserver.render import render_model_record
-
-    (model_dir / RENDERED_FILENAME).write_text(render_model_record(record), encoding="utf-8")
-    path = model_dir / RECORD_FILENAME
-    path.write_text(record.model_dump_json(indent=2) + "\n", encoding="utf-8")
-    return path
-
-
-def peek_record_schema_version(model_dir: Path) -> int | None:
-    """Best-effort read of a record's claimed schema version.
-
-    Distinguishes "corrupt record" from "record written by a newer
-    tool" when full validation fails. Never raises.
-
-    Args:
-        model_dir: The model directory (``models/<creator>/<model>``).
-
-    Returns:
-        The claimed ``record_schema_version``, or None when it cannot
-        be determined.
-    """
-    path = model_dir / RECORD_FILENAME
-    try:
-        if path.is_symlink() or path.stat().st_size > MAX_METADATA_BYTES:
-            return None
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-        return None
-    version = data.get("record_schema_version") if isinstance(data, dict) else None
-    if isinstance(version, int) and not isinstance(version, bool):
-        return version
-    return None
-
-
-def load_record(model_dir: Path) -> ModelRecord:
-    """Read and validate ``model-record.json`` from a model directory.
-
-    Args:
-        model_dir: The model directory (``models/<creator>/<model>``).
-
-    Returns:
-        The validated record.
-
-    Raises:
-        FileNotFoundError: If the directory has no record file.
-        ValueError: If the record file is a symlink or implausibly
-            large (see ``MAX_METADATA_BYTES``).
-        pydantic.ValidationError: If the file is not valid JSON or does
-            not match the schema.
-    """
-    path = model_dir / RECORD_FILENAME
-    if path.is_symlink():
-        raise ValueError(f"{path} is a symlink; refusing to read a record through it")
-    if path.stat().st_size > MAX_METADATA_BYTES:
-        raise ValueError(f"{path} exceeds {MAX_METADATA_BYTES} bytes; not a plausible record")
-    return ModelRecord.model_validate_json(path.read_text(encoding="utf-8"))

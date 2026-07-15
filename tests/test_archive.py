@@ -161,6 +161,24 @@ def test_inventory_marks_newer_schema_on_unreadable_record(
     assert summary.newer_record_schema is True
 
 
+def test_inventory_reads_record_naming_tool_owned_file_as_error(
+    tmp_path, write_model, sample_record_dict
+):
+    # Spec 0010: reserved root filenames fail validation, so a
+    # hand-crafted record claiming manifest-sha256.txt as payload
+    # degrades to the visible record-unreadable state — deliberate,
+    # not accidental (the on-disk JSON is never touched).
+    record = sample_record_dict()
+    record["artifacts"][0]["files"][0]["path"] = "manifest-sha256.txt"
+    init_archive(tmp_path)
+    write_model(tmp_path, record)
+
+    (summary,) = inventory(tmp_path)
+
+    assert summary.record_error is True
+    assert summary.newer_record_schema is False
+
+
 def test_inventory_skips_symlinked_model_dir(tmp_path):
     init_archive(tmp_path)
     outside = tmp_path / "outside-model"

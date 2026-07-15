@@ -10,15 +10,14 @@ import sys
 import time
 from collections import Counter
 from collections.abc import Callable
-from pathlib import Path
 from typing import Annotated, TextIO
 
 import typer
 
-from llm_preserver.archive import ArchiveError, inventory
+from llm_preserver.archive import ArchiveError
 from llm_preserver.cli.app import ArchivePath, app, fail
+from llm_preserver.cli.model_errors import reject_unknown_model, split_model_id
 from llm_preserver.pull_preflight import human_size
-from llm_preserver.records import ID_COMPONENT_RE
 from llm_preserver.render import clean_text
 from llm_preserver.verify import (
     ModelVerifyResult,
@@ -138,24 +137,6 @@ def _summary_line(report: VerifyReport) -> str:
     return f"{total} {noun}: {', '.join(parts)}"
 
 
-def _reject_unknown_model(path_arg: Path, model: str) -> typer.Exit:
-    """Error for a --model that matches no model directory: exit 2.
-
-    Prints the archive's model ids so a typo self-corrects without a
-    separate ``status`` round-trip (spec 0009).
-    """
-    typer.echo(
-        clean_text(f"error: no model directory for {model} in {path_arg}", single_line=True),
-        err=True,
-    )
-    model_ids = [summary.model_id for summary in inventory(path_arg)]
-    if model_ids:
-        typer.echo("archived models:", err=True)
-        for model_id in model_ids:
-            typer.echo(clean_text(f"  {model_id}", single_line=True), err=True)
-    return typer.Exit(code=2)
-
-
 @app.command()
 def verify(
     path: ArchivePath,
@@ -180,13 +161,7 @@ def verify(
 
     try:
         if model is not None:
-            creator, sep, name = model.partition("/")
-            if (
-                not sep
-                or not ID_COMPONENT_RE.fullmatch(creator)
-                or not ID_COMPONENT_RE.fullmatch(name)
-            ):
-                raise fail(f"model id must look like <creator>/<model>, got {model!r}")
+            split_model_id(model)
         if quick:
             typer.echo("quick check: hashes were not checked (existence and size only)")
         report = verify_archive(
@@ -207,7 +182,7 @@ def verify(
     except ArchiveError as exc:
         raise fail(str(exc)) from exc
     if model is not None and not report.models:
-        raise _reject_unknown_model(path, model)
+        raise reject_unknown_model(path, model)
     if not report.models:
         typer.echo("archive is empty (no models)")
         return

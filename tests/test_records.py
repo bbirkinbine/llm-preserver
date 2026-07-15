@@ -124,6 +124,25 @@ def test_rejects_parent_traversal_file_path():
         make_file_entry(path="../escape.gguf")
 
 
+@pytest.mark.parametrize(
+    "reserved", ["model-record.json", "MODEL-RECORD.md", "manifest-sha256.txt"]
+)
+def test_rejects_tool_owned_root_filenames_as_payload(reserved):
+    # Spec 0010 (queued by the 0009 adversarial review): a record
+    # naming a tool-owned root file as payload would make verify write
+    # a manifest carrying a bogus digest line for itself, which
+    # `sha256sum -c` then fails forever.
+    with pytest.raises(ValidationError):
+        make_file_entry(path=reserved)
+
+
+def test_allows_tool_owned_names_nested_under_a_subdir():
+    # Only the exact root paths are reserved; a nested file that
+    # happens to share the name is a different file and harmless.
+    entry = make_file_entry(path="gguf/model-record.json")
+    assert entry.path == "gguf/model-record.json"
+
+
 def test_rejects_control_characters_in_file_path():
     with pytest.raises(ValidationError):
         make_file_entry(path="a.gguf |\n| forged-row.gguf")

@@ -14,6 +14,7 @@ from pathlib import Path
 
 from llm_preserver.hub import RepoInfo
 from llm_preserver.records import (
+    MANIFEST_FILENAME,
     RECORD_FILENAME,
     ArtifactEntry,
     ArtifactFormat,
@@ -22,8 +23,6 @@ from llm_preserver.records import (
     Role,
     derive_artifact_provenance,
 )
-
-MANIFEST_FILENAME = "manifest-sha256.txt"
 
 
 def update_record(
