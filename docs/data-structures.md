@@ -248,6 +248,18 @@ sequenceDiagram
 The same convention extends to pull (specs 0003/0004): payload files
 first, record last, so the record only ever describes files that exist.
 
+**Removal inverts the convention** (spec 0010), because deletion is the
+mirror of writing. `remove` of a whole model deletes the record
+*first*, then the payload: a crash then leaves an unrecorded directory
+`status`/`verify` already surface as a degraded state (and a re-run
+finishes), never a record naming files that are gone — which would read
+as corruption. Pattern-scoped `remove` writes the *updated* record
+first (survivors only, manifest regenerated), then unlinks the
+de-listed files: a crash leaves informational `unrecorded` strays a
+re-run of the same command sweeps up. Either way the source of truth is
+touched first on the way out, so the transient state is always
+"regenerable debris," never "truth missing its support."
+
 `init` is idempotent and defensive: re-running on an existing archive
 changes nothing; a non-empty directory that is *not* an archive is
 refused untouched.

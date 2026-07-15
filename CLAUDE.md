@@ -344,8 +344,11 @@ parallelize only with partitioned file ownership.
 - `pyproject.toml` `[tool.uv]` section — ask first
 - The model archive itself (wherever `llm-preserver` is pointed at,
   e.g. a NAS path or `~/models/`) — the tool's *output* is irreplaceable
-  data; never delete, move, or "clean up" archive contents. Tests use
-  tmp dirs, never a real archive.
+  data; never delete, move, or "clean up" archive contents by hand. The
+  one sanctioned deletion path is the `remove` command (spec 0010),
+  which keeps the record, files, and staging consistent — the human
+  drives it; agents do not `rm` inside an archive. Tests use tmp dirs,
+  never a real archive.
 
 ## Open work / current state (updated 2026-07-13, end of session 10)
 
@@ -451,14 +454,32 @@ parallelize only with partitioned file ownership.
   in-place byte counter (0.5s throttle); non-TTY output stays
   byte-identical (the hash seam gained a `progress` kwarg; fakes
   must accept it). 509 tests.
-- **Next spec (0010): pick from TODO.md** — runtime views (0002,
-  unblocked), managed remove/retire, smoke test, or the
-  interactive-listing TUI (three independent live-use requests
-  during 0006). Also queued from live use: goal-definitive archiving
-  (capability report in `status`), file-kind dictionary, live-hub
-  canary (0000 roadmap).
+- **Spec 0010 managed remove (in progress, this branch):** the
+  `remove` command — whole-model and `--include` pattern-scoped
+  deletion, the one sanctioned delete path (record + files + staging
+  kept consistent). Preview-then-confirm, `--yes` skips the question
+  not the disclosure, crash-safe by deleting the source of truth
+  first, Ctrl-C reprints the re-run command. Landed two queued
+  chores first as their own commits: `records.py` split into a
+  package, and the tool-owned-filename reservation in
+  `FileEntry.path`. Shared helpers extracted for reuse:
+  `model_scan.unrecorded_files`, `cli/model_errors` (id validation +
+  unknown-model listing). The review round paid off: security + a
+  self-audit PoC-confirmed three symlink-escape vectors on a copied
+  archive (intermediate-symlinked dir, symlinked creator dir,
+  symlinked MODEL-RECORD.md write) — all now refused/contained; the
+  adversarial round caught a pattern-mode record/disk mismatch on a
+  symlinked payload (now refused) and a read-only-dir traceback (now
+  a clean error). `remove.py` split into a `remove/` package. 561
+  tests.
+- **Next spec (0011): pick from TODO.md** — runtime views (0002,
+  unblocked), smoke test, or the interactive-listing TUI (three
+  independent live-use requests during 0006). Also queued from live
+  use: goal-definitive archiving (capability report in `status`),
+  file-kind dictionary, live-hub canary (0000 roadmap).
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
-  (draft, unblocked); 0005/0006/0007/0008/0009 shipped.
+  (draft, unblocked); 0005/0006/0007/0008/0009 shipped; `0010`
+  managed remove (in progress).
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

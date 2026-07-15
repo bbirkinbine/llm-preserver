@@ -50,6 +50,10 @@ uv run llm-preserver verify ~/models # audit: every file present, every hash int
   present (*complete*), every SHA256 intact (*valid*). `--quick` skips
   hashing for a seconds-long structural check; the exit code makes it
   cron-friendly.
+- **`remove`** — the archive's one sanctioned deletion path: a whole
+  model, or a `--include` pattern subset (a quant swap), with the
+  record, files, and interrupted-pull staging kept consistent. Always
+  previews before it deletes.
 
 ### Install the command on your PATH (optional, recommended)
 

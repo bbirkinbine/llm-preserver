@@ -18,8 +18,8 @@ script instead of installing it, for manual setup.
 
 Commands documented here: `init`, `pull` (selective, `--whole-repo`
 full snapshot, and `--plan` dry run), `discover`, `status`, `show`,
-`verify`. Planned features (cache import, runtime views, smoke tests)
-are listed in the roadmap in
+`verify`, `remove`. Planned features (cache import, runtime views,
+smoke tests) are listed in the roadmap in
 [`specs/0000-product.md`](specs/0000-product.md)
 and appear here when they ship.
 
@@ -604,3 +604,100 @@ roughly 2.5 hours per terabyte over gigabit to a NAS, much faster on
 local storage. `--quick` catches deletion and truncation (not bitrot)
 in seconds and suits a pre-backup sanity pass; the full run is the
 quarterly fixity check.
+
+## remove — delete a model, or some of its files, from the archive
+
+```bash
+uv run llm-preserver remove Qwen/Qwen3.6-27B ~/models          # the whole model
+uv run llm-preserver remove Qwen/Qwen3.6-27B                   # archive from $LLM_PRESERVER_ARCHIVE
+uv run llm-preserver remove Qwen/Qwen3.6-27B --include '*Q4_K_M*'  # one quant, keep the rest
+uv run llm-preserver remove Qwen/Qwen3.6-27B --yes             # scripted: skip the prompt
+```
+
+The archive's one sanctioned deletion path (spec 0010) — the "delete"
+in the tool's create/read/update/delete cycle. Hand-`rm` inside the
+archive lets the record and directory drift apart and silently strands
+interrupted-pull staging; `remove` keeps the record, the on-disk files,
+and the staging leftovers consistent. It never touches the hub and
+never deletes anything outside the named model's directory and its
+staging sibling.
+
+Two granularities:
+
+- **Whole model** — `remove <creator>/<model>` deletes the model
+  directory (record, rendered markdown, manifest, all payload) and the
+  model's `.staging/<creator>/<model>` leftovers if any. A model that
+  exists *only* as staging leftovers (an interrupted pull that never
+  completed, invisible to `status`) is removable the same way — remove
+  reports there is no archived model and offers to clear the staging
+  directory. A model whose record is missing or unreadable is still
+  removable: the preview falls back to a filesystem-derived file count,
+  so degraded metadata never leaves a model stuck.
+- **Pattern-scoped** — `remove <creator>/<model> --include '<pattern>'`
+  deletes only the matching payload files, drops their entries from the
+  record (an emptied artifact and its now-empty format directory go
+  too), and regenerates `MODEL-RECORD.md` and `manifest-sha256.txt`, so
+  `verify` reports `valid` afterward. This is the quant-swap and
+  shed-the-master path.
+
+`--include` uses the same fnmatch language as `pull --include`
+(repeatable, case-sensitive, union of patterns), with two differences
+worth internalizing:
+
+- It matches the **archived** paths `show` lists (format-dir-prefixed —
+  `gguf/…`, `hf-snapshot/…`), not the hub repo's filenames that `pull`
+  matches. A floating pattern like `*Q4_K_M*` (what the pull resume
+  hint prints) matches in both; a pattern anchored at a hub filename's
+  start does not match on remove.
+- Pull's "documentation always rides along" rule does **not** carry
+  over — remove deletes exactly what matches, and a doc file is neither
+  auto-included nor protected.
+- A pattern matching **every** archived file is refused, pointing at
+  plain `remove` — pattern mode never empties a model silently. A
+  pattern matching **nothing** is a user error (exit 2, the pattern
+  echoed). Files on disk that no record lists (`verify`'s `unrecorded`
+  class — stranded junk, or the leftovers of an interrupted pattern
+  removal) match patterns too, so re-running the same command finishes
+  an interrupted one.
+
+Behavior worth knowing:
+
+- **The preview is the safety mechanism.** Deletion is permanent —
+  there is no trash can or undo. Every run prints what it will delete
+  (formats, file counts, sizes — the same human sizes as `status` —
+  and the staging directory when present) before asking to confirm.
+- **`--yes` skips the question, not the disclosure.** The full preview
+  still prints, then a result line naming what was deleted, so a
+  script's log carries the audit trail. The prose is not promised
+  machine-parseable; exit codes are the scripting contract.
+- **Non-interactive means `--yes`.** Because the delete is
+  irreversible, a run with no terminal on stdin refuses (exit 2) unless
+  `--yes` is passed — a piped or inherited `y` is not accepted as a
+  stand-in for a human. Scripts and cron jobs opt in explicitly with
+  `--yes`; interactive terminals get the normal prompt.
+- **Deletion is crash-safe by ordering.** Whole-model removal deletes
+  the record first, so an interrupt leaves an unrecorded directory
+  `status`/`verify` already surface (and a re-run finishes) — never a
+  record naming missing files. Pattern removal writes the updated
+  record first, so an interrupt leaves informational `unrecorded`
+  strays a re-run of the same command sweeps up.
+- **Ctrl-C during deletion** exits 130 and prints the exact re-run
+  command as the final line (absolute archive path, quoted patterns,
+  no `--yes` — the re-run earns its own preview). There is no separate
+  resume state; the same invocation finishes the job.
+- **Live progress on a TTY.** Run interactively, remove prints one
+  `removing <file>` line per file on stderr (removal over a slow mount
+  should not look hung). Piped or cron runs get none of it: stdout
+  stays byte-identical to a progress-free run.
+
+Exit codes match the rest of the tool:
+
+| Code | Domain | Cause |
+| --- | --- | --- |
+| 0 | success | model or files removed; also a declined confirmation ("nothing removed") |
+| 1 | archive/usage | path is not an archive; malformed `<creator>/<model>`; a symlinked model directory (refused, never followed); pattern removal against a model with no readable record |
+| 2 | user input | unknown model (the archive's model ids are listed so a typo self-corrects); a pattern matching nothing; any non-interactive run (no terminal on stdin) without `--yes` |
+| 130 | interrupted | Ctrl-C during deletion — paste the re-run command (printed as the last line) to finish |
+
+Removing whole models or pattern subsets is the only deletion the tool
+performs; the archive is otherwise append-only.

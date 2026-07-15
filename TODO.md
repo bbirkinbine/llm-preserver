@@ -5,18 +5,11 @@ What's next, in rough order. Feature detail lives in
 and the numbered specs; this file is the short-term working list.
 Check items off as they ship; update when priorities shift.
 
-## Next spec (0010) — pick one
+## Next spec (0011) — pick one
 
 - [ ] **Runtime views** (spec 0002, drafted): symlink/config views so
   runtimes run archived models in place. Its blocker (the download
   specs) is lifted — this is what makes the archive *usable* daily.
-- [ ] **Managed remove/retire**: the only sanctioned way to delete
-  from the archive (record + directory updated together). Real
-  pruning needs exist from first live use. Must also clear the
-  model's staging leftovers: interrupted pulls stage into
-  `<root>/.staging/<creator>/<model>` (sibling of `models/`, reused
-  on resume, deleted only on pull success), so removing a model
-  without sweeping its staging dir strands gigabytes invisibly.
 - [ ] **Smoke test**: load an archived model offline in a local
   runtime (llama.cpp / ollama), check a trivial deterministic
   prompt, record the result in the record's `runtime_tested` field
@@ -146,15 +139,14 @@ Check items off as they ship; update when priorities shift.
 - [ ] `quantization` record field is never populated (artifact-level
   label extraction was never specced; per-file is likely the right
   shape now that one artifact can hold several quants).
-- [ ] Split `records.py` (296) — near the 300-line cap; split before
-  the next feature touches it (`pull.py` was split by 0005). Fold in
-  while there (0009 adversarial review, Low): reserve the tool-owned
-  root filenames (`model-record.json`, `MODEL-RECORD.md`,
-  `manifest-sha256.txt`) in `FileEntry.path` validation — a
-  hand-crafted record naming one as a payload makes verify write a
-  manifest containing a bogus digest line for itself, which
-  `sha256sum -c` then fails forever. Unreachable via pull (payloads
-  nest under format dirs); only hand-edited or imported records.
+- [ ] Artifact/format-level pruning as `remove` flags (deferred from
+  spec 0010's whole-model + `--include` scope): a `--format` selector
+  and, once the `quantization` field is populated per-file, `--quant`
+  sugar over the same removal core. `--include 'hf-snapshot/*'` already
+  expresses format removal today, so this is ergonomics, not a gap.
+- [ ] Retire/tombstone mode for `remove` (deferred from 0010): delete
+  payload but keep the record as archive history. Out until a live
+  need shows up — 0010 read "remove/retire" as a single `remove`.
 - [ ] Extend `render.clean_text`'s scrub beyond C0/C1 controls to
   Unicode bidi/format characters (U+202A–202E, U+2066–2069,
   zero-width set): hub-supplied text could visually reorder a
