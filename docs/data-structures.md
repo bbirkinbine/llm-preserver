@@ -3,14 +3,15 @@
 Visual reference for the on-disk and in-memory structures the tool is
 built on. This is the foundation layer (spec 0001, layout decided by
 ADR 0001 — `docs/adr/0001-model-storage.md`); every later feature —
-pull and verify (shipped), smoke test and runtime views (planned) —
-reads or writes these same structures. Diagrams are Mermaid — GitHub and VS Code's markdown
-preview render them natively.
+pull, verify, and remove (shipped), smoke test and runtime views
+(planned) — reads, writes, or deletes these same structures. Diagrams
+are Mermaid — GitHub and VS Code's markdown preview render them
+natively.
 
 Source of truth for the schemas is the code
-(`src/llm_preserver/records.py`, `src/llm_preserver/archive.py`) and
-ADR 0001; this document is a rendering of them. If they disagree, the
-code and ADR win — update this file.
+(`src/llm_preserver/records/schema.py`, `src/llm_preserver/archive.py`)
+and ADR 0001; this document is a rendering of them. If they disagree,
+the code and ADR win — update this file.
 
 ## The big picture
 
@@ -81,10 +82,10 @@ a quantization), `FileEntry` one file of that artifact.
 ```mermaid
 classDiagram
     class ModelRecord {
-        record_schema_version : int, defaults to 1
+        record_schema_version : int, defaults to 2
         name : str
         hub_id : str
-        roles : list~Role~ nonempty, first is primary
+        roles : list~Role~ may be empty, first is primary
         capabilities : list~str~ or None
         pipeline_tag : str or None
         license : str or None
@@ -110,6 +111,8 @@ classDiagram
         sha256 : str or None, 64-hex
         size : int or None, bytes
         source : FileSource
+        provenance : Provenance or None, per-file since v2
+        revision : str or None, 40-hex per-file pin since v2
     }
 
     class Role {
@@ -131,6 +134,7 @@ classDiagram
     class Provenance {
         <<enumeration>>
         verified
+        hashed-locally
         unverified
     }
 
@@ -152,18 +156,18 @@ Semantics that don't fit in a box:
 
 | Field | Why it's shaped this way |
 | --- | --- |
-| `roles` vs `capabilities` | `roles` is curator judgment ("why is this on the shelf") — a strict enum, nonempty, first entry drives `status` grouping. `capabilities` is machine facts recorded from source metadata (`tools`, `vision`, ...) — free strings, because the vocabulary belongs to hubs/runtimes and will grow. |
-| `revision` | Full 40-hex commit hash only; a branch name is a moving pointer, not provenance, and fails validation. |
-| `provenance` | `verified` = hub pull whose hashes match the pinned revision; `unverified` = cache import that can't be checked against a source. |
+| `roles` vs `capabilities` | `roles` is curator judgment ("why is this on the shelf") — a strict enum, first entry drives `status` grouping. It may be empty (schema v2): roles are judgment the tool never fabricates, so a freshly pulled model can carry none and groups under a "(no role)" bucket. `capabilities` is machine facts recorded from source metadata (`tools`, `vision`, ...) — free strings, because the vocabulary belongs to hubs/runtimes and will grow. |
+| `revision` | Full 40-hex commit hash only; a branch name is a moving pointer, not provenance, and fails validation. The artifact-level field tracks the most recent pull; each `FileEntry` also carries its own `revision` pin (schema v2), so a merged artifact never implies older files were resolved at a newer commit. |
+| `provenance` | `verified` = local SHA256 matched a hub-declared hash; `hashed-locally` (schema v2) = the hub published no hash to check against, so the file was hashed on download but not cross-checked; `unverified` = cache import that can't be checked against a source. Recorded per file (v2); an artifact is `verified` only when every file is. |
 | `FileEntry.source` | Internet Archive's original-vs-generated split: `original` files (weights, tokenizer, license) are sacred and never regenerable; `generated` files (`MODEL-RECORD.md`, future manifests) can be rebuilt from originals + record. Backup and recovery logic treat the classes differently. |
-| `FileEntry.path` | Upstream filename preserved verbatim (GGUF names encode quant type and shard position). Validated: relative, POSIX, no `..`, no backslashes or control characters — filenames are upstream-supplied and therefore untrusted. |
+| `FileEntry.path` | Upstream filename preserved verbatim (GGUF names encode quant type and shard position). Validated: relative, POSIX, no `..`, no backslashes or control characters — filenames are upstream-supplied and therefore untrusted. The three tool-owned root filenames (`model-record.json`, `MODEL-RECORD.md`, `manifest-sha256.txt`) are also reserved (spec 0010): a record may not name one as a payload path. |
 | Nullable fields | "Unknown at this point in time", serialized as explicit `null` — never omitted — so a reader can tell "unknown" from "not part of this schema version". Schema evolution is add-a-field, never rename. |
 
 ### Example record
 
 ```json
 {
-  "record_schema_version": 1,
+  "record_schema_version": 2,
   "name": "Qwen2.5 Coder 32B Instruct",
   "hub_id": "Qwen/Qwen2.5-Coder-32B-Instruct",
   "roles": ["coding", "chat"],
@@ -187,7 +191,9 @@ Semantics that don't fit in a box:
           "path": "gguf/Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf",
           "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           "size": 19851335840,
-          "source": "original"
+          "source": "original",
+          "provenance": "verified",
+          "revision": "0123456789abcdef0123456789abcdef01234567"
         }
       ]
     }
@@ -206,7 +212,13 @@ differently to each:
 | Version | Lives in | Constant | On a *newer* value |
 | --- | --- | --- | --- |
 | Archive schema | `archive.json` → `schema_version` | `archive.SCHEMA_VERSION = 1` | **Refuse.** Every command — including read-only `status`/`show` — errors and tells the user to upgrade. |
-| Record schema | `model-record.json` → `record_schema_version` | `records.RECORD_SCHEMA_VERSION = 1` | **Flag, don't refuse.** `status` shows it in the completeness column; `show` warns on stderr but still renders. Read-only inspection stays useful. |
+| Record schema | `model-record.json` → `record_schema_version` | `records.RECORD_SCHEMA_VERSION = 2` | **Flag, don't refuse.** `status` shows it in the completeness column; `show` warns on stderr but still renders. Read-only inspection stays useful. |
+
+Schema v2 (spec 0003) widened v1: per-file `provenance` and
+`revision`, the `hashed-locally` provenance state, and optional-empty
+`roles`. v1 records still load — every v2 change is a widening (a new
+optional field, a new enum value, a relaxed constraint), never a
+rename.
 
 The record carries its own version so a lone model directory rsynced
 away from the archive stays self-describing without the root marker.
@@ -312,6 +324,7 @@ flowchart LR
         STATUS["status / show: inventory + detail<br/>(spec 0001)"]
         DL["pull: selective + whole-repo<br/>(specs 0003/0004)"]
         VER["verify: re-hash disk against records<br/>(spec 0009)"]
+        RM["remove: whole-model + pattern deletion<br/>(spec 0010)"]
     end
 
     subgraph FUTURE ["planned layers (0000-product roadmap)"]
@@ -325,6 +338,7 @@ flowchart LR
     VER -- "re-hashes files against records;<br/>regenerates manifest-sha256.txt;<br/>complete vs valid" --> REC
     SMOKE -- "writes runtime_tested" --> REC
     VIEWS -- "reads only; generates<br/>disposable symlink/config views" --> REC
+    RM -- "deletes payload + entries;<br/>whole-model or pattern subset;<br/>regenerates record + manifest" --> REC
 ```
 
 Related vocabulary verify uses (adopted from BagIt, ADR 0001; spec
