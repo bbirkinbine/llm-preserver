@@ -23,17 +23,15 @@ from pydantic import ValidationError
 
 from llm_preserver import hashing
 from llm_preserver.archive import iter_model_dirs, require_archive
-from llm_preserver.pull_record import MANIFEST_FILENAME, write_manifest
+from llm_preserver.model_scan import unrecorded_files
+from llm_preserver.pull_record import write_manifest
 from llm_preserver.records import (
     RECORD_FILENAME,
-    RENDERED_FILENAME,
     ModelRecord,
     load_record,
 )
 
 DRIFT_STATES = frozenset({"incomplete", "invalid", "no-record", "record-unreadable"})
-
-_TOOL_OWNED = frozenset({RECORD_FILENAME, RENDERED_FILENAME, MANIFEST_FILENAME})
 
 
 @dataclass
@@ -198,19 +196,6 @@ def _check_recorded_files(
     return problems, unhashed, any_missing, any_hashed
 
 
-def _unrecorded_files(model_dir: Path, record: ModelRecord) -> list[str]:
-    """On-disk files no record lists, exempting tool-owned generated files."""
-    recorded = {entry.path for artifact in record.artifacts for entry in artifact.files}
-    found = []
-    for path in model_dir.rglob("*"):
-        if not path.is_file() or path.is_symlink():
-            continue
-        rel = path.relative_to(model_dir).as_posix()
-        if rel not in recorded and rel not in _TOOL_OWNED:
-            found.append(rel)
-    return sorted(found)
-
-
 def _verify_model(
     model_dir: Path, model_id: str, quick: bool, events: ProgressEvents
 ) -> ModelVerifyResult:
@@ -245,7 +230,7 @@ def _verify_model(
         state=state,
         problems=problems,
         unhashed=unhashed,
-        unrecorded=_unrecorded_files(model_dir, record),
+        unrecorded=unrecorded_files(model_dir, record),
     )
     if not quick:
         # Refresh the sidecar for every readable record, drifted models
