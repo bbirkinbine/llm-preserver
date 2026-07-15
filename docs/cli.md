@@ -558,8 +558,10 @@ categories:
   (e.g. a future unverified cache import) — "valid" is never claimed
   for a model whose digests were not actually checked.
 - **incomplete** — recorded files are missing from disk (each is
-  named). The tool never deletes, so this means out-of-band deletion
-  or a partial copy.
+  named). `remove` updates the record whenever it deletes, so a
+  recorded-but-missing file is never its doing — this means an
+  out-of-band deletion (a manual `rm` inside the archive) or a partial
+  copy.
 - **invalid** — everything is present, but at least one file's size or
   hash disagrees with the record (expected and actual are shown), or a
   file could not be read. Bitrot, tampering, or a failing disk.
