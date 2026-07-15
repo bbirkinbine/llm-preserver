@@ -22,6 +22,18 @@ Check items off as they ship; update when priorities shift.
 
 ## Shipped
 
+- 0010 managed remove (PR #14): the `remove` command — whole-model
+  and `--include` pattern-scoped deletion, the archive's one
+  sanctioned delete path (record + files + `.staging` kept
+  consistent). Preview-then-confirm, `--yes` skips the question not
+  the disclosure, a non-interactive run without `--yes` refuses,
+  crash-safe by deleting the source of truth first, Ctrl-C reprints
+  the re-run command. Prep landed first: `records.py` → `records/`
+  package and the tool-owned-filename reservation. Review round
+  PoC-confirmed and fixed three symlink-escape vectors on a copied
+  archive plus a pattern-mode record/disk mismatch; `remove.py` split
+  into a `remove/` package. 562 tests. Deferred to smaller items:
+  artifact/`--format` pruning, retire/tombstone mode.
 - 0001 archive init + records, 0003 selective pull, 0004 full
   snapshot (`pull --whole-repo`, shipped as `--all` and renamed by
   0005). The core loop works end to end and is live-verified: init →

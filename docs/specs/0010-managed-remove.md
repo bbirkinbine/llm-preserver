@@ -1,6 +1,6 @@
 # 0010 — Managed remove
 
-**Status:** shipping
+**Status:** shipped
 **Last updated:** 2026-07-15
 
 ## Goal
