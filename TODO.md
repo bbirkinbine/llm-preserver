@@ -5,7 +5,14 @@ What's next, in rough order. Feature detail lives in
 and the numbered specs; this file is the short-term working list.
 Check items off as they ship; update when priorities shift.
 
-## Next spec (0011) — pick one
+## In flight
+
+- [ ] **0011 clean error on invalid repo id** (spec drafted,
+  `spec-0011-clean-error-invalid-repo-id`): a bad Hugging Face repo id
+  (e.g. an Ollama `name:tag` pasted into `pull`) prints a clean exit-2
+  error instead of a Traceback. Live-use trigger, 2026-07-15.
+
+## Next spec (0012) — pick one
 
 - [ ] **Runtime views** (spec 0002, drafted): symlink/config views so
   runtimes run archived models in place. Its blocker (the download

@@ -486,13 +486,21 @@ parallelize only with partitioned file ownership.
   sweep). `remove.py` split into a `remove/` package
   (models/plan/execute). 562 tests. Deferred to smaller items:
   artifact/`--format` pruning, retire/tombstone mode.
-- **Next spec (0011): pick from TODO.md** — runtime views (0002,
+- **Spec 0011 in flight (branch `spec-0011-clean-error-invalid-repo-id`,
+  draft):** clean exit-2 error instead of a Traceback when `pull` (or any
+  hub-facing command) gets an invalid Hugging Face repo id — live-use
+  trigger 2026-07-15 (`pull 'qwen3-vl:30b-a3b-instruct'`, an Ollama tag,
+  raised an unmapped `HFValidationError`). `HFValidationError` subclasses
+  `ValueError`, which the hub seam's `MAPPED_EXCEPTIONS` does not catch;
+  fix maps it to `PullUserError`.
+- **Next spec (0012): pick from TODO.md** — runtime views (0002,
   unblocked), smoke test, or the interactive-listing TUI (three
   independent live-use requests during 0006). Also queued from live
   use: goal-definitive archiving (capability report in `status`),
   file-kind dictionary, live-hub canary (0000 roadmap).
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
-  (draft, unblocked); 0005/0006/0007/0008/0009/0010 shipped.
+  (draft, unblocked); `0011` clean-error-on-bad-id (draft, in flight);
+  0005/0006/0007/0008/0009/0010 shipped.
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

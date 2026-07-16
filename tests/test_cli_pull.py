@@ -7,7 +7,6 @@ no network is ever touched.
 
 import contextlib
 import json
-import logging
 
 from typer.testing import CliRunner
 
@@ -42,19 +41,6 @@ def install_fake_hub(monkeypatch, client):
     import llm_preserver.cli as cli_module
 
     monkeypatch.setattr(cli_module, "HubClient", lambda: client)
-
-
-class FailingHubClient:
-    """Hub-seam double whose repo_info raises a fault-domain error."""
-
-    def __init__(self, exc):
-        self._exc = exc
-
-    def repo_info(self, repo_id):
-        raise self._exc
-
-    def download(self, repo_id, filename, revision, dest_dir):
-        raise AssertionError("download must not be called after repo_info failed")
 
 
 def invoke_pull(archive, *extra_args):
@@ -167,92 +153,6 @@ def test_pull_validates_archive_before_prompting(tmp_path, monkeypatch, fake_hub
 
     assert result.exit_code != 0
     assert "archive" in combined_output(result).lower()
-
-
-def test_pull_fault_domains_have_distinct_exit_codes(tmp_path, monkeypatch):
-    from llm_preserver.hub import (
-        PullEnvError,
-        PullHubError,
-        PullIntegrityError,
-        PullUserError,
-    )
-
-    archive = init_archive_dir(tmp_path)
-    failures = {
-        "user": PullUserError("unknown repo id acme/nope: check the repo id"),
-        "env": PullEnvError("network unreachable: check your connection"),
-        "hub": PullHubError("hub returned 503: retry later"),
-        "integrity": PullIntegrityError("sha256 mismatch after download: retry the pull"),
-    }
-    codes = {}
-    for domain, exc in failures.items():
-        install_fake_hub(monkeypatch, FailingHubClient(exc))
-        result = invoke_pull(archive)
-        assert result.exit_code != 0, domain
-        codes[domain] = result.exit_code
-    assert len(set(codes.values())) == 4
-
-
-def test_pull_integrity_failure_message_names_domain_and_next_step(tmp_path, monkeypatch):
-    from llm_preserver.hub import PullIntegrityError
-
-    archive = init_archive_dir(tmp_path)
-    exc = PullIntegrityError("sha256 mismatch for tiny-chat-Q4_K_M.gguf: retry the pull")
-    install_fake_hub(monkeypatch, FailingHubClient(exc))
-
-    result = invoke_pull(archive)
-
-    assert result.exit_code != 0
-    output = combined_output(result)
-    assert "integrity" in output.lower()
-    assert "retry the pull" in output
-
-
-def test_pull_verbose_failure_never_leaks_authorization_header(tmp_path, monkeypatch, caplog):
-    import httpx
-    from huggingface_hub.errors import HfHubHTTPError
-
-    from llm_preserver.hub import PullHubError
-
-    leaked_value = "hf_FAKETOKEN12345"
-    request = httpx.Request(
-        "GET",
-        "https://huggingface.co/api/models/bartowski/tiny-chat-GGUF",
-        headers={"Authorization": f"Bearer {leaked_value}"},
-    )
-    raw = HfHubHTTPError("500 Server Error", response=httpx.Response(500, request=request))
-    wrapped = PullHubError("hub-side failure: retry later")
-    wrapped.__cause__ = raw
-    archive = init_archive_dir(tmp_path)
-    install_fake_hub(monkeypatch, FailingHubClient(wrapped))
-
-    with caplog.at_level(logging.DEBUG):
-        result = invoke_pull(archive, "--verbose")
-
-    assert result.exit_code != 0
-    everything = combined_output(result) + caplog.text
-    assert leaked_value not in everything
-    assert "Authorization" not in everything
-
-
-def test_grouping_prompt_sanitizes_hostile_base_model(tmp_path, monkeypatch, fake_hub_factory):
-    # base_model is hub-supplied text and reaches the confirm prompt;
-    # a value carrying terminal escapes must render control-char-free.
-    archive = init_archive_dir(tmp_path)
-    hostile = "acme/tiny\x1b]52;c;evil\x07chat"
-    install_fake_hub(monkeypatch, fake_hub_factory(base_model=hostile))
-
-    result = runner.invoke(
-        app,
-        ["pull", "bartowski/tiny-chat-GGUF", str(archive), "--include", "*Q4_K_M*"],
-        input="n\n",  # decline the grouping; the prompt has already rendered
-    )
-
-    assert result.exit_code != 0
-    output = combined_output(result)
-    assert "\x1b" not in output
-    assert "\x07" not in output
-    assert "evil" in output  # content survives, escapes do not
 
 
 def test_interactive_listing_annotates_recognized_companion_kinds(

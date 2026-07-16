@@ -63,6 +63,16 @@ def map_hub_exception(exc: Exception) -> PullError:
             f"repo, revision, or file not found (or access not granted): {exc}; "
             "check the repo id, and for gated/private repos log in with `hf auth login`"
         )
+    if isinstance(exc, hf_errors.HFValidationError):
+        # The id never reached the network: the client-side validator
+        # rejected its shape (e.g. an Ollama `name:tag` pasted where a
+        # hub `<org>/<name>` id is expected — spec 0011). A user-input
+        # fault (exit 2), not an environment failure; point at the
+        # deterministic recovery path.
+        return PullUserError(
+            f"not a valid Hugging Face repo id (expected '<org>/<name>'): {exc}; "
+            "search the hub for the model by name with `llm-preserver discover <query>`"
+        )
     if isinstance(exc, hf_errors.HfHubHTTPError):
         status = exc.response.status_code if exc.response is not None else None
         if status == 429:
@@ -85,6 +95,10 @@ def map_hub_exception(exc: Exception) -> PullError:
 MAPPED_EXCEPTIONS = (
     hf_errors.HfHubHTTPError,
     hf_errors.OfflineModeIsEnabled,
+    # A ValueError subclass the id validator raises before any request;
+    # not caught by the HTTP/OS families above, so it must be listed
+    # explicitly or it escapes unmapped as a Traceback (spec 0011).
+    hf_errors.HFValidationError,
     httpx.HTTPError,
     OSError,
 )

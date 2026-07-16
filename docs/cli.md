@@ -125,7 +125,11 @@ is set (see the init section) — with the variable exported, every
 example above works with the path omitted entirely.
 
 `REPO_ID` is an exact hub repo id (`namespace/repo`) — the tool never
-resolves fuzzy names. The pull downloads the selected files plus the
+resolves fuzzy names. A value that is not a valid hub repo id — an
+Ollama `name:tag` reference (`qwen3-vl:30b-a3b-instruct`) pasted in by
+habit is the common case — is rejected with a one-line error and
+exit 2, not a stack trace; search the hub by name with the `discover`
+command to find the exact id. The pull downloads the selected files plus the
 repo's README/model card and LICENSE, records a SHA256 for every file,
 pins the resolved commit hash, and writes the model record
 (`model-record.json` + rendered `MODEL-RECORD.md`). Archived payload
@@ -312,7 +316,7 @@ reading source:
 | Code | Domain | Typical cause / next step |
 | --- | --- | --- |
 | 1 | archive/usage | path is not an archive; bad arguments |
-| 2 | user input | unknown repo id; gated repo not accepted; no matching files |
+| 2 | user input | malformed or unknown repo id; gated repo not accepted; no matching files |
 | 3 | local environment | network unreachable, disk full — check your machine |
 | 4 | hub-side | 5xx or rate limiting — retry later; not your fault |
 | 5 | integrity | hash mismatch after download — the file never entered the archive |
