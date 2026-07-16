@@ -350,7 +350,7 @@ parallelize only with partitioned file ownership.
   drives it; agents do not `rm` inside an archive. Tests use tmp dirs,
   never a real archive.
 
-## Open work / current state (updated 2026-07-13, end of session 10)
+## Open work / current state (updated 2026-07-15, end of session 12)
 
 - **Specs 0001, 0003, 0004, 0005, 0006, 0007, 0008, and 0009 are all
   merged.** The loop is live-verified end to end: discover (name →
@@ -486,13 +486,40 @@ parallelize only with partitioned file ownership.
   sweep). `remove.py` split into a `remove/` package
   (models/plan/execute). 562 tests. Deferred to smaller items:
   artifact/`--format` pruning, retire/tombstone mode.
-- **Next spec (0011): pick from TODO.md** — runtime views (0002,
+- **Session 12 (2026-07-15, small-tier, PR #15): spec 0011 clean
+  error on an invalid repo id shipped.** A bad Hugging Face repo id —
+  the live-use trigger was an Ollama `name:tag`
+  (`pull 'qwen3-vl:30b-a3b-instruct'`) pasted where a hub
+  `<org>/<name>` id is expected — crashed with a rich Traceback.
+  Root cause: `huggingface_hub`'s `HFValidationError` subclasses
+  `ValueError`, which the hub seam's `MAPPED_EXCEPTIONS` tuple did not
+  include, so it escaped `map_hub_exception` unmapped. Fix is one
+  branch mapping it to `PullUserError` (exit 2) plus the tuple
+  addition; the existing CLI `PullUserError` → exit-2 path carried the
+  clean message with no new plumbing. The validity verdict is deferred
+  to the library's own validator, so no valid id is over-rejected
+  (a hand-rolled pre-flight check was explicitly deferred to avoid a
+  second validator diverging from the hub's rules). Hard-won facts:
+  the CLI end-to-end test must drive the **real** `HubClient`, not the
+  `FakeHubClient` seam — the fix lives inside the client's
+  `except MAPPED_EXCEPTIONS → map_hub_exception` path, so a fake would
+  bypass exactly the code under test; it stays hermetic because
+  `validate_repo_id` rejects the id locally before any HTTP request
+  (`HF_HUB_OFFLINE=1` set as a belt). The new test pushed
+  `test_cli_pull.py` past the 300-line cap, so the error /
+  fault-domain / output-hygiene tests were split into
+  `test_cli_pull_errors.py`. Both reviewers returned ship; the one
+  security item (bidi / zero-width chars surviving `clean_text`) is
+  pre-existing and already queued from spec 0007, covered for free
+  when that scrubber hardening lands. Ollama-shape detection in the
+  message was deferred. 567 tests.
+- **Next spec (0012): pick from TODO.md** — runtime views (0002,
   unblocked), smoke test, or the interactive-listing TUI (three
   independent live-use requests during 0006). Also queued from live
   use: goal-definitive archiving (capability report in `status`),
   file-kind dictionary, live-hub canary (0000 roadmap).
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
-  (draft, unblocked); 0005/0006/0007/0008/0009/0010 shipped.
+  (draft, unblocked); 0005/0006/0007/0008/0009/0010/0011 shipped.
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

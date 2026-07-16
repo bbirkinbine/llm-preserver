@@ -40,6 +40,7 @@ line; the source of truth is the spec file, this is a rendered cache. Run
 - ~~[0008 — Hf Logging](0008-hf-logging.md)~~  (shipped)
 - ~~[0009 — Verify](0009-verify.md)~~  (shipped)
 - ~~[0010 — Managed remove](0010-managed-remove.md)~~  (shipped)
+- ~~[0011 — Clean error on an invalid repo id](0011-clean-error-invalid-repo-id.md)~~  (shipped)
 <!-- specs-status:end -->
 
 ## Numbering

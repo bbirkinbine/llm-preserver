@@ -5,7 +5,7 @@ What's next, in rough order. Feature detail lives in
 and the numbered specs; this file is the short-term working list.
 Check items off as they ship; update when priorities shift.
 
-## Next spec (0011) — pick one
+## Next spec (0012) — pick one
 
 - [ ] **Runtime views** (spec 0002, drafted): symlink/config views so
   runtimes run archived models in place. Its blocker (the download
@@ -22,6 +22,15 @@ Check items off as they ship; update when priorities shift.
 
 ## Shipped
 
+- 0011 clean error on invalid repo id (PR #15): a bad Hugging Face
+  repo id — the common case is an Ollama `name:tag` pasted into `pull`
+  (`qwen3-vl:30b-a3b-instruct`) — now prints a clean one-line error and
+  exits 2 instead of a rich Traceback. `HFValidationError` (a
+  `ValueError` subclass) was escaping the hub seam's `MAPPED_EXCEPTIONS`
+  unmapped; it now maps to `PullUserError`, deferring the validity
+  verdict to the library's own validator so no valid id is
+  over-rejected. Live-use trigger, 2026-07-15. Error tests split into
+  `test_cli_pull_errors.py` for the 300-line cap.
 - 0010 managed remove (PR #14): the `remove` command — whole-model
   and `--include` pattern-scoped deletion, the archive's one
   sanctioned delete path (record + files + `.staging` kept
