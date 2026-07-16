@@ -1,6 +1,6 @@
 # 0011 — Clean error on an invalid repo id
 
-**Status:** draft
+**Status:** shipped
 **Last updated:** 2026-07-15
 
 ## Goal
@@ -114,3 +114,26 @@ message helper plus a CLI test asserting exit 2 and no Traceback via the
 Typer runner), `docs/cli.md`. ~3 files — Small tier; `/test-first`
 required, `/plan` skipped (the source change is localized to one
 module).
+
+## Implementation Notes
+
+- Shipped in PR #15. Fix is exactly the single-seam sketch: one branch
+  in `map_hub_exception` plus `HFValidationError` added to
+  `MAPPED_EXCEPTIONS`; the CLI boundary needed no change (the existing
+  `PullUserError` → exit-2 path carried it).
+- The CLI end-to-end test drives the **real** `HubClient`, not the
+  `FakeHubClient` seam — the fix lives inside the client's
+  `except MAPPED_EXCEPTIONS → map_hub_exception` path, and a fake
+  (raising canned `Pull*Error`s) would bypass the code under test. It
+  stays hermetic because `validate_repo_id` rejects the id locally,
+  before any HTTP request; `HF_HUB_OFFLINE=1` is set as a belt.
+- Adding the ~31-line test pushed `tests/test_cli_pull.py` over the
+  300-line cap, so the error / fault-domain / output-hygiene tests were
+  split into `tests/test_cli_pull_errors.py` (following the existing
+  `test_cli_pull_*` sibling convention; helpers are duplicated per file
+  as the other siblings do). Not in the original sketch's touch list —
+  a review finding, resolved on the branch.
+- Both independent reviewers returned "ship". The one security item
+  (bidi / zero-width chars surviving `clean_text`) is pre-existing and
+  already queued from spec 0007; this change funnels through the same
+  scrubber, so it is covered when that hardening lands.
