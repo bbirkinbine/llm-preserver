@@ -259,6 +259,12 @@ sequenceDiagram
 
 The same convention extends to pull (specs 0003/0004): payload files
 first, record last, so the record only ever describes files that exist.
+A pull that is interrupted before the record is written therefore leaves
+partial bytes in `.staging/<creator>/<model>/` and no record at all —
+regenerable debris that the record-anchored audit cannot see, since it
+has nothing recorded to check. `verify --staging` surfaces exactly that
+leftover with a hash-free `.staging/` scan (spec 0012); it is cleared by
+resuming the pull or by `remove`.
 
 **Removal inverts the convention** (spec 0010), because deletion is the
 mirror of writing. `remove` of a whole model deletes the record

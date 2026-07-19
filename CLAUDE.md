@@ -513,11 +513,13 @@ parallelize only with partitioned file ownership.
   pre-existing and already queued from spec 0007, covered for free
   when that scrubber hardening lands. Ollama-shape detection in the
   message was deferred. 567 tests.
-- **Next spec (0012): pick from TODO.md** — runtime views (0002,
+- **Next spec (0013): pick from TODO.md** — runtime views (0002,
   unblocked), smoke test, or the interactive-listing TUI (three
   independent live-use requests during 0006). Also queued from live
   use: goal-definitive archiving (capability report in `status`),
-  file-kind dictionary, live-hub canary (0000 roadmap).
+  file-kind dictionary, live-hub canary (0000 roadmap). (Spec 0012,
+  staging-leftover detection, is in flight on branch
+  `spec-0012-staging-leftovers`.)
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
   (draft, unblocked); 0005/0006/0007/0008/0009/0010/0011 shipped.
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool

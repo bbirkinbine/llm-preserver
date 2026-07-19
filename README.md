@@ -49,7 +49,8 @@ uv run llm-preserver verify ~/models # audit: every file present, every hash int
 - **`verify`** — audits disk against the records: every recorded file
   present (*complete*), every SHA256 intact (*valid*). `--quick` skips
   hashing for a seconds-long structural check; the exit code makes it
-  cron-friendly.
+  cron-friendly. `--staging` surfaces abandoned downloads an interrupted
+  pull left behind (a hash-free `.staging/` scan).
 - **`remove`** — the archive's one sanctioned deletion path: a whole
   model, or a `--include` pattern subset (a quant swap), with the
   record, files, and interrupted-pull staging kept consistent. Always

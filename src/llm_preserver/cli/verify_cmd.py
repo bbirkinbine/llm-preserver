@@ -10,13 +10,19 @@ import sys
 import time
 from collections import Counter
 from collections.abc import Callable
+from pathlib import Path
 from typing import Annotated, TextIO
 
 import typer
 
-from llm_preserver.archive import ArchiveError
+from llm_preserver.archive import ArchiveError, require_archive
 from llm_preserver.cli.app import ArchivePath, app, fail
-from llm_preserver.cli.model_errors import reject_unknown_model, split_model_id
+from llm_preserver.cli.model_errors import (
+    reject_unknown_model,
+    reject_unknown_staging_model,
+    split_model_id,
+)
+from llm_preserver.model_scan import StagingLeftover, staging_leftovers
 from llm_preserver.pull_preflight import human_size
 from llm_preserver.render import clean_text
 from llm_preserver.verify import (
@@ -137,6 +143,64 @@ def _summary_line(report: VerifyReport) -> str:
     return f"{total} {noun}: {', '.join(parts)}"
 
 
+def _staging_line(left: StagingLeftover) -> str:
+    """One ``--staging`` report line for a leftover."""
+    noun = "file" if left.file_count == 1 else "files"
+    return f"{left.model_id}  {human_size(left.total_bytes)}, {left.file_count} partial {noun}"
+
+
+def _run_staging_scan(path: Path, model: str | None) -> None:
+    """Report abandoned ``.staging/`` downloads only — no audit, no hashing.
+
+    The ``--staging`` short-circuit: it never walks ``models/``, hashes
+    nothing, and writes nothing (not even the manifest sidecar a full
+    verify refreshes). A leftover is informational, so a clean scan and
+    a scan that finds leftovers both exit 0.
+    """
+    try:
+        require_archive(path)
+        leftovers = staging_leftovers(path)
+    except (ArchiveError, OSError) as exc:
+        # An unreadable .staging/ (foreign-uid copy, NAS fault) is a
+        # clean exit-1, never a traceback — same contract as a bad path.
+        raise fail(str(exc)) from exc
+    if model is not None:
+        split_model_id(model)  # malformed shape → exit 1, before any listing
+        scoped = [left for left in leftovers if left.model_id == model]
+        if not scoped:
+            raise reject_unknown_staging_model(path, model, [left.model_id for left in leftovers])
+        leftovers = scoped
+    if not leftovers:
+        typer.echo("no abandoned downloads in .staging/")
+        return
+    for left in leftovers:
+        typer.echo(clean_text(_staging_line(left), single_line=True))
+
+
+def _echo_leftover_footer(path: Path, model: str | None) -> None:
+    """Print the informational abandoned-download note, if any.
+
+    Runs on every plain-verify path (including ``--quick`` and an
+    empty-``models/`` archive) so a routine audit never silently hides a
+    forgotten download. Never changes the exit code, and never raises: a
+    symlinked or unreadable ``.staging/`` is surfaced by ``--staging``
+    (exit 1), not by crashing an otherwise-successful audit.
+    """
+    try:
+        leftovers = staging_leftovers(path)
+    except (ArchiveError, OSError):
+        # Best-effort: a symlinked or unreadable .staging/ is surfaced by
+        # --staging (exit 1), never by crashing a successful audit.
+        return
+    if model is not None:
+        leftovers = [left for left in leftovers if left.model_id == model]
+    count = len(leftovers)
+    if count == 0:
+        return
+    noun = "download" if count == 1 else "downloads"
+    typer.echo(f"note: {count} abandoned {noun} in .staging/ — run 'verify --staging'")
+
+
 @app.command()
 def verify(
     path: ArchivePath,
@@ -151,8 +215,22 @@ def verify(
             help="Existence and size checks only — no hashing, no manifest refresh.",
         ),
     ] = False,
+    staging: Annotated[
+        bool,
+        typer.Option(
+            "--staging",
+            help="Report abandoned .staging/ downloads only — no audit, no hashing.",
+        ),
+    ] = False,
 ) -> None:
     """Audit the archive against its records (complete vs valid)."""
+    if staging:
+        try:
+            _run_staging_scan(path, model)
+        except KeyboardInterrupt:
+            typer.echo("interrupted — scan incomplete", err=True)
+            raise typer.Exit(code=130) from None
+        return
     renderer = ProgressRenderer(sys.stderr)
 
     def emit(result: ModelVerifyResult) -> None:
@@ -185,7 +263,11 @@ def verify(
         raise reject_unknown_model(path, model)
     if not report.models:
         typer.echo("archive is empty (no models)")
+        _echo_leftover_footer(path, model)
         return
     typer.echo(_summary_line(report))
+    # The footer is informational and prints before the drift exit — a
+    # forgotten download must surface even when the audit itself fails.
+    _echo_leftover_footer(path, model)
     if report.drifted:
         raise typer.Exit(code=5)

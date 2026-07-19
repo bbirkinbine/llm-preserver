@@ -5,7 +5,7 @@ What's next, in rough order. Feature detail lives in
 and the numbered specs; this file is the short-term working list.
 Check items off as they ship; update when priorities shift.
 
-## Next spec (0012) — pick one
+## Next spec (0013) — pick one
 
 - [ ] **Runtime views** (spec 0002, drafted): symlink/config views so
   runtimes run archived models in place. Its blocker (the download
