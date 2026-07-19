@@ -535,6 +535,7 @@ uv run llm-preserver verify ~/models          # full audit: re-hash everything
 uv run llm-preserver verify                   # same, archive from $LLM_PRESERVER_ARCHIVE
 uv run llm-preserver verify --quick           # existence + size only, seconds not hours
 uv run llm-preserver verify --model Qwen/Qwen3.6-27B   # one model, not the whole shelf
+uv run llm-preserver verify --staging         # only: any abandoned downloads? (instant, no hashing)
 ```
 
 The whole-archive drift detector (spec 0009), BagIt-style: each
@@ -594,12 +595,67 @@ stays checkable with coreutils alone:
 cd ~/models/models/Qwen/Qwen3.6-27B && sha256sum -c manifest-sha256.txt
 ```
 
+### Abandoned downloads (`--staging`)
+
+A pull stages into `.staging/<creator>/<model>/`, and only after every
+file has moved into `models/` and the record is written does it delete
+that directory. An interrupted pull — Ctrl-C, a crash, a dropped link —
+therefore leaves partial bytes in `.staging/` and writes no record.
+Because the audit above checks only what each record *lists* under
+`models/`, and `.staging/` is a sibling of `models/`, a half-finished
+download is otherwise invisible: an archive-wide `verify` can report
+"all valid" while gigabytes of an abandoned pull sit forgotten in
+staging (spec 0012).
+
+Detecting a leftover is just the presence of a non-empty
+`.staging/<creator>/<model>/` directory — no record, no `models/` walk,
+no hashing. So finding them never needs a hash run:
+
+```bash
+uv run llm-preserver verify --staging                       # list abandoned downloads, then stop
+uv run llm-preserver verify --staging --model Qwen/Qwen3.6-27B   # scope to one
+```
+
+`--staging` skips the recorded-file audit entirely and prints one line
+per leftover — `<creator>/<model>  4.5 KiB, 2 partial files`, sorted by
+id — or `no abandoned downloads in .staging/` when clean. It is
+near-instant regardless of archive size, writes nothing (not even the
+manifest sidecar a full run refreshes), and always exits 0: a leftover
+is an incomplete acquisition you chose to interrupt, not corruption of
+preserved data. The size and file count cover the *whole* staging
+directory — including huggingface's own `.cache/huggingface/`
+bookkeeping and the in-progress `.incomplete` blob — because the point
+is to surface every incidental byte the record-based audit can't see and
+let you decide; it does not try to separate downloaded payload from hf's
+client-side scratch. `--quick` is a no-op alongside `--staging` (the scan
+never hashes anyway). Under `--staging` the `--model` id namespace is
+the staging tree, not `models/` — a first-ever interrupted pull has no
+model directory at all — so an unknown `--model` lists the ids present
+in `.staging/`.
+
+A plain `verify` (full or `--quick`) never *fails* on a leftover, but it
+does not stay silent either: when `.staging/` holds abandoned downloads
+it prints a one-line footer —
+`note: 2 abandoned downloads in .staging/ — run 'verify --staging'` —
+after the audit summary, with the exit code unchanged (the footer
+prints even when the audit itself exits 5 for drift). With `--model`
+set, the footer counts only that model's leftover.
+
+Resolving a leftover uses commands that already exist, and the scan
+prints the id both need: resume the original
+`pull <creator>/<model> …` (staging is reused, so completed shards are
+not re-fetched), or discard it with `remove <creator>/<model>` (which
+clears a staging-only leftover even when no `models/` directory exists).
+One caveat: a pull running *right now* also has content in `.staging/`,
+and the scan cannot tell a live transfer from a forgotten one — run
+`--staging` when no pull is in flight.
+
 Exit codes are the cron contract — a scheduled run needs no output
 parsing:
 
 | Code | Meaning |
 | --- | --- |
-| 0 | clean — every checked model valid or complete; unhashed/unrecorded findings and manifest-refresh warnings are informational and do not change the code. An empty archive also exits 0, saying so explicitly |
+| 0 | clean — every checked model valid or complete; unhashed/unrecorded findings, abandoned-download (`.staging/`) notes, and manifest-refresh warnings are informational and do not change the code. An empty archive also exits 0, saying so explicitly. `--staging` always exits 0 (or 1/2 for a bad path/`--model`) |
 | 1 | archive/usage — path is not an archive; malformed `--model` syntax |
 | 2 | user input — `--model` names no archived model (the error lists the archive's model ids so a typo self-corrects). The CLI framework's own usage errors — a missing path with no `LLM_PRESERVER_ARCHIVE` set, an unknown flag — also exit 2, so treat 2 as "fix the invocation", not specifically "unknown model" |
 | 5 | integrity — drift found: any model incomplete, invalid, missing its record, or with an unreadable record or payload file |
