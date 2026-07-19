@@ -22,6 +22,18 @@ Check items off as they ship; update when priorities shift.
 
 ## Shipped
 
+- 0012 staging-leftover detection (PR #18): `verify --staging` — a
+  hash-free scan of `.staging/<creator>/<model>/` that surfaces
+  abandoned downloads an interrupted pull left behind (partial bytes,
+  no record) which the record-based audit is structurally blind to.
+  Deep view via the flag, plus a one-line informational footer on
+  plain/`--quick` verify; always read-only, resolution via `pull`
+  (resume) or `remove` (discard). Counts the whole staging leaf, hf
+  `.cache/` bookkeeping included, to surface all incidental space and
+  let the human decide. Live-use trigger + validation, 2026-07-19: found
+  four genuinely abandoned pulls on a real archive (none archived per
+  `status`). Adversarial review caught two traceback-on-unreadable-
+  `.staging/` bugs, both fixed + regression-tested. 595 tests.
 - 0011 clean error on invalid repo id (PR #15): a bad Hugging Face
   repo id — the common case is an Ollama `name:tag` pasted into `pull`
   (`qwen3-vl:30b-a3b-instruct`) — now prints a clean one-line error and
