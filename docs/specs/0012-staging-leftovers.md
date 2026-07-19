@@ -1,6 +1,6 @@
 # 0012 — Staging leftover detection
 
-**Status:** draft
+**Status:** shipped
 **Last updated:** 2026-07-19
 
 ## Goal

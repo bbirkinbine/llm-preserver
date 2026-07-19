@@ -350,7 +350,7 @@ parallelize only with partitioned file ownership.
   drives it; agents do not `rm` inside an archive. Tests use tmp dirs,
   never a real archive.
 
-## Open work / current state (updated 2026-07-15, end of session 12)
+## Open work / current state (updated 2026-07-19, end of session 13)
 
 - **Specs 0001, 0003, 0004, 0005, 0006, 0007, 0008, and 0009 are all
   merged.** The loop is live-verified end to end: discover (name →
@@ -513,15 +513,49 @@ parallelize only with partitioned file ownership.
   pre-existing and already queued from spec 0007, covered for free
   when that scrubber hardening lands. Ollama-shape detection in the
   message was deferred. 567 tests.
+- **Session 13 (2026-07-19, small/medium-tier, PR #18): spec 0012
+  staging-leftover detection shipped.** Live-use trigger opened the
+  session: "we ran verify and everything verified even though I
+  believe I have partially downloaded models that didn't finish." Root
+  cause: an interrupted pull leaves partial bytes in
+  `.staging/<creator>/<model>/` and writes no record (record is written
+  last, after the batch move into `models/`), and `.staging/` is a
+  sibling of `models/` that neither `verify` nor `status` walks — so a
+  record-based audit is structurally blind to it. Fix: a hash-free
+  `staging_leftovers()` scan in `model_scan.py` (beside
+  `unrecorded_files`), exposed as `verify --staging` (deep view, skips
+  the audit) plus an informational footer on plain/`--quick` verify;
+  detection only, read-only, resolution via existing `pull` (resume,
+  staging reused) / `remove` (discard — already handles staging-only).
+  Two checkpoint adjudications: **count the whole leaf, hf `.cache/`
+  bookkeeping included** — the goal is to surface all incidental space
+  a verify can't see and let the human decide, not classify payload vs
+  hf-internal (which would depend on hf's cache layout and hide a single
+  large file interrupted mid-download, whose bytes live only in
+  `.cache/…/*.incomplete`); and the `--staging` `--model` id namespace
+  is the staging tree, not `models/`. Adversarial review earned its
+  keep: the footer and the `--staging` scan both tracebacked on an
+  unreadable `.staging/` (chmod-000 / NFS `ESTALE` / foreign-uid copy) —
+  the exact 0011-class regression — now a clean exit / skipped footer,
+  regression-tested. Hard-won facts: hf downloads via
+  `hf_hub_download(local_dir=staging_dir)`, which leaves
+  `.cache/huggingface/` bookkeeping in the leaf, so a real interrupted
+  pull's "N partial files" count includes hf metadata sidecars (tiny) —
+  the size, not the count, is the load-bearing signal. Live-verified on
+  the real archive: `verify --staging` surfaced four genuinely abandoned
+  pulls (Qwen3-Coder-Next, Qwen3-VL-32B-Instruct, Devstral-Small-2507,
+  gpt-oss-20b), all cross-checked absent from `status` (11 archived
+  models, none matching) — small sizes (KB–MB) meaning each was
+  interrupted early, before any weight shard landed. `test_cli_verify`
+  split further: `--staging` deep view vs `test_cli_verify_footer.py`
+  for the footer, both under the 300-line cap. 595 tests.
 - **Next spec (0013): pick from TODO.md** — runtime views (0002,
   unblocked), smoke test, or the interactive-listing TUI (three
   independent live-use requests during 0006). Also queued from live
   use: goal-definitive archiving (capability report in `status`),
-  file-kind dictionary, live-hub canary (0000 roadmap). (Spec 0012,
-  staging-leftover detection, is in flight on branch
-  `spec-0012-staging-leftovers`.)
+  file-kind dictionary, live-hub canary (0000 roadmap).
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
-  (draft, unblocked); 0005/0006/0007/0008/0009/0010/0011 shipped.
+  (draft, unblocked); 0005/0006/0007/0008/0009/0010/0011/0012 shipped.
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to
