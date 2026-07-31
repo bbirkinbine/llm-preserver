@@ -1,6 +1,6 @@
 # 0014 — Skip Prompt Already Archived
 
-**Status:** draft
+**Status:** shipped (PR #23)
 **Last updated:** 2026-07-31
 
 ## Goal

@@ -5,14 +5,6 @@ What's next, in rough order. Feature detail lives in
 and the numbered specs; this file is the short-term working list.
 Check items off as they ship; update when priorities shift.
 
-## In progress
-
-- [ ] **Skip the grouping prompt on an already-archived pull**
-  (spec 0014, branch `spec-0014-skip-prompt-already-archived`):
-  a re-pull whose selected files are all already archived reports
-  that and exits 0 before the grouping confirmation, instead of
-  asking first and revealing "nothing to pull" after.
-
 ## Next spec (0015) — pick one
 
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
@@ -31,6 +23,18 @@ Check items off as they ship; update when priorities shift.
 
 ## Shipped
 
+- 0014 skip confirmations on a nothing-to-do pull (PR #23): a re-pull
+  whose whole selection is already archived under a *user-chosen*
+  home (the typed repo id, or `--model`) asks no questions — the plan
+  runs first, and with nothing to download or adopt, y and N reach
+  the same no-op. Final line says "already archived ... nothing new
+  to pull"; non-interactive complete re-pulls exit 0 (were 2), so
+  scripted re-pulls are idempotent. A hub-derived home (declared
+  base_model) still confirms before naming any directory — the 0006
+  invariant, upheld after a review PoC showed a hostile base_model
+  plus a name+size-matched hashless file could steal a silent
+  "already archived" exit 0. Riders: adapter-config advisory fetch
+  requires a declared size; `pull_metadata.py` split off.
 - 0013 Ollama match (PR #22): `discover --match-ollama <name[:tag]>`
   states byte-identity facts between a locally-run Ollama model and
   hub GGUFs — local manifest digest (read-only, fixed-order store
