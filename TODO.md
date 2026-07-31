@@ -197,6 +197,21 @@ Check items off as they ship; update when priorities shift.
 - [ ] Retire/tombstone mode for `remove` (deferred from 0010): delete
   payload but keep the record as archive history. Out until a live
   need shows up — 0010 read "remove/retire" as a single `remove`.
+- [ ] Digest-verified Ollama→hub matching (live-use 2026-07-31: "which
+  discover result actually matches my `bge-m3:latest`?"). Ollama's
+  store is content-addressed — the local manifest carries the model
+  layer's SHA256 of the GGUF bytes — and HF's repo-tree API exposes
+  every file's LFS SHA256, so an exact byte-identity match is
+  mechanical.
+  No global search-by-hash exists on HF, so the shape is: name search
+  for candidates (existing `discover`), then digest-compare each
+  candidate's GGUF listing (metadata calls only, no downloads) and
+  annotate exact matches — a hub fact, not tool judgment; the human
+  still picks. Proven by hand: local `bge-m3:latest` blob matched
+  byte-identical files in two repos, while a third repo's same-size
+  f16 had a different digest (different converter run) — exactly the
+  trap the annotation prevents. Candidate surface:
+  `discover --match-ollama <name>`.
 - [ ] Ollama-shape detection in `pull`'s invalid-id error (upgrades
   the item deferred from spec 0011; scoped 2026-07-30 during 0002
   planning): when the rejected id looks like an Ollama name, say so.
