@@ -5,6 +5,7 @@ contract: 0 built/instructions, 1 archive problem or nothing eligible,
 2 user-input domain (unknown tool, bad dest), 130 interrupted.
 """
 
+import os
 from pathlib import Path
 from typing import Annotated
 
@@ -51,9 +52,12 @@ def _echo_multiline(text: str) -> None:
 def views(
     path: ArchivePath,
     dest: Annotated[
-        Path,
-        typer.Option(help="View directory to create or refresh (never inside the archive)."),
-    ],
+        Path | None,
+        typer.Option(
+            help="View directory to create or refresh (never inside the "
+            "archive). Falls back to $LLM_PRESERVER_VIEWS/<tool>."
+        ),
+    ] = None,
     tool: Annotated[
         str,
         typer.Option(help="Target runtime (phase 1: ollama)."),
@@ -74,6 +78,15 @@ def views(
         raise typer.BadParameter(
             f"unknown tool {tool!r} — phase 1 supports: {supported}", param_hint="--tool"
         )
+    if dest is None:
+        # Mirrors the archive path's env fallback: a views *root*, one
+        # subdirectory per tool, so later adapters never collide.
+        views_root = os.environ.get("LLM_PRESERVER_VIEWS")
+        if not views_root:
+            raise typer.BadParameter(
+                "no --dest given and $LLM_PRESERVER_VIEWS is not set", param_hint="--dest"
+            )
+        dest = Path(views_root) / tool
     try:
         result: ViewBuildResult = build_view(path, tool=tool, dest=dest, seed=seed_store)
     except ArchiveError as exc:

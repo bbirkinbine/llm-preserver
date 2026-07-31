@@ -769,7 +769,16 @@ performs; the archive is otherwise append-only.
 ```bash
 uv run llm-preserver views ~/models --tool ollama --dest ~/ollama-view              # print instructions only
 uv run llm-preserver views ~/models --tool ollama --dest ~/ollama-view --seed-store # seed the external store
+llm-preserver views --seed-store   # both paths from env: $LLM_PRESERVER_ARCHIVE + $LLM_PRESERVER_VIEWS
 ```
+
+Both paths have env fallbacks: the archive argument falls back to
+`$LLM_PRESERVER_ARCHIVE` (as everywhere), and `--dest` falls back to
+`$LLM_PRESERVER_VIEWS/<tool>` — a views *root* with one subdirectory
+per tool, so later adapters never collide. An explicit `--dest` wins.
+(`$OLLAMA_MODELS` itself always points at the generated view, never at
+the archive: Ollama requires read-write on its store, and the archive
+is neither Ollama-shaped nor writable by tools.)
 
 Models are too large to shuttle between bulk storage and local disks,
 so a *view* (spec 0002) makes a runtime able to find archived models
