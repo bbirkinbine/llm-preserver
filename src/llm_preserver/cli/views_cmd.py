@@ -14,7 +14,13 @@ import typer
 from llm_preserver.archive import ArchiveError
 from llm_preserver.cli.app import ArchivePath, app, fail
 from llm_preserver.render import clean_text
-from llm_preserver.views import SUPPORTED_TOOLS, ViewBuildResult, ViewSourceScan, build_view
+from llm_preserver.views import (
+    SUPPORTED_TOOLS,
+    ViewBuildResult,
+    ViewEntry,
+    ViewSourceScan,
+    build_view,
+)
 from llm_preserver.views.types import ViewError
 
 _SEED_WARNING = (
@@ -30,16 +36,51 @@ def _refuse(message: str) -> typer.Exit:
     return typer.Exit(code=2)
 
 
-def _echo_breakdown(scan: ViewSourceScan) -> None:
-    """The scanned/eligible/skipped totals plus a reason per skip."""
+def _echo_breakdown(scan: ViewSourceScan, entries: list[ViewEntry]) -> None:
+    """Usable and not-usable models, clearly separated.
+
+    Live-use adjudication (Brian, 2026-07-31): the flat skip list
+    buried the two usable models under ten repeated snapshot reasons,
+    and companion-file skips made usable models look broken. Usable
+    models lead (with their run-ready minted names after seeding),
+    not-usable models get one deduplicated reason each, and companion
+    skips stay out of the display entirely.
+    """
     total = len(scan.models)
-    eligible = sum(1 for model in scan.models if model.eligible)
+    usable = [model for model in scan.models if model.eligible]
     noun = "model" if total == 1 else "models"
-    typer.echo(f"scanned {total} {noun}: {eligible} eligible, {total - eligible} skipped")
-    for model in scan.models:
+    typer.echo(
+        f"scanned {total} {noun}: {len(usable)} eligible (usable with "
+        f"ollama), {total - len(usable)} skipped"
+    )
+    names_by_model: dict[str, list[str]] = {}
+    for entry in entries:
+        names_by_model.setdefault(entry.model_id, []).append(entry.name)
+    if usable:
+        typer.echo("usable:")
+    for model in usable:
+        names = names_by_model.get(model.model_id)
+        if names:
+            line = f"  {model.model_id} → {', '.join(names)}"
+        else:
+            count = len(model.eligible)
+            file_noun = "file" if count == 1 else "files"
+            line = f"  {model.model_id}  ({count} GGUF {file_noun})"
+        typer.echo(clean_text(line, single_line=True))
         for skip in model.skips:
-            line = f"  {model.model_id}: {skip.path}: {skip.reason}"
-            typer.echo(clean_text(line, single_line=True))
+            if skip.kind == "problem":
+                detail = f"    skipped {skip.path}: {skip.reason}"
+                typer.echo(clean_text(detail, single_line=True))
+    not_usable = [model for model in scan.models if not model.eligible]
+    if not_usable:
+        typer.echo("not usable:")
+    for model in not_usable:
+        reasons: list[str] = []
+        for skip in model.skips:
+            if skip.kind != "companion" and skip.reason not in reasons:
+                reasons.append(skip.reason)
+        summary = "; ".join(reasons) or "no linkable files"
+        typer.echo(clean_text(f"  {model.model_id}: {summary}", single_line=True))
 
 
 def _echo_multiline(text: str) -> None:
@@ -96,7 +137,7 @@ def views(
     except KeyboardInterrupt:
         typer.echo("interrupted — view may be partial; re-run to refresh it", err=True)
         raise typer.Exit(code=130) from None
-    _echo_breakdown(result.scan)
+    _echo_breakdown(result.scan, result.entries)
     if not any(model.eligible for model in result.scan.models):
         typer.echo(
             "error: no models eligible for an ollama view — it links "

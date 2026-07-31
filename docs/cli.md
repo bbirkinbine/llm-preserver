@@ -819,11 +819,15 @@ without that marker is refused untouched, and a `--dest` inside the
 archive is always refused.
 
 Eligibility is reported, never silent: an Ollama view links **GGUF
-files with recorded SHA256s** only. Every run prints a
-scanned/eligible/skipped breakdown with a reason per skip
-(safetensors-only models need a copying import; unhashed files have no
+files with recorded SHA256s** only. Every run prints a breakdown split
+into **usable** (each runnable model, with its exact `ollama run` name
+once seeded) and **not usable** (one short reason per model —
+safetensors-only models need a copying import; unhashed files have no
 digest to name a blob with; sharded GGUF sets are not linked in phase
-1). If nothing is eligible, nothing is written and the run exits 1.
+1). Companion files riding in GGUF artifacts (READMEs, docs) are
+expected and stay out of the display; genuine problems (an unhashed
+quant, a sharded set) surface under the model they belong to. If
+nothing is eligible, nothing is written and the run exits 1.
 
 Two modes:
 

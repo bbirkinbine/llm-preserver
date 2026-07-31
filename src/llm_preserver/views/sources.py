@@ -24,11 +24,8 @@ _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _SHARD_RE = re.compile(r"-\d+-of-\d+\.gguf$", re.IGNORECASE)
 
 _NON_GGUF_REASONS = {
-    "hf-snapshot": (
-        "hf-snapshot (safetensors) artifact — phase 1 views link GGUF "
-        "files only; snapshot formats need a copying import"
-    ),
-    "mlx": "mlx artifact — phase 1 views link GGUF files only",
+    "hf-snapshot": "safetensors snapshot only — no GGUF archived (Ollama runs GGUF)",
+    "mlx": "mlx artifact only — no GGUF archived (Ollama runs GGUF)",
 }
 
 
@@ -98,7 +95,9 @@ def _scan_model(model_id: str, model_dir: Path, archive_resolved: Path) -> Model
             )
             count = len(artifact.files)
             noun = "file" if count == 1 else "files"
-            result.skips.append(ViewSourceSkip(path=f"({count} {noun})", reason=reason))
+            result.skips.append(
+                ViewSourceSkip(path=f"({count} {noun})", reason=reason, kind="format")
+            )
             continue
         for entry in artifact.files:
             _classify_gguf_file(
@@ -121,7 +120,13 @@ def _classify_gguf_file(
         result.skips.append(ViewSourceSkip(path=rel_path, reason=reason))
 
     if not rel_path.lower().endswith(".gguf"):
-        skip("not a .gguf file — companion files are not linked in phase 1")
+        result.skips.append(
+            ViewSourceSkip(
+                path=rel_path,
+                reason="not a .gguf file — companion files are not linked in phase 1",
+                kind="companion",
+            )
+        )
         return
     if _SHARD_RE.search(rel_path):
         skip("sharded GGUF — phase 1 does not link shard sets")

@@ -44,10 +44,16 @@ class ViewSourceSkip:
     Attributes:
         path: The file path (relative, as recorded) or record filename.
         reason: Why it was skipped — always reported, never silent.
+        kind: Display class — ``format`` (wrong artifact format for
+            this tool), ``companion`` (expected non-payload rider like
+            a README; suppressed from the CLI breakdown), or
+            ``problem`` (something worth a human look: unhashed,
+            sharded, symlink, malformed record).
     """
 
     path: str
     reason: str
+    kind: str = "problem"
 
 
 @dataclass
