@@ -5,7 +5,14 @@ What's next, in rough order. Feature detail lives in
 and the numbered specs; this file is the short-term working list.
 Check items off as they ship; update when priorities shift.
 
-## Next spec (0013) — pick one
+## Next spec (0014) — pick one
+
+- [ ] **Ollama match** (spec 0013, drafted 2026-07-31): map an
+  Ollama model to its byte-identical hub GGUF
+  (`discover --match-ollama`, digest-verified via local manifest +
+  HF LFS SHA256s) plus Ollama-shape detection in `pull`'s invalid-id
+  error (the 0011 deferral). Absorbs the two smaller items queued
+  2026-07-31.
 
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
   PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over
@@ -196,29 +203,6 @@ Check items off as they ship; update when priorities shift.
 - [ ] Retire/tombstone mode for `remove` (deferred from 0010): delete
   payload but keep the record as archive history. Out until a live
   need shows up — 0010 read "remove/retire" as a single `remove`.
-- [ ] Digest-verified Ollama→hub matching (live-use 2026-07-31: "which
-  discover result actually matches my `bge-m3:latest`?"). Ollama's
-  store is content-addressed — the local manifest carries the model
-  layer's SHA256 of the GGUF bytes — and HF's repo-tree API exposes
-  every file's LFS SHA256, so an exact byte-identity match is
-  mechanical.
-  No global search-by-hash exists on HF, so the shape is: name search
-  for candidates (existing `discover`), then digest-compare each
-  candidate's GGUF listing (metadata calls only, no downloads) and
-  annotate exact matches — a hub fact, not tool judgment; the human
-  still picks. Proven by hand: local `bge-m3:latest` blob matched
-  byte-identical files in two repos, while a third repo's same-size
-  f16 had a different digest (different converter run) — exactly the
-  trap the annotation prevents. Candidate surface:
-  `discover --match-ollama <name>`.
-- [ ] Ollama-shape detection in `pull`'s invalid-id error (upgrades
-  the item deferred from spec 0011; scoped 2026-07-30 during 0002
-  planning): when the rejected id looks like an Ollama name, say so.
-  Two shapes, both mechanical: `name:tag` has no Hugging Face
-  equivalent — point at `discover <name>`; `hf.co/<org>/<repo>:<quant>`
-  maps exactly — show the translated `pull <org>/<repo>` (and the
-  quant as an `--include` hint). Detection stays in the error path
-  only; no id rewriting, no guessing.
 - [ ] Extend `render.clean_text`'s scrub beyond C0/C1 controls to
   Unicode bidi/format characters (U+202A–202E, U+2066–2069,
   zero-width set): hub-supplied text could visually reorder a

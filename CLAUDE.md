@@ -582,13 +582,14 @@ parallelize only with partitioned file ownership.
   interrupted early, before any weight shard landed. `test_cli_verify`
   split further: `--staging` deep view vs `test_cli_verify_footer.py`
   for the footer, both under the 300-line cap. 595 tests.
-- **Next spec (0013): pick from TODO.md** — runtime views (0002,
-  unblocked), smoke test, or the interactive-listing TUI (three
-  independent live-use requests during 0006). Also queued from live
-  use: goal-definitive archiving (capability report in `status`),
-  file-kind dictionary, live-hub canary (0000 roadmap).
+- **Next spec (0014): pick from TODO.md** — Ollama match (0013,
+  drafted), smoke test, spec 0002's later adapter phases (LM Studio /
+  llama.cpp / vLLM), or the interactive-listing TUI. Also queued from
+  live use: goal-definitive archiving (capability report in
+  `status`), file-kind dictionary, live-hub canary (0000 roadmap).
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
-  (draft, unblocked); 0005/0006/0007/0008/0009/0010/0011/0012 shipped.
+  in progress — phase 1 shipped (PR #20), later adapters open; `0013`
+  Ollama match drafted; 0005–0012 shipped.
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to
