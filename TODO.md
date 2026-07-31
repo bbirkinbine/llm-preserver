@@ -7,13 +7,6 @@ Check items off as they ship; update when priorities shift.
 
 ## Next spec (0014) — pick one
 
-- [ ] **Ollama match** (spec 0013, drafted 2026-07-31): map an
-  Ollama model to its byte-identical hub GGUF
-  (`discover --match-ollama`, digest-verified via local manifest +
-  HF LFS SHA256s) plus Ollama-shape detection in `pull`'s invalid-id
-  error (the 0011 deferral). Absorbs the two smaller items queued
-  2026-07-31.
-
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
   PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over
   the same core, plus the phase-1 deferrals (sharded-GGUF linking,
@@ -30,6 +23,18 @@ Check items off as they ship; update when priorities shift.
 
 ## Shipped
 
+- 0013 Ollama match (PR #22): `discover --match-ollama <name[:tag]>`
+  states byte-identity facts between a locally-run Ollama model and
+  hub GGUFs — local manifest digest (read-only, fixed-order store
+  probe, disclosed) against per-file LFS SHA256s from the existing
+  seam, candidates in hub order, matches in a footer whose last line
+  is the exact pasteable `pull --include` command plus the repo's hub
+  facts for provenance picking. `--search` and `--limit` (max 500)
+  are the levers; no ranking, no auto-pull. Plus the 0011 deferral:
+  Ollama-shaped ids pasted into `pull` get the recovery command
+  appended to the clean invalid-id error. Live-verified on the real
+  store/hub (bge-m3: one match at depth 20, six identical at 500);
+  four live-use adjudications shaped the output.
 - 0002 runtime views, phase 1 (PR #20): the `views` command — a
   record-driven eligibility scan (GGUF + recorded SHA256s, every skip
   reasoned) and an Ollama adapter that seeds a disposable external

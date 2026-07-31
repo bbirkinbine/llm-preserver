@@ -1,6 +1,6 @@
 # 0013 — Ollama Match
 
-**Status:** draft
+**Status:** shipped (PR #22)
 **Last updated:** 2026-07-31
 
 ## Goal
