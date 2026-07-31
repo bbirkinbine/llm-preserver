@@ -18,10 +18,36 @@ script instead of installing it, for manual setup.
 
 Commands documented here: `init`, `pull` (selective, `--whole-repo`
 full snapshot, and `--plan` dry run), `discover`, `status`, `show`,
-`verify`, `remove`. Planned features (cache import, runtime views,
-smoke tests) are listed in the roadmap in
+`verify`, `remove`, `views`. Planned features (cache import, smoke
+tests) are listed in the roadmap in
 [`specs/0000-product.md`](specs/0000-product.md)
 and appear here when they ship.
+
+## Environment variables
+
+Everything is optional — every path can be given explicitly — but a
+configured shell makes most commands zero-argument. The first two are
+read by `llm-preserver`; the `OLLAMA_*` pair is read by Ollama and
+only ever *printed* by this tool:
+
+| Variable | Read by | Purpose |
+| --- | --- | --- |
+| `LLM_PRESERVER_ARCHIVE` | llm-preserver | Default archive root; the trailing path argument on every command falls back to it. Explicit path wins. |
+| `LLM_PRESERVER_VIEWS` | llm-preserver | Views root for `views --dest` fallback: the dest becomes `$LLM_PRESERVER_VIEWS/<tool>` (one subdirectory per runtime). Explicit `--dest` wins. |
+| `OLLAMA_MODELS` | ollama | Points Ollama's model store at the *generated view* (never at the archive). Read at `ollama serve` startup. |
+| `OLLAMA_NOPRUNE=1` | ollama | Disables Ollama's startup prune, which would delete seeded blob links it considers unreferenced. Set it whenever serving a seeded view. |
+
+A one-time setup for the daily loop:
+
+```bash
+# ~/.zshrc
+export LLM_PRESERVER_ARCHIVE=~/models
+export LLM_PRESERVER_VIEWS=~/llm-views
+
+# then:
+llm-preserver views --seed-store
+OLLAMA_MODELS=$LLM_PRESERVER_VIEWS/ollama OLLAMA_NOPRUNE=1 ollama serve
+```
 
 ## init — create an archive
 
