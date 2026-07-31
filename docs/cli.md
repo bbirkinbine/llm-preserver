@@ -879,6 +879,11 @@ Two modes:
   seeded link would see it deleted (the archive file behind a pruned
   link is untouched — only the link dies).
 
+Running a view server *alongside* a normal Ollama install — small
+always-on models in Ollama's own store, large archived models served
+from the view on a second port — is the recommended day-to-day shape;
+the worked setup lives in [`ollama-hybrid.md`](ollama-hybrid.md).
+
 What `--help` can't carry:
 
 - **The store is swapped, not merged.** `OLLAMA_MODELS` pointed at the
