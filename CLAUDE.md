@@ -350,7 +350,38 @@ parallelize only with partitioned file ownership.
   drives it; agents do not `rm` inside an archive. Tests use tmp dirs,
   never a real archive.
 
-## Open work / current state (updated 2026-07-31, end of session 15)
+## Open work / current state (updated 2026-07-31, end of session 16)
+
+- **Session 16 (2026-07-31, small/medium-tier, PR #23): spec 0014
+  skip-confirmations-on-nothing-to-do shipped.** Live-use trigger
+  opened the session: re-pulling `gpustack/bge-m3-GGUF` asked the
+  canonical-model y/N, then revealed everything was already archived.
+  Fix: `prepare_pull` resolves the home tentatively, plans first, and
+  asks the grouping/every-weight questions only when the plan has
+  work (`to_download or adopted` — adopt-only still prompts: the
+  answer decides where the record lands); the no-op path prints the
+  same INFO lines, a new honest final line ("is already archived
+  in ...; nothing new to pull" via an `on_no_op` seam mirroring
+  `on_transfer_start`), and exits 0 — non-interactive complete
+  re-pulls flip 2→0, so scripted re-pulls are idempotent. The review
+  round (reviewer + adversarial + security, PoC-driven) earned its
+  keep AGAIN: a hostile `base_model` plus a name+size-matched
+  hashless file could steer a silent exit-0 "already archived"
+  verdict at another model's directory — so the prompt skip is scoped
+  to *user-chosen* homes (typed repo id or `--model`), and a
+  hub-derived home (declared base_model) confirms before naming any
+  directory, upholding the 0006 invariant verbatim. Riders:
+  adapter-config advisory fetch now requires a hub-declared size
+  (reachable with zero prompts); `pull_grouping` split into
+  propose/confirm/parse; `pull_metadata.py` split off (300-line cap);
+  dead `resolve_model_id` deleted. Hard-won facts: `--plan`'s
+  would-ask lines must mirror the real pull exactly (absent for a
+  no-op user-chosen home, present for hub-derived — both pinned);
+  red→green was proven against a throwaway main worktree, not
+  assumed. Queued: planning hard stops should name the model
+  directory (they can now fire before any prompt puts the home on
+  screen). Deferred: live re-run of the bge-m3 no-op on the real
+  archive. 754 tests.
 
 - **Session 15 (2026-07-31, medium-tier, PR #22): spec 0013 Ollama
   match shipped.** `discover --match-ollama <name[:tag]>`: local
@@ -617,14 +648,14 @@ parallelize only with partitioned file ownership.
   interrupted early, before any weight shard landed. `test_cli_verify`
   split further: `--staging` deep view vs `test_cli_verify_footer.py`
   for the footer, both under the 300-line cap. 595 tests.
-- **Next spec (0014): pick from TODO.md** — smoke test, spec 0002's
+- **Next spec (0015): pick from TODO.md** — smoke test, spec 0002's
   later adapter phases (LM Studio / llama.cpp / vLLM), or the
   interactive-listing TUI. Also queued from live use: goal-definitive
   archiving (capability report in `status`), file-kind dictionary,
   live-hub canary (0000 roadmap).
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
   in progress — phase 1 shipped (PR #20), later adapters open;
-  0005–0013 shipped.
+  0005–0014 shipped.
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

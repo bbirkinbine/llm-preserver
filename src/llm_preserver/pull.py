@@ -78,6 +78,7 @@ def pull_model(
     select_all: bool = False,
     confirm: ConfirmCallback,
     on_transfer_start: Callable[[str], None] | None = None,
+    on_no_op: Callable[[], None] | None = None,
 ) -> Path:
     """Pull selected files from a hub repo into the archive.
 
@@ -111,6 +112,11 @@ def pull_model(
             — the moment the resume hint is both accurate (grouping
             settled) and useful (spec 0007). Not called for adopt-only
             pulls: there is no transfer to interrupt.
+        on_no_op: Called when the pull finds nothing to download and
+            nothing to adopt (spec 0014) — the caller's chance to
+            report "already archived" instead of pull success, since a
+            run that moved no bytes and wrote no record must not read
+            as one that did.
 
     Returns:
         The model directory the pull landed in.
@@ -151,6 +157,8 @@ def pull_model(
         logger.info(
             "nothing to pull: every selected file is already archived in %s", prep.model_dir
         )
+        if on_no_op is not None:
+            on_no_op()
         return prep.model_dir
     # Adopt-only pulls (files already on disk, record catching up) move
     # zero bytes; a "pull 0 files (0 B)?" prompt would block scripted

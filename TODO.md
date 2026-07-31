@@ -5,7 +5,7 @@ What's next, in rough order. Feature detail lives in
 and the numbered specs; this file is the short-term working list.
 Check items off as they ship; update when priorities shift.
 
-## Next spec (0014) — pick one
+## Next spec (0015) — pick one
 
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
   PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over
@@ -23,6 +23,18 @@ Check items off as they ship; update when priorities shift.
 
 ## Shipped
 
+- 0014 skip confirmations on a nothing-to-do pull (PR #23): a re-pull
+  whose whole selection is already archived under a *user-chosen*
+  home (the typed repo id, or `--model`) asks no questions — the plan
+  runs first, and with nothing to download or adopt, y and N reach
+  the same no-op. Final line says "already archived ... nothing new
+  to pull"; non-interactive complete re-pulls exit 0 (were 2), so
+  scripted re-pulls are idempotent. A hub-derived home (declared
+  base_model) still confirms before naming any directory — the 0006
+  invariant, upheld after a review PoC showed a hostile base_model
+  plus a name+size-matched hashless file could steal a silent
+  "already archived" exit 0. Riders: adapter-config advisory fetch
+  requires a declared size; `pull_metadata.py` split off.
 - 0013 Ollama match (PR #22): `discover --match-ollama <name[:tag]>`
   states byte-identity facts between a locally-run Ollama model and
   hub GGUFs — local manifest digest (read-only, fixed-order store
@@ -138,6 +150,13 @@ Check items off as they ship; update when priorities shift.
   `hf_xet`'s lazy import — the ordering the whole flag rests on.
 
 ## Smaller items (from live use)
+
+- [ ] Pull planning errors should name the model directory (queued
+  from the 0014 review round, 2026-07-31): with the plan computed
+  before the grouping prompt, a changed-weight integrity stop can now
+  fire before any question puts the home on screen — the error names
+  the file's relative path but not which model directory holds the
+  conflicting record. Add the directory to those messages.
 
 - [ ] `--json` on the read-only reporting commands (queued
   2026-07-13, from the 0009 wrap-up: exit codes serve cron, but an

@@ -76,6 +76,10 @@ def run_pull(
     # interactively; hint holds the printed line for the Ctrl-C repeat.
     emit_hint = resume_hint or (not select_all and not include)
     hint: str | None = None
+    # Spec 0014: a pull that moved no bytes and wrote no record must
+    # not end with the pull-success line — scripts and scrollback key
+    # on it.
+    no_op = False
     try:
         patterns = list(include)
         info = repo_info
@@ -162,6 +166,10 @@ def run_pull(
             if hint is not None and emit_hint:
                 typer.echo(hint)
 
+        def mark_no_op() -> None:
+            nonlocal no_op
+            no_op = True
+
         model_dir = pull_model(
             path,
             repo_id,
@@ -176,6 +184,7 @@ def run_pull(
             # converts unanswerable prompts to deterministic exits.
             confirm=lambda prompt: confirm_or_stop(prompt, yes),
             on_transfer_start=capture_resume_hint,
+            on_no_op=mark_no_op,
         )
     except KeyboardInterrupt:
         # Ctrl-C mid-transfer (spec 0007): repeat the hint as the final
@@ -197,4 +206,8 @@ def run_pull(
             if shape_hint is not None:
                 typer.echo(shape_hint, err=True)
         raise exit_exc from exc
-    typer.echo(clean_text(f"pulled {repo_id} into {model_dir}", single_line=True))
+    if no_op:
+        final = f"{repo_id} is already archived in {model_dir}; nothing new to pull"
+    else:
+        final = f"pulled {repo_id} into {model_dir}"
+    typer.echo(clean_text(final, single_line=True))

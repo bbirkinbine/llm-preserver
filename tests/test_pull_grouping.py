@@ -103,3 +103,50 @@ def test_declined_snapshot_own_home_names_model_flag(archive, fake_hub_factory):
 
     assert "--model" in str(excinfo.value)
     assert list((archive / "models").iterdir()) == []
+
+
+# --- propose_default_home (spec 0014): the default home, unconfirmed ---
+#
+# Spec 0014 needs the candidate home *before* any prompt, so grouping
+# grows a pure proposal function:
+#
+#     propose_default_home(info, repo_id, tree_format) -> (home, prompt)
+#
+# It picks the same format-directed default as today's confirm path and
+# composes the prompt text, without asking anything. Imported lazily
+# inside each test so its absence fails only these tests, never
+# collection of this module.
+
+
+def make_info(base_model: str | None) -> hub.RepoInfo:
+    return hub.RepoInfo(
+        commit="a" * 40, files=[], base_model=base_model, pipeline_tag=None, license=None
+    )
+
+
+def test_propose_default_home_without_base_model_is_repo_id():
+    from llm_preserver.pull_grouping import propose_default_home
+
+    home, prompt = propose_default_home(make_info(None), GGUF_REPO_ID, "gguf")
+
+    assert home == GGUF_REPO_ID
+    assert "no base_model" in prompt
+
+
+def test_propose_default_home_snapshot_with_base_is_repo_id_with_lineage():
+    from llm_preserver.pull_grouping import propose_default_home
+
+    home, prompt = propose_default_home(make_info(BASE_MODEL), SNAPSHOT_REPO_ID, "hf-snapshot")
+
+    assert home == SNAPSHOT_REPO_ID  # derived model: its own home...
+    assert "lineage" in prompt
+    assert BASE_MODEL in prompt  # ...with the base mentioned as lineage
+
+
+def test_propose_default_home_gguf_with_base_groups_under_base():
+    from llm_preserver.pull_grouping import propose_default_home
+
+    home, prompt = propose_default_home(make_info(BASE_MODEL), GGUF_REPO_ID, "gguf")
+
+    assert home == BASE_MODEL  # conversions group under the base
+    assert GGUF_REPO_ID in prompt

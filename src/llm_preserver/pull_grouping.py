@@ -31,13 +31,18 @@ ConfirmCallback = Callable[[str], bool]
 _MODEL_FLAG_HINT = "--model <creator>/<model>"
 
 
-def _confirmed_default_home(
-    info: RepoInfo, repo_id: str, confirm: ConfirmCallback, tree_format: ArtifactFormat
-) -> str:
-    """Pick and confirm the default canonical home for a pull.
+def propose_default_home(
+    info: RepoInfo, repo_id: str, tree_format: ArtifactFormat
+) -> tuple[str, str]:
+    """Pick the format-directed default home for a pull, unconfirmed.
 
-    Raises:
-        PullUserError: If the user declines the offered default.
+    Pure proposal (spec 0014): the default is deterministic from hub
+    metadata alone, so a pull can resolve it *tentatively*, plan
+    against it, and only ask when the plan finds work to do.
+
+    Returns:
+        ``(home, prompt)`` — the proposed ``<creator>/<model>`` home
+        and the confirmation prompt that offers it.
     """
     if info.base_model is None:
         # Nothing to group under, any format: the repo is its own home.
@@ -55,43 +60,28 @@ def _confirmed_default_home(
         # GGUF/MLX trees are conversions of the base model's weights.
         prompt = f"group {repo_id} under canonical model {info.base_model}?"
         home = info.base_model
+    return home, prompt
+
+
+def confirm_default_home(home: str, prompt: str, confirm: ConfirmCallback) -> None:
+    """Ask the grouping confirmation for a proposed default home.
+
+    Raises:
+        PullUserError: If the user declines the offered default.
+    """
     if not confirm(prompt):
         raise PullUserError(
             f"grouping under {home} declined: re-run with {_MODEL_FLAG_HINT} "
             "to choose the canonical model directory"
         )
-    return home
 
 
-def resolve_model_id(
-    model: str | None,
-    info: RepoInfo,
-    repo_id: str,
-    confirm: ConfirmCallback,
-    tree_format: ArtifactFormat,
-) -> tuple[str, str]:
-    """Resolve the canonical ``<creator>/<model>`` directory for a pull.
-
-    A ``--model`` override is used verbatim with no prompt. Otherwise
-    the default home is format-directed (see the module docstring) and
-    confirmed with the user. Metadata that is present but malformed
-    stays a hard stop, not a guess (spec 0003).
-
-    Args:
-        model: The ``--model`` override, or None to derive the home.
-        info: The repo metadata (supplies ``base_model``).
-        repo_id: The repo being pulled.
-        confirm: Yes/no prompt callback.
-        tree_format: Format inferred over the repo's *whole tree* —
-            grouping direction is a property of the repo, not of which
-            files were selected.
+def parse_model_id(model: str) -> tuple[str, str]:
+    """Split and validate a ``<creator>/<model>`` id.
 
     Raises:
-        PullUserError: On a declined confirmation or a malformed
-            model id.
+        PullUserError: If the id is not two valid components.
     """
-    if model is None:
-        model = _confirmed_default_home(info, repo_id, confirm, tree_format)
     creator, sep, name = model.partition("/")
     if not sep or not ID_COMPONENT_RE.fullmatch(creator) or not ID_COMPONENT_RE.fullmatch(name):
         raise PullUserError(f"model id must look like <creator>/<model>, got {model!r}")
