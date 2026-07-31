@@ -41,7 +41,7 @@ line; the source of truth is the spec file, this is a rendered cache. Run
 - ~~[0010 — Managed remove](0010-managed-remove.md)~~  (shipped)
 - ~~[0011 — Clean error on an invalid repo id](0011-clean-error-invalid-repo-id.md)~~  (shipped)
 - ~~[0012 — Staging leftover detection](0012-staging-leftovers.md)~~  (shipped)
-- [0002 — Runtime views](0002-runtime-views.md)  (in progress) — depends on 0001
+- [0002 — Runtime views](0002-runtime-views.md)  (in progress — phase 1 (core + Ollama) shipped (PR #20)) — depends on 0001
 <!-- specs-status:end -->
 
 ## Numbering

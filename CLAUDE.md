@@ -350,7 +350,39 @@ parallelize only with partitioned file ownership.
   drives it; agents do not `rm` inside an archive. Tests use tmp dirs,
   never a real archive.
 
-## Open work / current state (updated 2026-07-19, end of session 13)
+## Open work / current state (updated 2026-07-31, end of session 14)
+
+- **Session 14 (2026-07-30/31, medium-tier, PR #20): spec 0002 phase 1
+  (runtime views, Ollama) shipped.** The `views` command: record-driven
+  eligibility scan (GGUF + recorded sha256; per-artifact skip roll-up so
+  a 32-file snapshot is one reasoned line), marker-owned disposable dest,
+  and an Ollama adapter that seeds an external store with blob symlinks
+  plus **tool-synthesized manifests/config blobs**. The drafted
+  seed-and-delegate design (seed blobs, let `ollama create` write the
+  paperwork) **failed its own gating live test** — the adversarial
+  reviewer ran it: ollama 0.32.0 `create` marks GGUF layers
+  `rewriteForCreate` and rewrites them into a new full-size blob under a
+  new digest, so delegation always copies (seeding merely halves it).
+  The spec's named fallback was implemented the same night and
+  live-verified end to end: a `schemaVersion: 2` manifest (mirrored from
+  a real store) + minimal config (`model_format`/`rootfs.diff_ids`) over
+  the symlinked blob lists AND serves — real embeddings through the
+  seeded link, 12 KB store over a 1.15 GB model, via the real CLI.
+  Hard-won facts: blob digest = SHA256 of file bytes, so recorded
+  digests are blob names for free; no template/params layers synthesized
+  — generate-class chat fidelity is the open caveat (embedding path
+  verified); Ollama PR #15735 ("manifest-v2") would move the manifest
+  tree — layout constants carry provenance comments. Review round
+  (reviewer + adversarial + security, all PoC-driven) earned its keep:
+  forged/foreign marker → rmtree rights (marker content now validated,
+  archive-root match required), marker-symlink wrote INTO the archive
+  (mkstemp+replace now), lexical prune containment fooled by `..`,
+  relative archive path → dangling links, unsanitized dir names reaching
+  paste-able commands (0007 class; ids validated via ID_COMPONENT_RE,
+  everything quoted+scrubbed), degraded-dest tracebacks (0011/0012
+  class). Unattended overnight run under standing consent ("complete the
+  loop"); remaining human step: live check on the real archive + real
+  Ollama, then merge. 636 tests.
 
 - **Specs 0001, 0003, 0004, 0005, 0006, 0007, 0008, and 0009 are all
   merged.** The loop is live-verified end to end: discover (name →

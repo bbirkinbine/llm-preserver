@@ -7,11 +7,11 @@ Check items off as they ship; update when priorities shift.
 
 ## Next spec (0013) — pick one
 
-- [ ] **Runtime views** (spec 0002, in progress on
-  `spec-0002-runtime-views`): symlink/config views so runtimes run
-  archived models in place. Phase 1 (shared core + Ollama adapter)
-  is underway; LM Studio / llama.cpp / vLLM adapters are later
-  phases on the same spec.
+- [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
+  PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over
+  the same core, plus the phase-1 deferrals (chat-template fidelity
+  for generate-class models, sharded-GGUF linking, `--model`
+  scoping).
 - [ ] **Smoke test**: load an archived model offline in a local
   runtime (llama.cpp / ollama), check a trivial deterministic
   prompt, record the result in the record's `runtime_tested` field
@@ -24,6 +24,21 @@ Check items off as they ship; update when priorities shift.
 
 ## Shipped
 
+- 0002 runtime views, phase 1 (PR #20): the `views` command — a
+  record-driven eligibility scan (GGUF + recorded SHA256s, every skip
+  reasoned) and an Ollama adapter that seeds a disposable external
+  store: blob symlinks named by recorded digests plus tool-synthesized
+  manifests/config blobs, so archived models `ollama list` and serve
+  in place with zero payload copied (`OLLAMA_MODELS=<dest>
+  OLLAMA_NOPRUNE=1`). The drafted seed-and-delegate design died on its
+  gating live test — ollama 0.32.0 `create` rewrites GGUF layers into
+  a new full-size blob — and the spec's synthesized-manifest fallback
+  was implemented and live-verified end to end (12 KB store over a
+  1.15 GB model, real embeddings served through the symlink). Review
+  round PoC-confirmed and fixed: forged/foreign view markers granting
+  rmtree rights, a marker-symlink archive write, lexical prune
+  containment, relative-archive-path dangling links, unquoted paste
+  commands. 636 tests.
 - 0012 staging-leftover detection (PR #18): `verify --staging` — a
   hash-free scan of `.staging/<creator>/<model>/` that surfaces
   abandoned downloads an interrupted pull left behind (partial bytes,

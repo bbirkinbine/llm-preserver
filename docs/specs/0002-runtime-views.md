@@ -1,7 +1,7 @@
 # 0002 — Runtime views
 
-**Status:** in progress
-**Last updated:** 2026-07-30
+**Status:** in progress — phase 1 (core + Ollama) shipped (PR #20)
+**Last updated:** 2026-07-31
 **Depends on:** 0001
 
 ## Goal
@@ -175,3 +175,23 @@ absolute paths into the archive mount; document the stable-mount-point
 assumption. Tests build a fake archive in `tmp_path` and assert view
 shape, link targets, and that the archive tree is untouched
 (read-only bit respected).
+
+## Phase handoff (2026-07-31, end of phase 1)
+
+Phase 1 shipped in PR #20: the `views` package (`sources` scan, `dest`
+preflight/marker, `ollama` adapter, `build` dispatch), the `views` CLI
+command, 41 tests, docs. Facts the next phase inherits:
+
+- The Ollama adapter synthesizes manifests itself — the
+  seed-and-delegate design is dead (gating-test record above). Any
+  future `create`-based idea re-fights that measurement.
+- The dest/marker core (validated ownership, `generated` index
+  pruning, symlink refusals) is adapter-agnostic — LM Studio /
+  llama.cpp / vLLM adapters plug into `build.py`'s `SUPPORTED_TOOLS`
+  and reuse it. The scan's GGUF-only eligibility is per-adapter
+  selection to generalize (vLLM needs the inverse: hf-snapshot).
+- Open items for later phases: chat-template fidelity through a
+  seeded view (generate-class models; embedding path verified),
+  sharded-GGUF linking, `--model` scoping, and the manifest-v2 watch
+  (Ollama PR #15735 — layout constants carry provenance comments in
+  `views/ollama.py`).
