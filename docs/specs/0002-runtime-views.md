@@ -1,7 +1,7 @@
 # 0002 — Runtime views
 
-**Status:** draft
-**Last updated:** 2026-07-09
+**Status:** in progress — phase 1 (core + Ollama) shipped (PR #20)
+**Last updated:** 2026-07-31
 **Depends on:** 0001
 
 ## Goal
@@ -15,6 +15,16 @@ principle); this spec owns the per-tool mechanics. It ships after the
 download specs exist, since views need models to point at — the
 number is an identifier, not an execution order.
 
+## Phasing (2026-07-30)
+
+Phase 1 (branch `spec-0002-runtime-views`): the shared `views` core
+(record-driven source scan, dest preflight + generated marker) plus
+the **Ollama adapter only** — Ollama is the daily-driver runtime, so
+it lands first even though it is the best-effort mode. LM Studio,
+llama.cpp, and vLLM adapters are later phases on this same spec, each
+one adapter module + tests over the same core. Phase boundaries get a
+`## Phase handoff` section per WORKFLOW.md.
+
 ## Success criteria
 
 - `llm-preserver views <archive> --tool lm-studio --dest <dir>`
@@ -24,11 +34,40 @@ number is an identifier, not an execution order.
 - `llm-preserver views <archive> --tool llama-cpp` (and vLLM
   equivalent) prints/exports the direct archive paths per model —
   these tools need no links, only path discovery.
-- An Ollama mode exists only as explicitly-labeled **best effort**:
-  either emit instructions for a local working copy, or (opt-in flag)
-  generate the community blob-symlink layout using the SHA256s
-  already in the records (no re-hashing) with a loud warning that
-  Ollama does not support it and pruning may break it.
+- An Ollama mode exists only as explicitly-labeled **best effort**
+  (phase 1 mechanics, revised 2026-07-30 after the gating live test —
+  see External references): the default output is instructions for
+  the supported copy-based `ollama create` import. An opt-in
+  `--seed-store` flag instead seeds a complete external store at
+  `--dest`: `blobs/sha256-<digest>` symlinks built from the SHA256s
+  already in the records (no re-hashing; digest = SHA256 of file
+  bytes, verified against Ollama source 2026-07-30), plus a
+  **tool-synthesized** minimal config blob and manifest per minted
+  name — the fallback design, promoted to primary after the
+  seed-and-delegate design failed its gating test (`ollama create`
+  rewrites GGUF layers into a new full-size blob, so delegation
+  always copies). The synthesized store was live-verified 2026-07-30
+  on ollama 0.32.0: `ollama list` shows the models and the runtime
+  loads and serves through the symlink with zero payload bytes
+  copied (12 KB store over a 1.15 GB model, end-to-end through the
+  real CLI). A loud warning states Ollama does not support external
+  stores; printed instructions cover `OLLAMA_MODELS=<dest>`,
+  `OLLAMA_NOPRUNE=1`, and that `ollama serve` reads the env at
+  startup. The tool never runs Ollama itself. No template/params
+  layers are synthesized; chat fidelity holds without them —
+  verified live on the real archive 2026-07-31 (generate-class chat
+  models answered correctly through a seeded view; Ollama falls back
+  to the GGUF's embedded chat template).
+- Eligibility is per-model and reported, never silent: Ollama views
+  cover GGUF artifacts only. The command prints a breakdown (scanned /
+  eligible / skipped with a reason per skip: safetensors-only,
+  unhashed, sharded GGUF — sharded is skipped in phase 1). Zero
+  eligible models: report, write nothing (no dest tree, no marker),
+  exit 1. A refresh whose eligible set shrank to zero reports the
+  same and leaves the existing view untouched.
+- Model names in the view are minted deterministically from the
+  archive's creator/model layout plus file identity (shaped near the
+  `hf.co/<org>/<repo>:<quant>` form) — no ranking, no judgment.
 - Views never write into the archive, and view generation works
   against a read-only archive mount.
 - Every view file/dir is identifiable as generated (naming or marker)
@@ -78,9 +117,58 @@ here from ADR 0001):
 
 **Unverified — must be tested during implementation, not assumed:**
 LM Studio dir-level symlinks and read-only models-dir tolerance;
-Ollama prune behavior against symlinked blobs; llamafile/mlx-lm path
-handling. Re-verify all tool behaviors at implementation time — these
-tools version fast and this spec's research will be stale.
+llamafile/mlx-lm path handling. Re-verify all tool behaviors at
+implementation time — these tools version fast and this spec's
+research will be stale.
+
+Ollama re-verification, 2026-07-30 (current docs, `main` source at
+v0.32.x era, issue tracker):
+
+- Still no official external-model support; multi-path storage
+  request open unimplemented
+  (<https://github.com/ollama/ollama/issues/12729>). `FROM <path>`
+  still full-copies — a symlinked source is resolved then copied
+  (`cmd/cmd.go` `createBlob`); no hard-link path.
+- Blob layout unchanged: `$OLLAMA_MODELS/blobs/sha256-<64 hex>`,
+  digest = SHA256 of the file bytes (`manifest/layer.go`), manifests
+  at `manifests/<registry>/<namespace>/<model>/<tag>`. Watch item:
+  PR <https://github.com/ollama/ollama/pull/15735> ("manifest-v2",
+  open/unmerged 2026-07-30) would restructure the manifest tree and
+  rename the default registry — pin layout constants with provenance.
+- Symlinked blobs work incidentally (read path follows them; nothing
+  rejects them) but remain unsupported
+  (<https://github.com/ollama/ollama/issues/1981>, closed
+  unimplemented). Startup prune `os.Remove`s blobs unreferenced by
+  any manifest (link deleted, external target untouched);
+  manifest-referenced blobs survive; `OLLAMA_NOPRUNE=1` disables the
+  startup pass (`envconfig/config.go`).
+- `ollama list` is purely local manifest enumeration — no network,
+  no pull required.
+- `OLLAMA_MODELS` officially requires read-write
+  (<https://docs.ollama.com/faq>); the view store, not the archive,
+  is what Ollama gets pointed at.
+- **Phase-1 gating live test — run 2026-07-30, FAILED, fallback
+  adopted.** On ollama 0.32.0 with a real 1.15 GB GGUF and a seeded
+  blob symlink: `ollama create` marks GGUF layers
+  `rewriteForCreate: true` (`server/create.go`) and rewrites them via
+  `ggml.WriteGGUF` into a **new full-size blob under a new digest**
+  unknowable from the record — the manifest references the rewritten
+  blob, the seeded symlink ends up manifest-unreferenced, and the
+  store grows by the full model size (seeding merely halves create's
+  copying: one rewritten copy instead of raw-upload + rewrite). The
+  spec's fallback — tool-synthesized manifests — was implemented and
+  live-verified the same day: a manifest (`schemaVersion: 2`, docker
+  media types, `sha256:<hex>` digests, mirrored from a real 0.32.0
+  store inspected on this machine) plus a minimal config blob
+  (`model_format`/`architecture`/`os`/`rootfs.diff_ids`) over the
+  symlinked blob **lists and serves** — real embeddings returned
+  through the seeded symlink, zero payload bytes copied, verified
+  end-to-end through the real CLI against a temp store. The one
+  remainder — chat fidelity for generate-class models with no
+  synthesized template layer — closed 2026-07-31: the human live
+  test ran chat models through a seeded view of the real archive and
+  responses rendered correctly (Ollama uses the GGUF's embedded chat
+  template when the manifest carries none).
 
 ## Sketch
 
@@ -90,3 +178,32 @@ absolute paths into the archive mount; document the stable-mount-point
 assumption. Tests build a fake archive in `tmp_path` and assert view
 shape, link targets, and that the archive tree is untouched
 (read-only bit respected).
+
+**Live-verified on the real archive, 2026-07-31 (human run):** the
+manual test — seed the view of the real archive, serve it, `ollama
+list`, `ollama run` — passed against the real Ollama install
+alongside the normal default-store server (the hybrid setup in
+`docs/ollama-hybrid.md`). Chat responses rendered correctly, closing
+the template-fidelity caveat: no template layer is needed for
+generate-class models.
+
+## Phase handoff (2026-07-31, end of phase 1)
+
+Phase 1 shipped in PR #20: the `views` package (`sources` scan, `dest`
+preflight/marker, `ollama` adapter, `build` dispatch), the `views` CLI
+command, 41 tests, docs. Facts the next phase inherits:
+
+- The Ollama adapter synthesizes manifests itself — the
+  seed-and-delegate design is dead (gating-test record above). Any
+  future `create`-based idea re-fights that measurement.
+- The dest/marker core (validated ownership, `generated` index
+  pruning, symlink refusals) is adapter-agnostic — LM Studio /
+  llama.cpp / vLLM adapters plug into `build.py`'s `SUPPORTED_TOOLS`
+  and reuse it. The scan's GGUF-only eligibility is per-adapter
+  selection to generalize (vLLM needs the inverse: hf-snapshot).
+- Open items for later phases: sharded-GGUF linking, `--model`
+  scoping, and the manifest-v2 watch (Ollama PR #15735 — layout
+  constants carry provenance comments in `views/ollama.py`).
+  Chat-template fidelity was closed 2026-07-31 by the human live
+  test: chat models answer correctly through a seeded view with no
+  synthesized template layer.

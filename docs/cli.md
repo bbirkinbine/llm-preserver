@@ -18,10 +18,36 @@ script instead of installing it, for manual setup.
 
 Commands documented here: `init`, `pull` (selective, `--whole-repo`
 full snapshot, and `--plan` dry run), `discover`, `status`, `show`,
-`verify`, `remove`. Planned features (cache import, runtime views,
-smoke tests) are listed in the roadmap in
+`verify`, `remove`, `views`. Planned features (cache import, smoke
+tests) are listed in the roadmap in
 [`specs/0000-product.md`](specs/0000-product.md)
 and appear here when they ship.
+
+## Environment variables
+
+Everything is optional — every path can be given explicitly — but a
+configured shell makes most commands zero-argument. The first two are
+read by `llm-preserver`; the `OLLAMA_*` pair is read by Ollama and
+only ever *printed* by this tool:
+
+| Variable | Read by | Purpose |
+| --- | --- | --- |
+| `LLM_PRESERVER_ARCHIVE` | llm-preserver | Default archive root; the trailing path argument on every command falls back to it. Explicit path wins. |
+| `LLM_PRESERVER_VIEWS` | llm-preserver | Views root for `views --dest` fallback: the dest becomes `$LLM_PRESERVER_VIEWS/<tool>` (one subdirectory per runtime). Created automatically on first `--seed-store`; keep it *outside* the archive — a dest inside the archive is refused (Ollama needs read-write on its store, and the archive is never handed out writable). Local disk is ideal: the view is kilobytes. Explicit `--dest` wins. |
+| `OLLAMA_MODELS` | ollama | Points Ollama's model store at the *generated view* (never at the archive). Read at `ollama serve` startup. |
+| `OLLAMA_NOPRUNE=1` | ollama | Disables Ollama's startup prune, which would delete seeded blob links it considers unreferenced. Set it whenever serving a seeded view. |
+
+A one-time setup for the daily loop:
+
+```bash
+# ~/.zshrc
+export LLM_PRESERVER_ARCHIVE=~/models
+export LLM_PRESERVER_VIEWS=~/llm-views
+
+# then:
+llm-preserver views --seed-store
+OLLAMA_MODELS=$LLM_PRESERVER_VIEWS/ollama OLLAMA_NOPRUNE=1 ollama serve
+```
 
 ## init — create an archive
 
@@ -763,3 +789,131 @@ Exit codes match the rest of the tool:
 
 Removing whole models or pattern subsets is the only deletion the tool
 performs; the archive is otherwise append-only.
+
+## views — run archived models in place (phase 1: Ollama)
+
+```bash
+uv run llm-preserver views ~/models --tool ollama --dest ~/ollama-view              # print instructions only
+uv run llm-preserver views ~/models --tool ollama --dest ~/ollama-view --seed-store # seed the external store
+llm-preserver views --seed-store   # both paths from env: $LLM_PRESERVER_ARCHIVE + $LLM_PRESERVER_VIEWS
+```
+
+Both paths have env fallbacks: the archive argument falls back to
+`$LLM_PRESERVER_ARCHIVE` (as everywhere), and `--dest` falls back to
+`$LLM_PRESERVER_VIEWS/<tool>` — a views *root* with one subdirectory
+per tool, so later adapters never collide. An explicit `--dest` wins.
+(`$OLLAMA_MODELS` itself always points at the generated view, never at
+the archive: Ollama requires read-write on its store, and the archive
+is neither Ollama-shaped nor writable by tools.)
+
+A complete first run, from nothing to a prompt — the instructions-only
+run prints this same flow with your real paths and the first usable
+model's name filled in, so every line is pasteable:
+
+```bash
+export LLM_PRESERVER_ARCHIVE=~/models    # one-time; add both to ~/.zshrc
+export LLM_PRESERVER_VIEWS=~/llm-views
+
+llm-preserver views --seed-store         # seed (or refresh) the ollama view
+OLLAMA_MODELS=$LLM_PRESERVER_VIEWS/ollama OLLAMA_NOPRUNE=1 ollama serve
+
+# in a second terminal:
+ollama list                              # the archived models, minted names
+ollama run qwen/qwen3.6-27b:q8_0         # example — any name from the usable list
+```
+
+Models are too large to shuttle between bulk storage and local disks,
+so a *view* (spec 0002) makes a runtime able to find archived models
+where they already live: a disposable directory of symlinks and
+generated paperwork **outside** the archive, pointing into it. The
+archive is read-only throughout — view generation works against a
+read-only mount, writes nothing into the archive, and re-running
+refreshes the view. Deleting a view loses nothing; the marker file at
+its root (`llm-preserver-view.json`) is how both the tool and a human
+recognize the tree as generated and disposable. A non-empty `--dest`
+without that marker is refused untouched, and a `--dest` inside the
+archive is always refused.
+
+Eligibility is reported, never silent: an Ollama view links **GGUF
+files with recorded SHA256s** only. Every run prints a breakdown split
+into **usable** (each runnable model, with its exact `ollama run` name
+once seeded) and **not usable** (one short reason per model —
+safetensors-only models need a copying import; unhashed files have no
+digest to name a blob with; sharded GGUF sets are not linked in phase
+1). Companion files riding in GGUF artifacts (READMEs, docs) are
+expected and stay out of the display; genuine problems (an unhashed
+quant, a sharded set) surface under the model they belong to. If
+nothing is eligible, nothing is written and the run exits 1.
+
+Two modes:
+
+- **Default (instructions only).** Writes nothing. Prints the
+  recommended `--seed-store` flow first (run in place, no copy — the
+  tool's stance per ADR 0001: views, not copies), then the official
+  alternative — a Modelfile with `FROM <archive path>` plus
+  `ollama create`, which *copies* the weights into Ollama's own store
+  (`~/.ollama/models` by default); useful for a model you want
+  permanently inside Ollama, or if an Ollama update ever breaks
+  views.
+- **`--seed-store` (best effort, no copy).** Ollama does not support
+  external model stores; this mode is explicitly best-effort and says
+  so loudly. It seeds a complete Ollama-shaped store at `--dest`: one
+  `blobs/sha256-<digest>` symlink per eligible GGUF (Ollama names
+  blobs by the SHA256 of the file bytes — exactly what the records
+  already hold, so nothing is ever re-hashed), plus a synthesized
+  manifest and minimal config blob per model, so the models are
+  registered directly — no `ollama pull`, no `ollama create`, no
+  network. One command finishes the job:
+
+  ```bash
+  OLLAMA_MODELS=~/ollama-view OLLAMA_NOPRUNE=1 ollama serve
+  ```
+
+  and `ollama list` / `ollama run` see the archived models
+  immediately. Do **not** import seeded models with `ollama create`:
+  measured live (ollama 0.32.0), `create` rewrites GGUF layers into a
+  new full-size blob — exactly the copy this mode exists to avoid —
+  which is why the tool writes the paperwork itself.
+  `OLLAMA_NOPRUNE=1` matters: Ollama's startup prune deletes blobs no
+  manifest references, and an Ollama-initiated change that orphans a
+  seeded link would see it deleted (the archive file behind a pruned
+  link is untouched — only the link dies).
+
+Running a view server *alongside* a normal Ollama install — small
+always-on models in Ollama's own store, large archived models served
+from the view on a second port — is the recommended day-to-day shape;
+the worked setup lives in [`ollama-hybrid.md`](ollama-hybrid.md).
+
+What `--help` can't carry:
+
+- **The store is swapped, not merged.** `OLLAMA_MODELS` pointed at the
+  view hides models previously pulled into `~/.ollama/models`, and
+  vice versa. Only Ollama's model store moves; keys, logs, and other
+  runtime state stay in Ollama's normal home.
+- **Symlink targets are absolute**, so the view assumes a stable
+  archive mount point. A moved mount means regenerate the view —
+  seconds, and nothing of value lives in it.
+- **Refresh is safe for Ollama's paperwork.** Re-running rebuilds the
+  tool's own content (blob symlinks pointing into the archive, the
+  `modelfiles/` tree, the marker) and prunes stale entries for models
+  no longer archived; manifests and blobs Ollama itself created in the
+  view store are never touched.
+- **Names are minted deterministically** from the archive layout —
+  `<creator>/<model>:<tag>` lowercased, the tag from the GGUF filename
+  — no ranking or judgment, same stance as `discover`.
+- **Blob names come from recorded digests, not from re-hashing.** The
+  seeded store asserts the SHA256s the records hold; run
+  `llm-preserver verify <archive>` first when seeding a view of an
+  archive you did not create.
+- **No template layers, by design.** The synthesized paperwork
+  carries no template/params layers; Ollama falls back to the chat
+  template embedded in the GGUF itself. Verified live for both model
+  classes: embeddings and generate-class chat both render correctly
+  through a seeded view.
+
+| Code | Domain | Cause |
+| --- | --- | --- |
+| 0 | success | view seeded/refreshed, or instructions printed |
+| 1 | archive/usage | path is not an archive; no eligible models (nothing written) |
+| 2 | user input | unknown `--tool` value; `--dest` inside the archive; non-empty `--dest` without the view marker |
+| 130 | interrupted | Ctrl-C — the view may be partial; re-run to refresh |

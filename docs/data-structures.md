@@ -3,8 +3,9 @@
 Visual reference for the on-disk and in-memory structures the tool is
 built on. This is the foundation layer (spec 0001, layout decided by
 ADR 0001 — `docs/adr/0001-model-storage.md`); every later feature —
-pull, verify, and remove (shipped), smoke test and runtime views
-(planned) — reads, writes, or deletes these same structures. Diagrams
+pull, verify, remove, and runtime views (shipped — views at phase
+1, the Ollama adapter), smoke test and cache import (planned) — reads,
+writes, or deletes these same structures. Diagrams
 are Mermaid — GitHub and VS Code's markdown preview render them
 natively.
 
@@ -331,12 +332,12 @@ flowchart LR
         DL["pull: selective + whole-repo<br/>(specs 0003/0004)"]
         VER["verify: re-hash disk against records<br/>(spec 0009)"]
         RM["remove: whole-model + pattern deletion<br/>(spec 0010)"]
+        VIEWS["views: disposable runtime views<br/>(spec 0002, phase 1: ollama)"]
     end
 
     subgraph FUTURE ["planned layers (0000-product roadmap)"]
         SMOKE["smoke-test spec"]
         IMPORT["cache-import spec"]
-        VIEWS["runtime views (spec 0002)"]
     end
 
     DL -- "writes payload files +<br/>artifact entries, hashes,<br/>pinned revisions" --> REC
