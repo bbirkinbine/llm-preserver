@@ -153,7 +153,12 @@ def test_default_run_prints_instructions_and_writes_nothing(
 
     assert result.exit_code == 0
     out = output_of(result)
-    for needle in ("ollama create", "OLLAMA_MODELS", "OLLAMA_NOPRUNE=1"):
+    for needle in (
+        "ollama create",
+        "OLLAMA_MODELS",
+        "OLLAMA_NOPRUNE=1",
+        "docs/ollama-hybrid.md",  # hybrid pointer, same as the post-seed output
+    ):
         assert needle in out
     assert not dest.exists()  # default mode is instructions-only
 
