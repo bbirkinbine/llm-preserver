@@ -806,6 +806,22 @@ per tool, so later adapters never collide. An explicit `--dest` wins.
 the archive: Ollama requires read-write on its store, and the archive
 is neither Ollama-shaped nor writable by tools.)
 
+A complete first run, from nothing to a prompt — the instructions-only
+run prints this same flow with your real paths and the first usable
+model's name filled in, so every line is pasteable:
+
+```bash
+export LLM_PRESERVER_ARCHIVE=~/models    # one-time; add both to ~/.zshrc
+export LLM_PRESERVER_VIEWS=~/llm-views
+
+llm-preserver views --seed-store         # seed (or refresh) the ollama view
+OLLAMA_MODELS=$LLM_PRESERVER_VIEWS/ollama OLLAMA_NOPRUNE=1 ollama serve
+
+# in a second terminal:
+ollama list                              # the archived models, minted names
+ollama run qwen/qwen3.6-27b:q8_0         # example — any name from the usable list
+```
+
 Models are too large to shuttle between bulk storage and local disks,
 so a *view* (spec 0002) makes a runtime able to find archived models
 where they already live: a disposable directory of symlinks and

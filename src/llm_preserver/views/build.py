@@ -54,8 +54,11 @@ def build_view(
     if not eligible:
         return ViewBuildResult(entries=[], scan=scan, instructions="")
     if not seed:
+        example_name = ollama.planned_names(eligible)[0][2]
         return ViewBuildResult(
-            entries=[], scan=scan, instructions=ollama.default_instructions(dest)
+            entries=[],
+            scan=scan,
+            instructions=ollama.default_instructions(resolved, dest, example_name),
         )
     try:
         dest.mkdir(parents=True, exist_ok=True)

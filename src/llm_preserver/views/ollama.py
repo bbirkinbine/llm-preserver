@@ -36,7 +36,7 @@ import re
 import shlex
 from pathlib import Path
 
-from llm_preserver.views.types import ModelViewSources, ViewEntry, ViewError
+from llm_preserver.views.types import ModelViewSources, ViewEntry, ViewError, ViewSourceFile
 
 BLOBS_DIRNAME = "blobs"
 BLOB_PREFIX = "sha256-"
@@ -79,24 +79,21 @@ def seed_store(
     manifests_dir = _require_real_dir(dest / MANIFESTS_DIRNAME)
     _prune_previous(dest, blobs_dir, manifests_dir, previous_generated)
     entries: list[ViewEntry] = []
-    taken: set[str] = set()
-    for model in models:
-        for source in model.eligible:
-            name = _mint_name(model.model_id, source.path, source.sha256, taken)
-            blob_path = blobs_dir / f"{BLOB_PREFIX}{source.sha256}"
-            _place_blob_link(blob_path, source.path)
-            manifest_path, config_digest = _write_registration(
-                blobs_dir, manifests_dir, name, source.sha256, source.size
+    for model_id, source, name in planned_names(models):
+        blob_path = blobs_dir / f"{BLOB_PREFIX}{source.sha256}"
+        _place_blob_link(blob_path, source.path)
+        manifest_path, config_digest = _write_registration(
+            blobs_dir, manifests_dir, name, source.sha256, source.size
+        )
+        entries.append(
+            ViewEntry(
+                name=name,
+                model_id=model_id,
+                blob_path=blob_path,
+                manifest_path=manifest_path,
+                config_digest=config_digest,
             )
-            entries.append(
-                ViewEntry(
-                    name=name,
-                    model_id=model.model_id,
-                    blob_path=blob_path,
-                    manifest_path=manifest_path,
-                    config_digest=config_digest,
-                )
-            )
+        )
     _prune_stale_blob_links(
         blobs_dir, {entry.blob_path.name for entry in entries}, archive_resolved
     )
@@ -107,22 +104,52 @@ def seed_store(
     return entries, generated
 
 
-def default_instructions(dest: Path) -> str:
-    """The instructions-only (non-seeding) output."""
+def planned_names(models: list[ModelViewSources]) -> list[tuple[str, ViewSourceFile, str]]:
+    """Mint the deterministic name for every eligible file, writing nothing.
+
+    Shared by :func:`seed_store` and the instructions builders so a
+    dry (non-seeding) run can show the exact names a seeded run will
+    register.
+
+    Returns:
+        One ``(model_id, source, name)`` triple per eligible file, in
+        scan order.
+    """
+    taken: set[str] = set()
+    return [
+        (model.model_id, source, _mint_name(model.model_id, source.path, source.sha256, taken))
+        for model in models
+        for source in model.eligible
+    ]
+
+
+def default_instructions(archive_root: Path, dest: Path, example_name: str) -> str:
+    """The instructions-only (non-seeding) output — a complete flow.
+
+    Every command is pasteable as printed (resume-hint philosophy):
+    the exact seed invocation, the serve line, and a real ``ollama
+    run`` using the first name a seeded run will register.
+    """
+    quoted_archive = shlex.quote(str(archive_root))
     quoted_dest = shlex.quote(str(dest))
     return (
         "Ollama cannot run models from an external folder out of the\n"
         "box — its official import copies the weights into its own\n"
         "store. Two ways to run archived models:\n"
         "\n"
-        "recommended — run in place, no copy (what --seed-store does):\n"
-        "  re-run with --seed-store, then serve against the view with:\n"
+        "recommended — run in place, no copy. The complete flow:\n"
+        "\n"
+        f"  llm-preserver views {quoted_archive} --dest {quoted_dest} --seed-store\n"
         f"  OLLAMA_MODELS={quoted_dest} OLLAMA_NOPRUNE=1 ollama serve\n"
+        "  # then, from a second terminal:\n"
+        "  ollama list\n"
+        f"  ollama run {example_name}\n"
+        "\n"
         "  This works — verified against the current Ollama — but is\n"
         "  not an officially supported Ollama setup, so an Ollama\n"
         "  update could break the view. Only the disposable view\n"
-        "  breaks in that case (regenerate it); the archive is never\n"
-        "  at risk.\n"
+        "  breaks in that case (re-run --seed-store to regenerate);\n"
+        "  the archive is never at risk.\n"
         "\n"
         "alternative — official import, copies the full weights into\n"
         "  Ollama's own store (~/.ollama/models by default). Use it\n"
@@ -139,13 +166,13 @@ def seed_instructions(dest: Path, entries: list[ViewEntry]) -> str:
     lines = [
         f"seeded view store: {dest}",
         "",
-        "serve against the seeded store (env is read at server startup):",
-        f"  OLLAMA_MODELS={quoted_dest} OLLAMA_NOPRUNE=1 ollama serve",
+        "1. serve against the seeded store (env is read at startup):",
+        f"   OLLAMA_MODELS={quoted_dest} OLLAMA_NOPRUNE=1 ollama serve",
         "",
-        "the archived models are registered and ready — no ollama pull,",
-        "no ollama create, no network:",
-        "  ollama list",
-        *(f"  ollama run {entry.name}" for entry in entries[:1]),
+        "2. from a second terminal, the models are ready — no ollama",
+        "   pull, no ollama create, no network:",
+        "   ollama list",
+        *(f"   ollama run {entry.name}" for entry in entries[:1]),
     ]
     return "\n".join(lines) + "\n"
 

@@ -83,6 +83,16 @@ def test_usable_models_are_named_and_companions_suppressed(
     assert "README" not in out  # companion noise stays out of the display
 
 
+def test_default_run_shows_complete_pasteable_flow(tmp_path: Path, mixed_archive: Path) -> None:
+    """The dry run prints the full seed command and a real run name."""
+    result = runner.invoke(app, ["views", str(mixed_archive), "--dest", str(tmp_path / "view")])
+
+    out = output_of(result)
+    assert "llm-preserver views" in out
+    assert "--seed-store" in out
+    assert "ollama run acme/tiny-chat:q4_k_m" in out  # first usable model's name
+
+
 def test_seed_mode_lists_run_ready_minted_names(tmp_path: Path, mixed_archive: Path) -> None:
     result = runner.invoke(
         app, ["views", str(mixed_archive), "--dest", str(tmp_path / "view"), "--seed-store"]
@@ -96,7 +106,9 @@ def test_not_usable_models_get_one_deduplicated_reason(tmp_path: Path, mixed_arc
     result = runner.invoke(app, ["views", str(mixed_archive), "--dest", str(tmp_path / "view")])
 
     out = output_of(result)
-    not_usable = out.split("not usable:")[1]
+    # The section ends where the instructions begin — the run-example
+    # there legitimately names the usable model.
+    not_usable = out.split("not usable:")[1].split("Ollama cannot")[0]
     assert "acme/snap-a: safetensors snapshot only" in not_usable
     assert "beta/snap-b: safetensors snapshot only" in not_usable
     assert "acme/tiny-chat" not in not_usable
