@@ -33,7 +33,7 @@ only ever *printed* by this tool:
 | Variable | Read by | Purpose |
 | --- | --- | --- |
 | `LLM_PRESERVER_ARCHIVE` | llm-preserver | Default archive root; the trailing path argument on every command falls back to it. Explicit path wins. |
-| `LLM_PRESERVER_VIEWS` | llm-preserver | Views root for `views --dest` fallback: the dest becomes `$LLM_PRESERVER_VIEWS/<tool>` (one subdirectory per runtime). Explicit `--dest` wins. |
+| `LLM_PRESERVER_VIEWS` | llm-preserver | Views root for `views --dest` fallback: the dest becomes `$LLM_PRESERVER_VIEWS/<tool>` (one subdirectory per runtime). Created automatically on first `--seed-store`; keep it *outside* the archive — a dest inside the archive is refused (Ollama needs read-write on its store, and the archive is never handed out writable). Local disk is ideal: the view is kilobytes. Explicit `--dest` wins. |
 | `OLLAMA_MODELS` | ollama | Points Ollama's model store at the *generated view* (never at the archive). Read at `ollama serve` startup. |
 | `OLLAMA_NOPRUNE=1` | ollama | Disables Ollama's startup prune, which would delete seeded blob links it considers unreferenced. Set it whenever serving a seeded view. |
 
