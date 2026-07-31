@@ -832,9 +832,13 @@ nothing is eligible, nothing is written and the run exits 1.
 Two modes:
 
 - **Default (instructions only).** Writes nothing. Prints the
-  supported path — a Modelfile with `FROM <archive path>` plus
-  `ollama create`, which *copies* bytes into Ollama's own store — and
-  how to use `--seed-store` instead.
+  recommended `--seed-store` flow first (run in place, no copy — the
+  tool's stance per ADR 0001: views, not copies), then the official
+  alternative — a Modelfile with `FROM <archive path>` plus
+  `ollama create`, which *copies* the weights into Ollama's own store
+  (`~/.ollama/models` by default); useful for a model you want
+  permanently inside Ollama, or if an Ollama update ever breaks
+  views.
 - **`--seed-store` (best effort, no copy).** Ollama does not support
   external model stores; this mode is explicitly best-effort and says
   so loudly. It seeds a complete Ollama-shaped store at `--dest`: one
