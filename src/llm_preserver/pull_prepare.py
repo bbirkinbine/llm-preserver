@@ -8,24 +8,24 @@ confirmation; ``pull --plan`` renders one and exits. One code path is
 what makes the printed plan match what a real pull does.
 """
 
-import json
 import logging
 import shutil
-import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 
 from llm_preserver.archive import require_archive
-from llm_preserver.hub import HubClientProtocol, PullError, PullUserError, RepoFile, RepoInfo
-from llm_preserver.hub_discovery import looks_like_repo_id
+from llm_preserver.hub import HubClientProtocol, PullUserError, RepoFile, RepoInfo
 from llm_preserver.pull_advisory import Advisory, advisories_for, archived_hub_repos
 from llm_preserver.pull_grouping import (
     ConfirmCallback,
+    confirm_default_home,
     load_existing_record,
+    parse_model_id,
+    propose_default_home,
     require_single_snapshot_source,
-    resolve_model_id,
 )
+from llm_preserver.pull_metadata import fetch_adapter_base, resolved_base_model
 from llm_preserver.pull_plan import PullPlan, plan_downloads
 from llm_preserver.pull_preflight import already_staged_bytes, total_selected_size
 from llm_preserver.records import ArtifactFormat, ModelRecord
@@ -67,90 +67,6 @@ class PullPreparation:
     adapter_config_fetched: bool = False
 
 
-# An adapter config is kilobytes (peft serializes a flat dict); a hub
-# file claiming to be one at megabyte scale is not worth fetching for
-# an advisory.
-_ADAPTER_CONFIG_MAX_BYTES = 1024 * 1024
-
-
-def _fetch_adapter_base(
-    client: HubClientProtocol, repo_id: str, info: RepoInfo
-) -> tuple[str | None, bool]:
-    """Read ``base_model_name_or_path`` from the repo's adapter config.
-
-    Returns:
-        ``(base_model_pointer, fetched)`` — the pointer is None for
-        any unusable config; ``fetched`` is True whenever a download
-        was attempted, so the plan report can disclose it.
-
-    Provenance: peft ``src/peft/config.py`` — ``save_pretrained``
-    writes ``adapter_config.json`` at the repo root with the
-    ``base_model_name_or_path`` field
-    (https://github.com/huggingface/peft, Apache-2.0, retrieved
-    2026-07-12).
-
-    Adjudicated 2026-07-12: accuracy beats purity — when the tree
-    ships a root-level ``adapter_config.json``, both real pulls and
-    ``--plan`` fetch that small file (into a throwaway temp dir,
-    never the archive or its staging) so the adapter-base advisory
-    can name the exact follow-up pull, and say so out loud. Hub data
-    is untrusted, and an advisory input must never abort a pull:
-    oversized, malformed, unfetchable, or non-object configs all
-    yield None. Root-only matching also keeps a nested decoy from
-    shadowing the real config.
-    """
-    config = next((f for f in info.files if f.path == "adapter_config.json"), None)
-    if config is None:
-        return None, False
-    if config.size is not None and config.size > _ADAPTER_CONFIG_MAX_BYTES:
-        logger.debug("adapter_config.json declares %d bytes: too large, skipping", config.size)
-        return None, False
-    logger.info("fetching %s to read its base-model pointer (advisory only)", config.path)
-    try:
-        with tempfile.TemporaryDirectory(prefix="llm-preserver-advisory-") as scratch:
-            local = client.download(
-                repo_id=repo_id,
-                filename=config.path,
-                revision=info.commit,
-                dest_dir=Path(scratch),
-            )
-            parsed = json.loads(local.read_text(encoding="utf-8"))
-    except (OSError, ValueError, PullError) as exc:
-        logger.debug("adapter_config.json unusable for the advisory: %s", exc)
-        return None, True
-    if not isinstance(parsed, dict):
-        return None, True
-    base = parsed.get("base_model_name_or_path")
-    return (base if isinstance(base, str) and base else None), True
-
-
-def _resolved_base_model(client: HubClientProtocol, base_model: str | None) -> str | None:
-    """Resolve a declared base model to its current hub id.
-
-    Card metadata goes stale when a parent repo is renamed (the hub
-    redirects the old name); recording or proposing a dead name in a
-    preservation tool ages badly. One light metadata call resolves it
-    (adjudicated 2026-07-13 — the second sanctioned exception to the
-    one-metadata-call rule, same rationale as the adapter-config
-    fetch: accuracy beats purity, disclosed out loud). Any failure
-    falls back to the declared name: base resolution is advisory
-    input and must never abort a pull.
-    """
-    if not base_model or not looks_like_repo_id(base_model):
-        return base_model
-    try:
-        summary = client.model_summary(base_model)
-    except PullError:
-        return base_model
-    if summary.repo_id != base_model:
-        logger.info(
-            "declared base model %s was renamed on the hub — using its current id %s",
-            base_model,
-            summary.repo_id,
-        )
-    return summary.repo_id
-
-
 def prepare_pull(
     archive_root: Path,
     repo_id: str,
@@ -166,9 +82,13 @@ def prepare_pull(
     """Resolve, select, group, plan, and advise — download nothing.
 
     Asks ``confirm`` the plan-affecting questions (grouping,
-    every-weight); the size confirmation belongs to the caller. Does
-    not raise on insufficient disk — the caller compares
-    ``needed_bytes`` against ``disk_free`` and picks its own refusal.
+    every-weight); the size confirmation belongs to the caller. When
+    the plan finds nothing to download and nothing to adopt AND the
+    home is not hub-derived, no question is asked at all (spec 0014) —
+    a no-op pull at a user-chosen home needs no answers. A hub-derived
+    home (the declared ``base_model``) always confirms first. Does not
+    raise on insufficient disk — the caller compares ``needed_bytes``
+    against ``disk_free`` and picks its own refusal.
 
     Args:
         archive_root: An initialized archive root.
@@ -198,20 +118,36 @@ def prepare_pull(
     # Rename-resolve the declared base once, so grouping proposals,
     # the mismatch warning, and the master advisory all speak the
     # hub's current name (adjudicated 2026-07-13).
-    info = replace(info, base_model=_resolved_base_model(client, info.base_model))
+    info = replace(info, base_model=resolved_base_model(client, info.base_model))
     # Grouping direction is a property of the repo's whole tree, not of
     # which files were selected (spec 0004 adjudications).
     tree_format = infer_format_subdir([f.path for f in info.files], repo_id)
-    creator, name = resolve_model_id(model, info, repo_id, confirm, tree_format)
+    # Resolve the home (spec 0014). A *hub-derived* home — the declared
+    # base_model, offered when a GGUF/MLX tree groups under its base —
+    # confirms up front, before it can name any directory: hub metadata
+    # never names an archive directory without a human yes (spec 0006
+    # adjudication, upheld at the 0014 review round — a hostile
+    # base_model plus a name+size-matched hashless file could otherwise
+    # steer a silent "already archived" verdict at another model's
+    # directory). When the home is the repo id the user typed (--model,
+    # no base_model, or hf-snapshot lineage), it is resolved
+    # tentatively and the grouping question waits until the plan proves
+    # there is work to do.
+    grouping_prompt: str | None = None
+    if model is None:
+        home, prompt = propose_default_home(info, repo_id, tree_format)
+        if home != repo_id:
+            confirm_default_home(home, prompt, confirm)
+        else:
+            grouping_prompt = prompt
+    else:
+        home = model
+    creator, name = parse_model_id(home)
     if select_all:
         selected = list(info.files)
     else:
         selected = select_files(info.files, include)
         require_nondoc_selection(selected, info.files, repo_id, include)
-        if selects_all_weights(info.files, selected) and not confirm(
-            f"selection covers every weight file in {repo_id}; pull them all?"
-        ):
-            raise PullUserError("every-weight pull declined: narrow --include and re-run")
     require_case_distinct_targets(selected)
     subdir = infer_format_subdir([f.path for f in selected], repo_id)
     model_dir = archive_root / "models" / creator / name
@@ -229,8 +165,22 @@ def prepare_pull(
         refresh_docs=refresh_docs,
         relocate_docs=not select_all,  # snapshots keep the tree verbatim
     )
+    if plan.to_download or plan.adopted:
+        # Work to do: ask today's questions in today's order (grouping,
+        # then every-weight; the size confirmation stays the caller's).
+        # A plan with nothing to download and nothing to adopt skips
+        # the deferred questions (spec 0014): y reaches the no-op and N
+        # aborts — both no-ops — so no answer can change the outcome.
+        if grouping_prompt is not None:
+            confirm_default_home(home, grouping_prompt, confirm)
+        if (
+            not select_all
+            and selects_all_weights(info.files, selected)
+            and not confirm(f"selection covers every weight file in {repo_id}; pull them all?")
+        ):
+            raise PullUserError("every-weight pull declined: narrow --include and re-run")
     staging_dir = archive_root / STAGING_DIRNAME / creator / name
-    adapter_base, adapter_config_fetched = _fetch_adapter_base(client, repo_id, info)
+    adapter_base, adapter_config_fetched = fetch_adapter_base(client, repo_id, info)
     advisories = advisories_for(
         info.files,
         selected,

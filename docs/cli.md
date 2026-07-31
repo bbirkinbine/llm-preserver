@@ -265,14 +265,29 @@ Behavior worth knowing:
 - **Non-interactive runs never hang or die vaguely.** When stdin
   cannot answer a confirmation (cron, CI, piped input exhausted), the
   pull exits 2 with a message naming the bypass: `--model` for the
-  grouping confirm, `--yes` for the size confirmation.
+  grouping confirm, `--yes` for the size confirmation. The exception
+  is a pull with nothing to do — it asks no questions (next bullet),
+  so a scripted re-pull of an already-complete selection exits 0.
 
-- **Re-pulls are idempotent.** A file already archived with a
-  matching hash is skipped ("already archived"); nothing re-downloads.
-  A file whose upstream content *changed* is a hard stop — the
-  archive never silently overwrites. For documentation files the stop
-  names the way out ("re-run with --refresh-docs to replace this
-  documentation file"); for weights there is no override.
+- **Re-pulls are idempotent, and a complete one asks nothing.** A
+  file already archived with a matching hash is skipped ("already
+  archived"); nothing re-downloads. When *every* selected file is
+  already archived and the pull's home is one you chose — the repo id
+  itself (no declared base model) or an explicit `--model` — no
+  confirmation is asked at all: the per-file "already archived" lines
+  and the "nothing to pull" summary print, the final line reads
+  "`<repo>` is already archived in `<dir>`; nothing new to pull", and
+  the command exits 0. (Any answer would reach the same no-op, so the
+  question is not worth your keystroke.) A home proposed from the
+  repo's *declared base model* still asks the grouping question
+  first, even on a complete re-pull — hub metadata never names an
+  archive directory without a human yes. A selection with any work
+  left — a new file, an unrecorded on-disk file to adopt, a
+  `--refresh-docs` replacement — asks the usual questions. A file
+  whose upstream content *changed* is a hard stop — the archive never
+  silently overwrites. For documentation files the stop names the way
+  out ("re-run with --refresh-docs to replace this documentation
+  file"); for weights there is no override.
 <!-- Stall math source: https://github.com/huggingface/xet-core
   (Apache-2.0), xet_runtime/src/config/groups/client.rs —
   read_timeout 300s, retry_max_attempts 5, retry_base_delay 3000ms;
@@ -435,11 +450,12 @@ Snapshot behavior:
   the full file count even though completed staged files tick by
   instantly and their bytes are netted out of the GiB figure and the
   disk preflight.
-- **Re-running a completed snapshot downloads nothing.** After the
-  grouping confirmation it reports "nothing to pull: every selected
-  file is already archived" and exits 0 — no size prompt, no
-  downloads. (Pass `--model` to skip the grouping question on
-  re-runs.)
+- **Re-running a completed snapshot downloads nothing.** It reports
+  "nothing to pull: every selected file is already archived" and
+  exits 0 — no size prompt, no downloads. The grouping question is
+  skipped too when the home is the repo id or `--model`; a home
+  proposed from the declared base model still confirms first (see the
+  selective-pull section).
 - **One source repo per format subdirectory.** A second same-format
   snapshot from a *different* source repo is refused (two verbatim
   trees cannot share one directory honestly) — archive it under a

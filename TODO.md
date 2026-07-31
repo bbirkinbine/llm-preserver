@@ -5,7 +5,15 @@ What's next, in rough order. Feature detail lives in
 and the numbered specs; this file is the short-term working list.
 Check items off as they ship; update when priorities shift.
 
-## Next spec (0014) — pick one
+## In progress
+
+- [ ] **Skip the grouping prompt on an already-archived pull**
+  (spec 0014, branch `spec-0014-skip-prompt-already-archived`):
+  a re-pull whose selected files are all already archived reports
+  that and exits 0 before the grouping confirmation, instead of
+  asking first and revealing "nothing to pull" after.
+
+## Next spec (0015) — pick one
 
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
   PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over
@@ -138,6 +146,13 @@ Check items off as they ship; update when priorities shift.
   `hf_xet`'s lazy import — the ordering the whole flag rests on.
 
 ## Smaller items (from live use)
+
+- [ ] Pull planning errors should name the model directory (queued
+  from the 0014 review round, 2026-07-31): with the plan computed
+  before the grouping prompt, a changed-weight integrity stop can now
+  fire before any question puts the home on screen — the error names
+  the file's relative path but not which model directory holds the
+  conflicting record. Add the directory to those messages.
 
 - [ ] `--json` on the read-only reporting commands (queued
   2026-07-13, from the 0009 wrap-up: exit codes serve cron, but an

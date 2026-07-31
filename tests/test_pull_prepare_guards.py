@@ -106,6 +106,45 @@ def test_oversized_config_is_never_downloaded(archive, fake_hub_factory):
     assert "adapter base model" not in advisory_kinds(prep)
 
 
+def test_undeclared_size_config_is_never_downloaded(archive, fake_hub_factory):
+    # No declared size means the megabyte cap cannot vouch for the
+    # fetch — and the fetch can run with zero prompts (spec 0014), so
+    # an undeclared size is treated as untrusted, not unlimited.
+    from llm_preserver.hub import RepoFile, RepoInfo
+
+    client = fake_hub_factory(
+        files=adapter_files(b'{"base_model_name_or_path": "acme/base-7b"}'),
+        repo_id=REPO_ID,
+        base_model=None,
+    )
+    fetched = client.repo_info(REPO_ID)
+    info = RepoInfo(
+        commit=fetched.commit,
+        files=[
+            RepoFile(path=f.path, size=None, sha256=f.sha256)
+            if f.path == "adapter_config.json"
+            else f
+            for f in fetched.files
+        ],
+        base_model=None,
+        pipeline_tag=fetched.pipeline_tag,
+        license=fetched.license,
+    )
+
+    prep = prepare_pull(
+        archive,
+        REPO_ID,
+        client,
+        include=["adapter_model*"],
+        model="acme/tiny-adapter",
+        repo_info=info,
+        confirm=lambda prompt: True,
+    )
+
+    assert client.download_calls == []
+    assert "adapter base model" not in advisory_kinds(prep)
+
+
 def test_nested_config_is_not_fetched(archive, fake_hub_factory):
     # peft writes adapter_config.json at the repo root; a nested decoy
     # must not steer which config gets read (root-only match).
