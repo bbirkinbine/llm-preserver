@@ -9,9 +9,8 @@ Check items off as they ship; update when priorities shift.
 
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
   PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over
-  the same core, plus the phase-1 deferrals (chat-template fidelity
-  for generate-class models, sharded-GGUF linking, `--model`
-  scoping).
+  the same core, plus the phase-1 deferrals (sharded-GGUF linking,
+  `--model` scoping).
 - [ ] **Smoke test**: load an archived model offline in a local
   runtime (llama.cpp / ollama), check a trivial deterministic
   prompt, record the result in the record's `runtime_tested` field

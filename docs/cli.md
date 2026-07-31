@@ -905,11 +905,11 @@ What `--help` can't carry:
   seeded store asserts the SHA256s the records hold; run
   `llm-preserver verify <archive>` first when seeding a view of an
   archive you did not create.
-- **Chat-template caveat.** The synthesized paperwork carries no
-  template/params layers. The embedding-model path is live-verified;
-  generate-class chat fidelity through a seeded view is not yet — if
-  a chat model answers oddly, that gap is the first suspect (tracked
-  in the spec).
+- **No template layers, by design.** The synthesized paperwork
+  carries no template/params layers; Ollama falls back to the chat
+  template embedded in the GGUF itself. Verified live for both model
+  classes: embeddings and generate-class chat both render correctly
+  through a seeded view.
 
 | Code | Domain | Cause |
 | --- | --- | --- |

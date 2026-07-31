@@ -370,8 +370,9 @@ parallelize only with partitioned file ownership.
   seeded link, 12 KB store over a 1.15 GB model, via the real CLI.
   Hard-won facts: blob digest = SHA256 of file bytes, so recorded
   digests are blob names for free; no template/params layers synthesized
-  — generate-class chat fidelity is the open caveat (embedding path
-  verified); Ollama PR #15735 ("manifest-v2") would move the manifest
+  and none needed — chat fidelity closed by the human live test
+  (Ollama falls back to the GGUF's embedded template); Ollama PR
+  #15735 ("manifest-v2") would move the manifest
   tree — layout constants carry provenance comments. Review round
   (reviewer + adversarial + security, all PoC-driven) earned its keep:
   forged/foreign marker → rmtree rights (marker content now validated,

@@ -53,10 +53,11 @@ one adapter module + tests over the same core. Phase boundaries get a
   real CLI). A loud warning states Ollama does not support external
   stores; printed instructions cover `OLLAMA_MODELS=<dest>`,
   `OLLAMA_NOPRUNE=1`, and that `ollama serve` reads the env at
-  startup. The tool never runs Ollama itself. Known caveat: no
-  template/params layers are synthesized — chat-template fidelity
-  for generate-class models is untested (the live test used an
-  embedding model) and is called out in `docs/cli.md`.
+  startup. The tool never runs Ollama itself. No template/params
+  layers are synthesized; chat fidelity holds without them —
+  verified live on the real archive 2026-07-31 (generate-class chat
+  models answered correctly through a seeded view; Ollama falls back
+  to the GGUF's embedded chat template).
 - Eligibility is per-model and reported, never silent: Ollama views
   cover GGUF artifacts only. The command prints a breakdown (scanned /
   eligible / skipped with a reason per skip: safetensors-only,
@@ -162,10 +163,12 @@ v0.32.x era, issue tracker):
   (`model_format`/`architecture`/`os`/`rootfs.diff_ids`) over the
   symlinked blob **lists and serves** — real embeddings returned
   through the seeded symlink, zero payload bytes copied, verified
-  end-to-end through the real CLI against a temp store. Untested
-  remainder: chat-template fidelity for generate-class models (no
-  template layer is synthesized; the live test used an embedding
-  model).
+  end-to-end through the real CLI against a temp store. The one
+  remainder — chat fidelity for generate-class models with no
+  synthesized template layer — closed 2026-07-31: the human live
+  test ran chat models through a seeded view of the real archive and
+  responses rendered correctly (Ollama uses the GGUF's embedded chat
+  template when the manifest carries none).
 
 ## Sketch
 
@@ -180,7 +183,9 @@ shape, link targets, and that the archive tree is untouched
 manual test — seed the view of the real archive, serve it, `ollama
 list`, `ollama run` — passed against the real Ollama install
 alongside the normal default-store server (the hybrid setup in
-`docs/ollama-hybrid.md`).
+`docs/ollama-hybrid.md`). Chat responses rendered correctly, closing
+the template-fidelity caveat: no template layer is needed for
+generate-class models.
 
 ## Phase handoff (2026-07-31, end of phase 1)
 
@@ -196,8 +201,9 @@ command, 41 tests, docs. Facts the next phase inherits:
   llama.cpp / vLLM adapters plug into `build.py`'s `SUPPORTED_TOOLS`
   and reuse it. The scan's GGUF-only eligibility is per-adapter
   selection to generalize (vLLM needs the inverse: hf-snapshot).
-- Open items for later phases: chat-template fidelity through a
-  seeded view (generate-class models; embedding path verified),
-  sharded-GGUF linking, `--model` scoping, and the manifest-v2 watch
-  (Ollama PR #15735 — layout constants carry provenance comments in
-  `views/ollama.py`).
+- Open items for later phases: sharded-GGUF linking, `--model`
+  scoping, and the manifest-v2 watch (Ollama PR #15735 — layout
+  constants carry provenance comments in `views/ollama.py`).
+  Chat-template fidelity was closed 2026-07-31 by the human live
+  test: chat models answer correctly through a seeded view with no
+  synthesized template layer.
