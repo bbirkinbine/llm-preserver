@@ -163,16 +163,24 @@ def default_instructions(archive_root: Path, dest: Path, example_name: str) -> s
 def seed_instructions(dest: Path, entries: list[ViewEntry]) -> str:
     """Next steps printed after a successful seeding run."""
     quoted_dest = shlex.quote(str(dest))
+    example = entries[0].name if entries else "<name>"
     lines = [
         f"seeded view store: {dest}",
         "",
         "1. serve against the seeded store (env is read at startup):",
         f"   OLLAMA_MODELS={quoted_dest} OLLAMA_NOPRUNE=1 ollama serve",
         "",
+        "   or, to run alongside a normal Ollama install, put the view",
+        "   server on its own port (hybrid setup — docs/ollama-hybrid.md):",
+        f"   OLLAMA_MODELS={quoted_dest} OLLAMA_NOPRUNE=1 OLLAMA_HOST=127.0.0.1:11500 ollama serve",
+        "",
         "2. from a second terminal, the models are ready — no ollama",
         "   pull, no ollama create, no network:",
         "   ollama list",
-        *(f"   ollama run {entry.name}" for entry in entries[:1]),
+        f"   ollama run {example}",
+        "",
+        "   hybrid: give each client command the same port:",
+        f"   OLLAMA_HOST=127.0.0.1:11500 ollama run {example}",
     ]
     return "\n".join(lines) + "\n"
 
