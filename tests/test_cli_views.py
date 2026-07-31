@@ -137,7 +137,7 @@ def test_seed_run_prints_loud_warning_and_serve_instructions(
 
     assert result.exit_code == 0
     out = output_of(result)
-    assert "not support" in out.lower()  # Ollama does not support external stores
+    assert "not an officially supported" in out.lower()  # works, but not official
     assert "ollama list" in out  # registered directly; no create step
     assert "OLLAMA_MODELS" in out
     assert "OLLAMA_NOPRUNE=1" in out

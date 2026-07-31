@@ -24,9 +24,10 @@ from llm_preserver.views import (
 from llm_preserver.views.types import ViewError
 
 _SEED_WARNING = (
-    "warning: Ollama does not support external model stores — the "
-    "seeded view is best-effort and an Ollama upgrade may break it; "
-    "the archive itself is never written"
+    "warning: this view works but is not an officially supported "
+    "Ollama setup — an Ollama upgrade may break it, in which case "
+    "re-run --seed-store to regenerate; the archive itself is never "
+    "written and never at risk"
 )
 
 

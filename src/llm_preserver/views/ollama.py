@@ -111,16 +111,21 @@ def default_instructions(dest: Path) -> str:
     """The instructions-only (non-seeding) output."""
     quoted_dest = shlex.quote(str(dest))
     return (
-        "Ollama has no supported in-place mode: its supported import\n"
-        "copies bytes into its own store. Two options:\n"
+        "Ollama cannot run models from an external folder out of the\n"
+        "box — its official import copies the weights into its own\n"
+        "store. Two ways to run archived models:\n"
         "\n"
-        "supported (copies the file into Ollama's store):\n"
+        "option 1 — official, but duplicates the weights on disk:\n"
         "  write a Modelfile containing 'FROM <archive path to a .gguf>'\n"
         "  and run: ollama create <name> -f <Modelfile>\n"
         "\n"
-        "best effort, no copy (unsupported by Ollama):\n"
-        "  re-run with --seed-store to seed a disposable external store\n"
-        f"  at {quoted_dest}, then serve against it with:\n"
+        "option 2 — no copy (what --seed-store does). This works — it\n"
+        "  is verified against the current Ollama — but relies on\n"
+        "  behavior Ollama does not officially support, so a future\n"
+        "  Ollama update could break the view. Only the disposable\n"
+        "  view breaks in that case (regenerate it); the archive is\n"
+        "  never at risk. To use it:\n"
+        "  re-run with --seed-store, then serve against the view with:\n"
         f"  OLLAMA_MODELS={quoted_dest} OLLAMA_NOPRUNE=1 ollama serve\n"
     )
 
