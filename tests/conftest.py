@@ -65,6 +65,8 @@ class FakeHubClient:
         search_error=None,
         list_children_error=None,
         model_summary_error=None,
+        repos=None,
+        repo_info_errors=None,
     ):
         self.files = list(files)
         self.repo_id = repo_id
@@ -84,6 +86,11 @@ class FakeHubClient:
         self.search_error = search_error
         self.list_children_error = list_children_error
         self.model_summary_error = model_summary_error
+        # Match mode (spec 0013): per-repo file lists consulted before
+        # the single-repo default, and per-repo repo_info errors. Both
+        # optional, so existing tests keep the spec-0003 defaults.
+        self.repos = dict(repos) if repos is not None else {}
+        self.repo_info_errors = dict(repo_info_errors) if repo_info_errors is not None else {}
         self.download_calls: list[str] = []
         self.repo_info_calls: list[str] = []
         self.search_calls: list[str] = []
@@ -94,6 +101,8 @@ class FakeHubClient:
         from llm_preserver.hub import RepoFile, RepoInfo
 
         self.repo_info_calls.append(repo_id)
+        if repo_id in self.repo_info_errors:
+            raise self.repo_info_errors[repo_id]
         if self.repo_info_error is not None:
             raise self.repo_info_error
         return RepoInfo(
@@ -104,7 +113,7 @@ class FakeHubClient:
                     size=len(content),
                     sha256=hashlib.sha256(content).hexdigest() if is_lfs else None,
                 )
-                for path, content, is_lfs in self.files
+                for path, content, is_lfs in self.repos.get(repo_id, self.files)
             ],
             base_model=self.base_model,
             pipeline_tag=self.pipeline_tag,

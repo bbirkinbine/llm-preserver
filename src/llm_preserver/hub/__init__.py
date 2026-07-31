@@ -14,6 +14,7 @@ from .errors import (
     PullError,
     PullHubError,
     PullIntegrityError,
+    PullInvalidIdError,
     PullUserError,
     map_hub_exception,
 )
@@ -26,6 +27,7 @@ __all__ = [
     "PullError",
     "PullHubError",
     "PullIntegrityError",
+    "PullInvalidIdError",
     "PullUserError",
     "RepoFile",
     "RepoInfo",

@@ -40,7 +40,10 @@ uv run llm-preserver verify ~/models # audit: every file present, every hash int
 - **`discover`** — covers the step before an exact repo id: searches
   the hub, walks the model tree (originals, quants, fine-tunes — hub
   facts only, the tool never ranks), and lands in the same pull flow.
-  No browser needed.
+  No browser needed. `discover --match-ollama <name:tag>` answers
+  "which hub repo holds the bytes I already run in Ollama?" by SHA256
+  digest — byte-identical or unverified, stated per file, never
+  guessed.
 - **`pull --plan`** — dry run: shows exactly what a pull would
   download (files, sizes, disk check, companion advisories) without
   moving a byte.

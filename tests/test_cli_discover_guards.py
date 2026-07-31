@@ -195,3 +195,114 @@ def test_paged_tree_children_stay_grouped_under_one_header(tmp_path, monkeypatch
     assert final_render.count("finetune versions:") == 1
     last_quant_row = final_render.rindex("q/tiny-")
     assert final_render.index("finetune versions:") > last_quant_row
+
+
+# --- positional contract after spec 0013 made query/path optional ----------
+
+
+def test_discover_with_no_arguments_is_a_clean_exit_2(monkeypatch):
+    # Query/path went Typer-optional for match mode; normal mode must
+    # still refuse to run without them (adversarial round 2026-07-31).
+    monkeypatch.delenv("LLM_PRESERVER_ARCHIVE", raising=False)
+
+    result = runner.invoke(app, ["discover"])
+
+    assert result.exit_code == 2
+    assert "QUERY" in click.unstyle(combined_output(result))
+
+
+def test_discover_query_without_path_or_env_is_a_clean_exit_2(monkeypatch):
+    monkeypatch.delenv("LLM_PRESERVER_ARCHIVE", raising=False)
+
+    result = runner.invoke(app, ["discover", "tiny"])
+
+    assert result.exit_code == 2
+    assert "LLM_PRESERVER_ARCHIVE" in click.unstyle(combined_output(result))
+
+
+def test_env_fallback_still_binds_the_trailing_path(tmp_path, monkeypatch, fake_hub_factory):
+    # The load-bearing binding: with the env var set, `discover QUERY`
+    # must run normal mode against the env archive, not misparse.
+    archive = init_archive_dir(tmp_path)
+    monkeypatch.setenv("LLM_PRESERVER_ARCHIVE", str(archive))
+    client = fake_hub_factory(search_results=[])
+    install_fake_hub(monkeypatch, client)
+
+    result = runner.invoke(app, ["discover", "tiny"])
+
+    assert result.exit_code == 0
+    assert client.search_calls == ["tiny"]
+
+
+def test_match_mode_runs_with_a_bogus_archive_env_set(tmp_path, monkeypatch, fake_hub_factory):
+    # An env-filled `path` must not trip the no-positionals refusal,
+    # and a broken archive env must not matter — match mode never
+    # touches the archive (adversarial round 2026-07-31).
+    import hashlib
+    import json
+
+    from llm_preserver import ollama_layout
+
+    store = tmp_path / "store"
+    manifest = (
+        store
+        / ollama_layout.MANIFESTS_DIRNAME
+        / ollama_layout.REGISTRY_DIRNAME
+        / ollama_layout.DEFAULT_NAMESPACE
+        / "bge-m3"
+        / ollama_layout.DEFAULT_TAG
+    )
+    manifest.parent.mkdir(parents=True)
+    digest = hashlib.sha256(b"m").hexdigest()
+    layer = {
+        "mediaType": "application/vnd.ollama.image.model",
+        "digest": f"sha256:{digest}",
+        "size": 1,
+    }
+    manifest.write_text(json.dumps({"schemaVersion": 2, "layers": [layer]}), encoding="utf-8")
+    monkeypatch.setenv(ollama_layout.MODELS_ENV_VAR, str(store))
+    monkeypatch.setenv("LLM_PRESERVER_ARCHIVE", str(tmp_path / "does-not-exist"))
+    client = fake_hub_factory(search_results=[])
+    install_fake_hub(monkeypatch, client)
+
+    result = runner.invoke(app, ["discover", "--match-ollama", "bge-m3"])
+
+    assert result.exit_code == 0
+    assert client.search_calls == ["bge-m3"]
+
+
+def test_plan_flag_is_refused_in_match_mode(monkeypatch, fake_hub_factory):
+    # --plan promises a pull dry run and match mode never pulls;
+    # refuse loudly instead of silently swallowing the flag
+    # (review round 2026-07-31). Refused before any store or hub read.
+    client = fake_hub_factory(search_results=[])
+    install_fake_hub(monkeypatch, client)
+
+    result = runner.invoke(app, ["discover", "--match-ollama", "bge-m3", "--plan"])
+
+    assert result.exit_code == 2
+    assert "--plan" in click.unstyle(combined_output(result))
+    assert client.search_calls == []
+
+
+def test_limit_without_match_ollama_is_refused(tmp_path, monkeypatch, fake_hub_factory):
+    archive = init_archive_dir(tmp_path)
+    client = fake_hub_factory(search_results=[])
+    install_fake_hub(monkeypatch, client)
+
+    result = runner.invoke(app, ["discover", "tiny", str(archive), "--limit", "50"])
+
+    assert result.exit_code == 2
+    assert "--match-ollama" in click.unstyle(combined_output(result))
+    assert client.search_calls == []
+
+
+def test_limit_outside_the_ceiling_is_refused(monkeypatch, fake_hub_factory):
+    client = fake_hub_factory(search_results=[])
+    install_fake_hub(monkeypatch, client)
+
+    for bad in ("0", "501"):
+        result = runner.invoke(app, ["discover", "--match-ollama", "bge-m3", "--limit", bad])
+        assert result.exit_code == 2
+        assert "between 1 and 500" in click.unstyle(combined_output(result))
+    assert client.search_calls == []

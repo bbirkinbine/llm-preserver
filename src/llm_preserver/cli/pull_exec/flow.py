@@ -17,7 +17,8 @@ from llm_preserver.cli.app import fail
 from llm_preserver.cli.pull_exec.plumbing import exit_for_pull_error
 from llm_preserver.cli.pull_exec.prompts import confirm_or_stop, prompt_for_selection
 from llm_preserver.cli.resume_hint import compose_resume_hint
-from llm_preserver.hub import HubClientProtocol, PullError, RepoInfo
+from llm_preserver.hub import HubClientProtocol, PullError, PullInvalidIdError, RepoInfo
+from llm_preserver.ollama_store import ollama_shape_hint
 from llm_preserver.pull import pull_model, validated_roles
 from llm_preserver.pull_preflight import require_disk_budget
 from llm_preserver.pull_prepare import prepare_pull
@@ -186,5 +187,14 @@ def run_pull(
     except ArchiveError as exc:
         raise fail(str(exc)) from exc
     except PullError as exc:
-        raise exit_for_pull_error(exc) from exc
+        exit_exc = exit_for_pull_error(exc)
+        if isinstance(exc, PullInvalidIdError):
+            # Spec 0013: an Ollama-shaped id gets the deterministic
+            # recovery command appended to the 0011 error. Detection
+            # lives in the error path only; the id is never rewritten
+            # and the exit code is unchanged.
+            shape_hint = ollama_shape_hint(repo_id)
+            if shape_hint is not None:
+                typer.echo(shape_hint, err=True)
+        raise exit_exc from exc
     typer.echo(clean_text(f"pulled {repo_id} into {model_dir}", single_line=True))

@@ -1,4 +1,4 @@
-"""The discover command: deterministic name-to-pull navigation.
+"""Interactive discovery stages: search page, tree hops, pull handoff.
 
 Spec 0006: hub free-text search (the hub's order, verbatim) → typed
 model-tree listing (parents up, children down) → the unmodified pull
@@ -8,21 +8,13 @@ tool never ranks, never selects, never pulls on its own.
 """
 
 from pathlib import Path
-from typing import Annotated
 
 import typer
 
-from llm_preserver.archive import ArchiveError, require_archive
-from llm_preserver.cli.app import ArchivePath, app, fail
-from llm_preserver.cli.pull_exec import (
-    exit_for_pull_error,
-    make_hub_client,
-    run_pull,
-    setup_logging,
-)
+from llm_preserver.cli.pull_exec import run_pull
 from llm_preserver.discover import DiscoveryPage, Option, build_parent_chain, parse_pick
 from llm_preserver.discover_render import render_search_page, render_tree_page
-from llm_preserver.hub import HubClientProtocol, PullError, PullUserError
+from llm_preserver.hub import HubClientProtocol, PullUserError
 from llm_preserver.hub_discovery import ModelSummary, RelationType
 from llm_preserver.render import clean_text
 
@@ -208,7 +200,7 @@ def _prompt_archive_mode() -> bool | None:
         typer.echo("enter 1, 2, or q")
 
 
-def _run_discovery(
+def run_discovery(
     path: Path, client: HubClientProtocol, query: str, plan: bool, hf_logging: bool = False
 ) -> None:
     """Drive search → tree hops → the shared pull core.
@@ -254,41 +246,3 @@ def _run_discovery(
             hf_logging=hf_logging,
         )
         return
-
-
-@app.command()
-def discover(
-    query: Annotated[str, typer.Argument(help="Free-text hub search (the hub's own results).")],
-    # Path comes LAST: Click binds positionals left-to-right, so the
-    # env-var fallback only works when the omittable argument trails.
-    path: ArchivePath,
-    plan: Annotated[
-        bool,
-        typer.Option(
-            "--plan",
-            help="Dry run the final pull: print what it would do, write nothing.",
-        ),
-    ] = False,
-    verbose: Annotated[
-        bool, typer.Option("--verbose", help="Show per-file progress and client detail.")
-    ] = False,
-    hf_logging: Annotated[
-        bool,
-        typer.Option(
-            "--hf-logging",
-            help="Show the HF client's own transfer telemetry (stalls, retries, backoff).",
-        ),
-    ] = False,
-) -> None:
-    """Find a model by name and pull it — search, model tree, pull, no browser."""
-    setup_logging(verbose, hf_logging=hf_logging)
-    # Fail fast on a bad archive path — before any network call.
-    try:
-        require_archive(path)
-    except ArchiveError as exc:
-        raise fail(str(exc)) from exc
-    client = make_hub_client()
-    try:
-        _run_discovery(path, client, query, plan, hf_logging=hf_logging)
-    except PullError as exc:
-        raise exit_for_pull_error(exc) from exc

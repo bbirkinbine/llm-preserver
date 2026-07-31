@@ -155,7 +155,14 @@ resolves fuzzy names. A value that is not a valid hub repo id — an
 Ollama `name:tag` reference (`qwen3-vl:30b-a3b-instruct`) pasted in by
 habit is the common case — is rejected with a one-line error and
 exit 2, not a stack trace; search the hub by name with the `discover`
-command to find the exact id. The pull downloads the selected files plus the
+command to find the exact id. When the rejected value is
+Ollama-shaped, the error adds the recovery command: an Ollama
+`name:tag` points at `discover <name>` and
+`discover --match-ollama <name:tag>` (see the discover section), and
+Ollama's `hf.co/<org>/<repo>[:<quant>]` pull syntax gets its exact
+mechanical translation (`pull <org>/<repo>`, the quant shown as an
+`--include` hint). Detection lives in the error path only — no id is
+ever rewritten or auto-corrected, and the exit code stays 2. The pull downloads the selected files plus the
 repo's README/model card and LICENSE, records a SHA256 for every file,
 pins the resolved commit hash, and writes the model record
 (`model-record.json` + rendered `MODEL-RECORD.md`). Archived payload
@@ -534,6 +541,74 @@ as `pull` (network 3, hub-side 4). Discovery is deliberately
 interactive-only: scripts already have exact repo ids, `--include`,
 `--yes`, and `--plan`. The tool shows facts and takes your picks — it
 never recommends, scores, or auto-selects.
+
+### discover --match-ollama — which hub repo holds these bytes?
+
+For when you already *run* a model in Ollama and want to archive the
+same build — not a same-named near-miss whose outputs subtly diverge.
+Ollama's store is content-addressed and Hugging Face publishes per-file
+SHA256s, so byte-identity is checkable with metadata calls alone:
+
+```bash
+llm-preserver discover --match-ollama bge-m3:latest
+# ollama store: /Users/you/.ollama/models
+# local bge-m3:latest — model layer sha256: 4bf5cf…
+# checking the first 20 hub search results for 'bge-m3' (the hub's relevance order):
+# gpustack/bge-m3-GGUF
+#   bge-m3-FP16.gguf  1157671200 bytes  byte-identical to the local model
+#   bge-m3-Q4_K_M.gguf  437778496 bytes  unverified
+#   ...
+# CompendiumLabs/bge-m3-gguf
+#   bge-m3-f16.gguf  1157671200 bytes  unverified
+#
+# 15 of 20 results have no GGUF files: BAAI/bge-m3, Xenova/bge-m3, …
+#
+# 1 byte-identical match — run this to archive it:
+#   gpustack/bge-m3-GGUF  —  181142 downloads · 2025-07-14
+#     llm-preserver pull gpustack/bge-m3-GGUF --include bge-m3-FP16.gguf
+```
+
+Reads the model-layer digest from the local Ollama manifest
+(read-only, no Ollama server needed). The store is found by a fixed,
+disclosed probe: `$OLLAMA_MODELS` when set (an explicit override —
+never a fallback chain), else `~/.ollama/models` (macOS, Windows,
+manual Linux runs), else `/usr/share/ollama/.ollama/models` (Linux
+system installs); the first line of output names the store that was
+read, and a miss on every candidate names each path checked. It then
+searches the hub with the tag-stripped model name (`--search <term>`
+overrides) and fetches each candidate's file listing — metadata only,
+nothing downloaded, nothing hashed. By default the first 20 search
+results are checked; `--limit <n>` (max 500) pages deeper for models
+whose byte-identical repo ranks low — a low-download re-upload of a
+niche model is exactly the repo this mode exists to find. Each result
+costs one hub metadata call, which is why deeper scans are an
+explicit ask, not the default. Each
+candidate GGUF gets a stated fact: **byte-identical** (SHA256 equals
+the local blob), or **unverified** with its size, so a same-size
+different-digest file is visibly a near-miss (a different converter
+run), not a match. Candidates stay in the hub's order; repos with no
+GGUF files roll up into one summary line, and the matches print in a
+footer as the final output — the last line is the exact
+`pull --include` command that archives exactly those bytes. When
+several repos match, they all hold the same bytes and any one pull
+suffices; each match line carries the repo's hub facts (downloads ·
+last-modified · gated — the same facts search rows show) so you can
+pick by provenance. Facts, never a ranking. The tool
+never pulls — paste the command yourself (append the archive path if
+`$LLM_PRESERVER_ARCHIVE` isn't set, and add `--model` grouping if you
+want to direct the home).
+
+Boundaries worth knowing: match mode takes no positional arguments,
+never touches the archive, and refuses `--plan` (it promises a pull
+dry run, and match mode never pulls); a candidate whose metadata fails
+to load is noted and the scan continues; "no exact match was verified" is a
+successful scan (exit 0) — the facts just came back negative. A
+missing store or unknown model name exits 2 naming what was looked for
+and where. Matching is only as good as the name-search candidates:
+hf.co has no search-by-hash, so a model whose repos use unrelated
+names may find nothing even at `--limit 500` — that limitation is
+stated, not worked around with heuristics (no fuzzy matching, ever);
+`--search` with a sharper term is the deterministic lever.
 
 ## status — inventory table
 

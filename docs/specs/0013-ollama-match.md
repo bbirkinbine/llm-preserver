@@ -48,10 +48,15 @@ trap the annotation prevents.
   human pastes it (optionally adding `--model` grouping); the tool
   still never runs it.
 - The local Ollama store is read-only to this feature: the manifest
-  is read from `$OLLAMA_MODELS` when set, else Ollama's default
-  location; nothing under it is ever written, and a missing/unreadable
-  store or unknown model name is a clean exit-2 error naming what was
-  looked for and where.
+  is read from `$OLLAMA_MODELS` when set (an explicit override, never
+  a fallback chain), else the first existing of `~/.ollama/models`
+  and the Linux system-install root
+  `/usr/share/ollama/.ollama/models` — a fixed documented probe
+  order, with the chosen store disclosed in the output (adjudicated
+  2026-07-31: a stock Linux service install must work out of the
+  box). Nothing under the store is ever written, and a
+  missing/unreadable store or unknown model name is a clean exit-2
+  error naming what was looked for and every path checked.
 - No byte-identical candidate found is a clear, non-error outcome:
   the listing still prints (with sizes), states that no exact match
   was verified, and notes that archiving a near-miss archives a
@@ -87,7 +92,74 @@ trap the annotation prevents.
   model whose repos use unrelated names may find no candidates. That
   limitation is documented, not worked around with heuristics.
 
+## External references
+
+Values whose correctness depends on an external authority; all
+fetched in-session and pinned with a provenance comment where the
+value is defined (`src/llm_preserver/ollama_layout.py` unless noted).
+Ollama is MIT-licensed — consulted, never copied.
+
+- Default store root (`~/.ollama/models`; Linux system installs use
+  `/usr/share/ollama/.ollama/models`) and the `OLLAMA_MODELS`
+  override: https://docs.ollama.com/faq, fetched 2026-07-31.
+- Name defaults for omitted components (registry `registry.ollama.ai`,
+  namespace `library`, tag `latest`): github.com/ollama/ollama
+  `types/model/name.go` (`defaultHost` / `defaultNamespace` /
+  `defaultTag`), fetched 2026-07-31.
+- Manifest tree layout (`manifests/<registry>/<namespace>/<model>/<tag>`)
+  and the model-layer media type
+  (`application/vnd.ollama.image.model`): github.com/ollama/ollama
+  `manifest/paths.go` and `manifest/layer.go`, fetched 2026-07-30
+  during spec 0002, confirmed against a real store on this machine;
+  constants shared with the views adapter via `ollama_layout.py`.
+  Watch: open Ollama PR #15735 ("manifest-v2") would move the
+  manifest tree.
+- Per-file SHA256s from the hub: the existing seam's
+  `RepoFile.sha256` (LFS metadata via `huggingface_hub` repo tree,
+  provenance pinned with spec 0003's references) — verified at
+  implementation time; no new hub surface was added.
+
 ## Notes
+
+- **Live-verified 2026-07-31** on the real store and real hub:
+  `discover --match-ollama bge-m3:latest` read the local digest with
+  no server, listed 20 candidates in hub order, marked exactly
+  gpustack/bge-m3-GGUF's FP16 byte-identical, and every other GGUF
+  (including same-family quants) unverified. (lm-kit/bge-m3-gguf, the
+  second by-hand match, sat outside the hub's first 20 for `bge-m3` —
+  the disclosed first-page cap, working as designed.)
+- **Output-shape adjudication (Brian, 2026-07-31, from that run):**
+  the first rendering buried the one actionable line in twenty
+  candidate blocks ("lost in a wall of text"). Repos with no GGUF
+  files now roll up into a single summary line, and the pasteable
+  command moved to a footer as the final output line ("run this to
+  archive it:"), per the 0007 stance that the line to paste sits
+  directly above the next prompt.
+- **Depth adjudication (Brian, 2026-07-31):** `--limit <n>` (max 500,
+  default the first search page) pages deeper for models whose
+  byte-identical repo ranks low. Evidence from the live run: the
+  second true bge-m3 match (lm-kit) sat beyond the first 20 results.
+  Default stays shallow because every candidate costs one hub
+  metadata call; an unbounded `--all` was rejected (rate-limited API,
+  no benefit over a large explicit number). The 500 ceiling held on
+  re-examination after a live `--limit 500` run found six matches:
+  byte-identical matches are the same bytes, so one hit suffices —
+  depth past 500 only matters at zero matches, where a sharper
+  `--search` is the stronger lever.
+- **Depth-run adjudications (Brian, 2026-07-31, from the live
+  `--limit 500` run):** the no-GGUF roll-up truncates at ten names
+  plus a count (440 names was a wall of its own), and a multi-match
+  footer says "all the same bytes; run any ONE" — six identical
+  commands must not read as six required pulls. Each footer match
+  also carries the repo's hub facts (downloads · last-modified ·
+  gated, via the shared `summary_facts` renderer): identical bytes
+  leave uploader provenance as the only pick criterion, and those
+  are the facts to pick with. Facts, never a ranking — order stays
+  the hub's.
+- **Store-root adjudication (Brian, 2026-07-31):** fixed-order probe
+  (`$OLLAMA_MODELS` as sole candidate when set, else user-local root,
+  else the Linux system-install root), chosen store disclosed; and
+  `--plan` is refused in match mode rather than silently ignored.
 
 - Hard-won facts from the by-hand run (2026-07-31, recorded in
   TODO.md): local manifest at
