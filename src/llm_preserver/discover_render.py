@@ -18,7 +18,7 @@ def _line(text: str) -> str:
     return clean_text(text, single_line=True)
 
 
-def _facts(summary: ModelSummary) -> str:
+def summary_facts(summary: ModelSummary) -> str:
     """Render a row's hub facts; absent facts are omitted, never None."""
     parts = []
     if summary.downloads is not None:
@@ -47,7 +47,8 @@ def render_search_page(
     """
     lines = [_line(f"hub search results for '{query}' (the hub's relevance order):")]
     lines.extend(
-        _line(f"  {number}. {row.repo_id}{_facts(row)}") for number, row in enumerate(rows, start=1)
+        _line(f"  {number}. {row.repo_id}{summary_facts(row)}")
+        for number, row in enumerate(rows, start=1)
     )
     if not exhausted:
         lines.append(f"showing {fetched} — more available (m)")
@@ -113,7 +114,7 @@ def render_tree_page(
             entry = f"{link.requested_id} — renamed, now {link.summary.repo_id}"
         else:
             entry = link.summary.repo_id
-        lines.append(_line(f"  {number}. {branch}{entry}{_facts(link.summary)}{root_tag}"))
+        lines.append(_line(f"  {number}. {branch}{entry}{summary_facts(link.summary)}{root_tag}"))
         number += 1
         depth += 1
     if parents:
@@ -128,7 +129,7 @@ def render_tree_page(
         if child.relation != previous_relation:
             lines.append(_line(f"{child.relation or 'related'} versions:"))
             previous_relation = child.relation
-        lines.append(_line(f"  {number}. {child.repo_id}{_facts(child)}"))
+        lines.append(_line(f"  {number}. {child.repo_id}{summary_facts(child)}"))
         number += 1
     lines.append(_line(f"  0. pull this repo ({current.repo_id})"))
     if more_available:

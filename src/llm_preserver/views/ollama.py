@@ -11,17 +11,14 @@ manifest per minted name. Verified live the same day: the synthesized
 store lists and *serves* through the symlink with zero payload bytes
 copied.
 
-Store layout facts (external authority, fetched in-session
+Store layout constants live in :mod:`llm_preserver.ollama_layout`
+(shared with the spec 0013 match reader; provenance pinned there).
+Facts specific to this adapter (external authority, fetched in-session
 2026-07-30; Ollama is MIT-licensed, consulted not copied):
 
-- Blob path is ``$OLLAMA_MODELS/blobs/sha256-<64 hex>``, digest =
-  SHA256 of the file bytes; manifests live at
-  ``manifests/<registry>/<namespace>/<model>/<tag>`` with
-  ``schemaVersion: 2`` docker media types and ``sha256:<hex>``-form
-  digests. Source: github.com/ollama/ollama ``manifest/paths.go``,
+- Manifests use ``schemaVersion: 2`` docker media types and
+  ``sha256:<hex>``-form digests. Source: github.com/ollama/ollama
   ``manifest/layer.go``, plus a real store inspected on this machine.
-  Watch: open PR #15735 ("manifest-v2") would move the manifest tree —
-  re-verify on Ollama upgrades.
 - ``OLLAMA_MODELS`` requires read-write; ``OLLAMA_NOPRUNE=1`` disables
   the startup prune pass that deletes manifest-unreferenced blobs.
   Sources: https://docs.ollama.com/faq, ``envconfig/config.go``.
@@ -36,12 +33,14 @@ import re
 import shlex
 from pathlib import Path
 
+from llm_preserver.ollama_layout import (
+    BLOB_PREFIX,
+    BLOBS_DIRNAME,
+    MANIFESTS_DIRNAME,
+    MODEL_LAYER_MEDIA_TYPE,
+    REGISTRY_DIRNAME,
+)
 from llm_preserver.views.types import ModelViewSources, ViewEntry, ViewError, ViewSourceFile
-
-BLOBS_DIRNAME = "blobs"
-BLOB_PREFIX = "sha256-"
-MANIFESTS_DIRNAME = "manifests"
-REGISTRY_DIRNAME = "registry.ollama.ai"
 
 _TAG_SAFE_RE = re.compile(r"[^a-z0-9._-]")
 _HEX64_RE = re.compile(r"[0-9a-f]{64}")
@@ -272,7 +271,7 @@ def _write_registration(
         },
         "layers": [
             {
-                "mediaType": "application/vnd.ollama.image.model",
+                "mediaType": MODEL_LAYER_MEDIA_TYPE,
                 "digest": f"sha256:{model_digest}",
                 "size": size or 0,
             }

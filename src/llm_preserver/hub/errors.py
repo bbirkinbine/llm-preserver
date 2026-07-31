@@ -22,6 +22,15 @@ class PullUserError(PullError):
     """User-input fault: unknown repo/revision/file, gated repo, bad flags."""
 
 
+class PullInvalidIdError(PullUserError):
+    """The repo id's shape was rejected client-side (spec 0011).
+
+    Same fault domain and exit code as ``PullUserError``; the subclass
+    lets the CLI add the Ollama-shape hint (spec 0013) to exactly this
+    failure — the typed id never reached the network.
+    """
+
+
 class PullEnvError(PullError):
     """Local-environment fault: network unreachable, disk full, offline mode."""
 
@@ -69,7 +78,7 @@ def map_hub_exception(exc: Exception) -> PullError:
         # hub `<org>/<name>` id is expected — spec 0011). A user-input
         # fault (exit 2), not an environment failure; point at the
         # deterministic recovery path.
-        return PullUserError(
+        return PullInvalidIdError(
             f"not a valid Hugging Face repo id (expected '<org>/<name>'): {exc}; "
             "search the hub for the model by name with `llm-preserver discover <query>`"
         )

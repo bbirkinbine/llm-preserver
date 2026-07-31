@@ -61,6 +61,36 @@ uv run llm-preserver verify ~/models # audit: every file present, every hash int
   targets Ollama (best effort — Ollama has no supported external-store
   mode, and the command says so loudly).
 
+### Using with Ollama
+
+Two commands connect the archive to a local Ollama, one in each
+direction:
+
+- **Archive what you already run** — `discover --match-ollama
+  <name[:tag]>` reads the model's SHA256 from Ollama's local store
+  and checks which Hugging Face repos hold byte-identical GGUFs
+  (same-named repos often carry different builds whose outputs
+  diverge; the digest settles it). The last line of output is the
+  exact `pull` command to paste:
+
+  ```bash
+  llm-preserver discover --match-ollama bge-m3:latest
+  # ...
+  # 1 byte-identical match — run this to archive it:
+  #   gpustack/bge-m3-GGUF  —  181142 downloads · 2025-07-14
+  #     llm-preserver pull gpustack/bge-m3-GGUF --include bge-m3-FP16.gguf
+  ```
+
+- **Run what you've archived** — `views --seed-store` builds a
+  disposable Ollama-shaped store of symlinks pointing into the
+  archive, so archived models `ollama list` and serve in place with
+  zero bytes copied. The recommended day-to-day shape runs that view
+  server alongside a normal Ollama install on a second port — the
+  worked setup lives in [`docs/ollama-hybrid.md`](docs/ollama-hybrid.md).
+
+Both are detailed in [`docs/cli.md`](docs/cli.md) (the
+`discover --match-ollama` and `views` sections).
+
 ### Install the command on your PATH (optional, recommended)
 
 `uv run` works only from the project directory. To run `llm-preserver`

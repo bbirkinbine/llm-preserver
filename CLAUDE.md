@@ -350,7 +350,42 @@ parallelize only with partitioned file ownership.
   drives it; agents do not `rm` inside an archive. Tests use tmp dirs,
   never a real archive.
 
-## Open work / current state (updated 2026-07-31, end of session 14)
+## Open work / current state (updated 2026-07-31, end of session 15)
+
+- **Session 15 (2026-07-31, medium-tier, PR #22): spec 0013 Ollama
+  match shipped.** `discover --match-ollama <name[:tag]>`: local
+  manifest digest (read-only; fixed-order store probe — $OLLAMA_MODELS
+  sole candidate when set, else user-local, else Linux system root —
+  disclosed in output) matched against per-file LFS SHA256s the seam's
+  `RepoFile.sha256` already carried (no seam extension needed);
+  verdicts byte-identical/unverified-with-size in hub order; matches
+  in a footer whose last line is the pasteable `pull --include`
+  command plus hub facts (shared `summary_facts` renderer) for
+  provenance picking among identical bytes. `--search` overrides the
+  term, `--limit` (max 500) pages deeper. Phase B (0011 deferral):
+  `PullInvalidIdError` + `ollama_shape_hint` append the recovery
+  command to pull's invalid-id error; alphabet-gated tokens only.
+  Store layout constants extracted to `ollama_layout.py` (shared with
+  views); `discover_cmd.py` → package (command/flow). Review round
+  (reviewer + adversarial + security, PoC-driven) earned its keep:
+  fnmatch-breaking filenames made the pasteable command archive
+  nothing (glob.escape + suppress-on-scrub-change), `/` and `..` in
+  name components reached manifest paths (alphabet gate at parse),
+  RecursionError traceback on hostile manifest JSON (0011/0012
+  class), leading-dash tokens in hint text. FOUR live-use
+  adjudications from Brian's real bge-m3 runs: pasteable command was
+  buried in a wall of text (no-GGUF roll-up + command-as-final-line
+  footer); roll-up itself became a 440-name wall at --limit 500
+  (truncate at 10 + count); multi-match footer must say "run any ONE"
+  (six matches are the same bytes); Linux system installs must work
+  out of the box (the store probe). Hard-won facts: matcher
+  live-verified twice (1 match at depth 20, 6 at 500 — the tool
+  out-found the by-hand run); one byte-identical hit suffices, so the
+  500 ceiling holds (zero-match depth is --search's job); earlier the
+  same session, PR #21 (rebase-merged) added the hybrid pointer to
+  the print-only views output. Deferred: real-store manifest as a
+  checked-in fixture (only the human can capture it); phase B hint
+  not yet eyeballed live (tests cover it). 736 tests.
 
 - **Session 14 (2026-07-30/31, medium-tier, PR #20): spec 0002 phase 1
   (runtime views, Ollama) shipped.** The `views` command: record-driven
@@ -582,13 +617,14 @@ parallelize only with partitioned file ownership.
   interrupted early, before any weight shard landed. `test_cli_verify`
   split further: `--staging` deep view vs `test_cli_verify_footer.py`
   for the footer, both under the 300-line cap. 595 tests.
-- **Next spec (0013): pick from TODO.md** — runtime views (0002,
-  unblocked), smoke test, or the interactive-listing TUI (three
-  independent live-use requests during 0006). Also queued from live
-  use: goal-definitive archiving (capability report in `status`),
-  file-kind dictionary, live-hub canary (0000 roadmap).
+- **Next spec (0014): pick from TODO.md** — smoke test, spec 0002's
+  later adapter phases (LM Studio / llama.cpp / vLLM), or the
+  interactive-listing TUI. Also queued from live use: goal-definitive
+  archiving (capability report in `status`), file-kind dictionary,
+  live-hub canary (0000 roadmap).
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
-  (draft, unblocked); 0005/0006/0007/0008/0009/0010/0011/0012 shipped.
+  in progress — phase 1 shipped (PR #20), later adapters open;
+  0005–0013 shipped.
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to
