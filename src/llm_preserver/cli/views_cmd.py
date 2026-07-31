@@ -158,4 +158,5 @@ def views(
                 single_line=True,
             )
         )
+    typer.echo("")  # breathing room between the breakdown and the flow
     _echo_multiline(result.instructions)
