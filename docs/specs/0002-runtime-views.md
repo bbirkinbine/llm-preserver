@@ -176,6 +176,12 @@ assumption. Tests build a fake archive in `tmp_path` and assert view
 shape, link targets, and that the archive tree is untouched
 (read-only bit respected).
 
+**Live-verified on the real archive, 2026-07-31 (human run):** the
+manual test — seed the view of the real archive, serve it, `ollama
+list`, `ollama run` — passed against the real Ollama install
+alongside the normal default-store server (the hybrid setup in
+`docs/ollama-hybrid.md`).
+
 ## Phase handoff (2026-07-31, end of phase 1)
 
 Phase 1 shipped in PR #20: the `views` package (`sources` scan, `dest`
