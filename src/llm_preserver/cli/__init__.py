@@ -1,4 +1,4 @@
-"""Typer CLI package: init, status, show, pull, discover, verify, remove.
+"""Typer CLI package: init, status, show, pull, discover, verify, remove, views.
 
 Split from a single ``cli.py`` at the 300-line rule. The public API is
 unchanged: ``app`` (the Typer application, also the console-script
@@ -15,6 +15,7 @@ from . import (  # noqa: F401  (importing registers the commands)
     pull_cmd,
     remove_cmd,
     verify_cmd,
+    views_cmd,
 )
 from .app import app
 

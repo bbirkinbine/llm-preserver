@@ -55,6 +55,11 @@ uv run llm-preserver verify ~/models # audit: every file present, every hash int
   model, or a `--include` pattern subset (a quant swap), with the
   record, files, and interrupted-pull staging kept consistent. Always
   previews before it deletes.
+- **`views`** — makes runtimes able to run archived models *in place*:
+  a disposable tree of symlinks and generated paperwork outside the
+  archive, pointing into it (the archive stays read-only). Phase 1
+  targets Ollama (best effort — Ollama has no supported external-store
+  mode, and the command says so loudly).
 
 ### Install the command on your PATH (optional, recommended)
 

@@ -7,9 +7,11 @@ Check items off as they ship; update when priorities shift.
 
 ## Next spec (0013) — pick one
 
-- [ ] **Runtime views** (spec 0002, drafted): symlink/config views so
-  runtimes run archived models in place. Its blocker (the download
-  specs) is lifted — this is what makes the archive *usable* daily.
+- [ ] **Runtime views** (spec 0002, in progress on
+  `spec-0002-runtime-views`): symlink/config views so runtimes run
+  archived models in place. Phase 1 (shared core + Ollama adapter)
+  is underway; LM Studio / llama.cpp / vLLM adapters are later
+  phases on the same spec.
 - [ ] **Smoke test**: load an archived model offline in a local
   runtime (llama.cpp / ollama), check a trivial deterministic
   prompt, record the result in the record's `runtime_tested` field
@@ -180,6 +182,14 @@ Check items off as they ship; update when priorities shift.
 - [ ] Retire/tombstone mode for `remove` (deferred from 0010): delete
   payload but keep the record as archive history. Out until a live
   need shows up — 0010 read "remove/retire" as a single `remove`.
+- [ ] Ollama-shape detection in `pull`'s invalid-id error (upgrades
+  the item deferred from spec 0011; scoped 2026-07-30 during 0002
+  planning): when the rejected id looks like an Ollama name, say so.
+  Two shapes, both mechanical: `name:tag` has no Hugging Face
+  equivalent — point at `discover <name>`; `hf.co/<org>/<repo>:<quant>`
+  maps exactly — show the translated `pull <org>/<repo>` (and the
+  quant as an `--include` hint). Detection stays in the error path
+  only; no id rewriting, no guessing.
 - [ ] Extend `render.clean_text`'s scrub beyond C0/C1 controls to
   Unicode bidi/format characters (U+202A–202E, U+2066–2069,
   zero-width set): hub-supplied text could visually reorder a
