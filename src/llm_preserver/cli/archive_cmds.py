@@ -19,6 +19,7 @@ from llm_preserver.archive import (
     require_archive,
 )
 from llm_preserver.cli.app import ArchivePath, app, fail
+from llm_preserver.pull_preflight import human_size
 from llm_preserver.records import (
     ID_COMPONENT_RE,
     RECORD_FILENAME,
@@ -89,12 +90,12 @@ def status(path: ArchivePath) -> None:
             clean_text(summary.model_id, single_line=True),
             ",".join(summary.formats) or "-",
             ",".join(summary.roles) or _roleless_cell(summary),
-            str(summary.total_size),
+            human_size(summary.total_size),
             _completeness(summary),
         )
         for summary in summaries
     ]
-    header = ("model", "formats", "roles", "size (bytes)", "completeness")
+    header = ("model", "formats", "roles", "size", "completeness")
     widths = [max(len(row[i]) for row in [header, *rows]) for i in range(len(header))]
     for row in [header, *rows]:
         typer.echo("  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True)))

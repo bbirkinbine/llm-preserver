@@ -633,8 +633,10 @@ uv run llm-preserver status ~/models
 ```
 
 One row per archived model: roles (role-less models group under
-"(no role)"), formats, completeness. The fast answer to "what is on
-the shelf."
+"(no role)"), formats, human-readable size (binary units, the same
+rendering as pull's confirmations and remove's previews), completeness.
+The fast answer to "what is on the shelf." Exact byte counts live in
+`show`.
 
 ## show — one model's record
 
