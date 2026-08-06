@@ -5,7 +5,22 @@ What's next, in rough order. Feature detail lives in
 and the numbered specs; this file is the short-term working list.
 Check items off as they ship; update when priorities shift.
 
-## Next spec (0016) — pick one
+## In progress
+
+- [ ] **0016 artifact classification and lineage** — specced and
+  planned 2026-08-06; ADR 0002 accepted. Taxonomy settled
+  (`adapter | quant | full-weights | unknown`), every design question
+  resolved in the spec's `## Implementation plan`. Shipping in two
+  PRs: **(a) docs + ADR + spec**, which document behavior that already
+  exists and need not wait, then **(b) implementation** as four
+  checkpointed passes — schema v3, classifier + pull wiring,
+  derivation + prose, hardening + docs sweep. Phase 2 (`status` shelf
+  view, criterion 4) follows separately. Companion doc
+  [`docs/what-to-archive.md`](docs/what-to-archive.md) answers the
+  live question ("I have a Q4 — what else do I need?") against today's
+  tool.
+
+## Next spec (0017) — pick one
 
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
   PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over
@@ -33,26 +48,19 @@ Check items off as they ship; update when priorities shift.
   what remains for a TUI is `pull`'s file listing plus the
   nice-to-haves a plain-print flow cannot do — arrow-key highlight,
   type-to-filter.
-- [ ] **Artifact classification and lineage requirements** (Brian,
-  2026-08-06): let tree discovery show lineage without implying a
-  recursive download. Classify each repo/artifact as one of
-  `full-checkpoint`, `merged`, `adapter`, `quant`, or `base`, and
-  record it: `artifact_type`, `base_model`, `parent_models`,
-  `requires_base: true|false`, `reconstructable: yes|no|unknown`,
-  `archive_policy: runnable|reconstruction|provenance-only`. Detect
-  adapter-style repos from markers — `adapter_config.json`, PEFT
-  metadata, or safetensors far smaller than the claimed base — and
-  warn when an artifact needs the exact base *revision* to be useful
-  offline. Treat `base_model` on a full checkpoint as provenance,
-  never an automatic recursive pull. Optionally promote common roots
-  (Qwen / Llama / Mistral base and instruct) into a canonical-roots
-  shelf. Notes: the classifier must stay deterministic and
-  marker-driven (0000: no tool judgment); the size-ratio heuristic
-  needs a stated threshold and an `unknown` verdict rather than a
-  guess; `requires_base` is the field that makes "I archived it but
-  it will not run" visible before the download, which is the point.
-  Touches the record schema, so it wants an ADR or an explicit
-  migration note for records written by 0001-0015.
+Artifact classification and lineage moved out of this list on
+2026-08-06 — it is now spec 0016, above. Two ideas from the original
+queue entry did **not** make the spec and stay open here:
+
+- [ ] **Canonical-roots shelf**: promote common roots (Qwen / Llama /
+  Mistral base and instruct) into a curated set worth holding on their
+  own, independent of what derives from them. Dropped from 0016 as
+  curation policy rather than classification.
+- [ ] **Size-ratio threshold** as an adapter marker ("safetensors far
+  smaller than the claimed base"). 0016 keeps it only as a fallback
+  behind `adapter_config.json` and requires a stated threshold plus an
+  `unknown` verdict; if the config marker proves sufficient in
+  practice, drop the heuristic entirely.
 
 ## Shipped
 

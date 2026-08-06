@@ -695,7 +695,26 @@ parallelize only with partitioned file ownership.
   interrupted early, before any weight shard landed. `test_cli_verify`
   split further: `--staging` deep view vs `test_cli_verify_footer.py`
   for the footer, both under the 300-line cap. 595 tests.
-- **Next spec (0016): pick from TODO.md** — smoke test, spec 0002's
+- **Spec 0016 specced and planned 2026-08-06, not yet implemented.**
+  ADR 0002 **accepted**; spec `draft` with its phase-1 plan and every
+  design question resolved inline (see its `## Implementation plan`).
+  `artifact_type` is `adapter | quant | full-weights | unknown` —
+  collapsed from five because `merged` is a claim about history no
+  file proves (mergekit writes only a README model card) and
+  `full-checkpoint` vs `base` is lineage, not artifact type.
+  Stored: `artifact_type` + evidence, `base_model`, `parent_models`.
+  Derived at read time, never stored: needs-a-base, base-satisfied,
+  derivable — storing them is a staleness bug, since each is a
+  function of state that changes after the write. **Split into two
+  PRs by decision 2026-08-06:** docs + ADR + spec land first (they
+  document behavior that already exists), then implementation runs as
+  four checkpointed passes on its own branch. Hard-won from planning:
+  classification must be written inside `update_record` *before*
+  `write_manifest`, or the manifest's anticipated record hash is wrong
+  and `verify` calls the record invalid forever; and `pull_advisory.py`
+  is already 304 lines, over the cap, which pass 3's shared
+  archive-walk extraction happens to fix.
+- **Next spec (0017): pick from TODO.md** — smoke test, spec 0002's
   later adapter phases (LM Studio / llama.cpp / vLLM), or the
   interactive-listing TUI (whose `discover` half spec 0015 took; what
   remains is `pull`'s file listing plus arrow-key/type-to-filter).
