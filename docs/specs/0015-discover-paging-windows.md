@@ -1,6 +1,6 @@
 # 0015 — Discover paging windows and stable pick numbers
 
-**Status:** shipping
+**Status:** shipped (PR #25)
 **Last updated:** 2026-08-06
 **Depends on:** 0006
 

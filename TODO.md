@@ -56,6 +56,22 @@ Check items off as they ship; update when priorities shift.
 
 ## Shipped
 
+- 0015 discover paging windows + stable pick numbers (PR #25): both
+  listings now render one terminal-sized window instead of reprinting
+  the whole accumulated list on every `m`, and rows are numbered once
+  as they arrive so a number permanently names a repo. The live-use
+  trigger was scroll pain under `screen`; the bug underneath it was
+  worse — the tree re-sorted children by relation each loop, so a new
+  quantized page displaced already-numbered finetune rows and **60 of
+  80 numbers named a different repo after one `m`**, silently. `b`
+  steps back a page with no network call; fetching is decoupled from
+  display (one page feeds several windows, buffer tops up before a
+  window underfills) with 0006's per-relation granularity untouched.
+  Sizing counts *physical* lines — real hub ids wrap at 80 columns, so
+  a logical-line budget promised one screen and delivered two. Review
+  round (three reviewers, converging) caught the footer advertising
+  numbers the prompt refused, runt one-row frames, and a
+  detached-stdout traceback. 857 tests.
 - 0014 skip confirmations on a nothing-to-do pull (PR #23): a re-pull
   whose whole selection is already archived under a *user-chosen*
   home (the typed repo id, or `--model`) asks no questions — the plan
