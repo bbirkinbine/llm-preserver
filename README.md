@@ -110,6 +110,11 @@ Full command reference — selection patterns, model grouping, roles,
 re-pull/idempotency behavior, exit codes, gated-repo auth — in
 [`docs/cli.md`](docs/cli.md).
 
+Deciding *what* to pull for a given model —
+why a quant alone is a one-way export, and what a backup you can
+re-quantize or fine-tune from actually contains — is
+[`docs/what-to-archive.md`](docs/what-to-archive.md).
+
 ## Repository layout
 
 - `src/llm_preserver/` — the package (CLI + archive/manifest/download logic)
