@@ -5,7 +5,7 @@ What's next, in rough order. Feature detail lives in
 and the numbered specs; this file is the short-term working list.
 Check items off as they ship; update when priorities shift.
 
-## Next spec (0015) — pick one
+## Next spec (0016) — pick one
 
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
   PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over
@@ -27,8 +27,12 @@ Check items off as they ship; update when priorities shift.
   loadable in place, smoke test proves they load.
 - [ ] **Interactive listing TUI** (promoted from smaller items —
   see its entry below for scope): after 0006's live testing, the
-  numbered-pick UX is workable but the scroll pain is real.
-
+  numbered-pick UX is workable but the scroll pain is real. Spec
+  0015 took the `discover` half of this (windowed frames, `b` to
+  step back, numbers that never renumber) with no new dependency;
+  what remains for a TUI is `pull`'s file listing plus the
+  nice-to-haves a plain-print flow cannot do — arrow-key highlight,
+  type-to-filter.
 ## Shipped
 
 - 0014 skip confirmations on a nothing-to-do pull (PR #23): a re-pull
@@ -195,9 +199,11 @@ Check items off as they ship; update when priorities shift.
   The `docs/cli.md` "Archiving for a goal" table is the interim
   reference.
 - [ ] Interactive listing TUI (future spec candidate; live-use
-  2026-07-13): discovery's accumulate-paging re-renders the whole
-  fetched list on every `m` (80+ lines after two pages), and pull's
-  file listing has the same long-scroll problem. A terminal UI —
+  2026-07-13): **the `discover` half of this shipped as spec 0015**
+  — accumulate-paging is gone, frames are windowed to the terminal,
+  and `b` steps back — so what is left here is `pull`'s file
+  listing, which still has the long-scroll problem, plus the
+  interaction affordances plain print cannot reach. A terminal UI —
   scrollable viewport sized to the terminal, arrow-key
   highlight-and-enter selection, optional type-to-filter — replaces
   numbered picks as presentation only; the deterministic

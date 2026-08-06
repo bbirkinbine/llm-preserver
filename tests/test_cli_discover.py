@@ -16,9 +16,12 @@ Interaction contract these tests pin (implementer follows the tests):
 - An empty first search page is not an error: exit 0, no ``error [``
   framing.
 - Numbered rows are navigate picks; "q" quits with exit 0 from any
-  prompt; "m" fetches the hub's next page. Paging ACCUMULATES: the
-  listing re-renders with every fetched row and continuous numbering
-  (row 21 is pick "21" after one "m"), so earlier rows stay pickable.
+  prompt; "m" advances one WINDOW (spec 0015), fetching the hub's next
+  page only when the window runs past the rows already fetched. Rows
+  are numbered once, at append time: no window reprints a row an
+  earlier one showed, numbering runs on across pages (row 21 is pick
+  "21" after one "m"), and a number stays pickable after it scrolls
+  out of the window. "b" steps back one window.
 - Search failures map through the pull fault-domain table
   (``PullHubError`` -> exit 4, "error [hub-side]").
 
@@ -176,6 +179,8 @@ def test_quit_at_search_prompt_exits_0_downloading_nothing(tmp_path, monkeypatch
 def test_first_search_page_caps_at_page_size_and_advertises_more(
     tmp_path, monkeypatch, fake_hub_factory
 ):
+    # Search rows carry no relation, so no section labels are charged
+    # against the 20-line window: page one's 20 rows fill it exactly.
     archive = init_archive_dir(tmp_path)
     client = fake_hub_factory(search_results=paged_rows())
     install_fake_hub(monkeypatch, client)
@@ -186,12 +191,45 @@ def test_first_search_page_caps_at_page_size_and_advertises_more(
     output = unstyled_output(result)
     assert "hub/repo-19" in output  # row 20, last of page one
     assert "hub/repo-20" not in output  # row 21 stays unfetched
-    assert "more available" in output
+    assert "showing 1-20 of 20 — more (m)" in output
+
+
+def test_second_search_window_prints_only_the_rows_page_one_did_not(
+    tmp_path, monkeypatch, fake_hub_factory
+):
+    # The window advances instead of reprinting, and "b" appears once
+    # there is an earlier window to go back to (spec 0015).
+    archive = init_archive_dir(tmp_path)
+    client = fake_hub_factory(search_results=paged_rows())
+    install_fake_hub(monkeypatch, client)
+
+    result = invoke_discover(archive, stdin=type_lines("m", "q"))
+
+    assert result.exit_code == 0
+    output = unstyled_output(result)
+    assert "showing 21-25 of 25 · back (b)" in output
+    assert output.count("hub/repo-00") == 1  # row 1 was not reprinted
+
+
+def test_stepping_back_in_the_search_listing_keeps_the_highest_number(
+    tmp_path, monkeypatch, fake_hub_factory
+):
+    # "b" re-shows window one, but the count it reports is the
+    # sequence's, not the window's: 25 rows have been numbered, and a
+    # number never shrinks back.
+    archive = init_archive_dir(tmp_path)
+    client = fake_hub_factory(search_results=paged_rows())
+    install_fake_hub(monkeypatch, client)
+
+    result = invoke_discover(archive, stdin=type_lines("m", "b", "q"))
+
+    assert result.exit_code == 0
+    assert "showing 1-20 of 25 — more (m)" in unstyled_output(result)
 
 
 def test_more_extends_search_listing_and_row_21_is_pick_21(tmp_path, monkeypatch, fake_hub_factory):
-    # Accumulated numbering: after "m" the listing holds rows 1..25 and
-    # pick "21" navigates into the 21st search result's tree.
+    # Append-only numbering: "m" fetches page two, numbers it 21..25,
+    # and pick "21" navigates into the 21st search result's tree.
     archive = init_archive_dir(tmp_path)
     client = fake_hub_factory(search_results=paged_rows())
     install_fake_hub(monkeypatch, client)

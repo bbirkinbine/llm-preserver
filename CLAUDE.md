@@ -648,11 +648,13 @@ parallelize only with partitioned file ownership.
   interrupted early, before any weight shard landed. `test_cli_verify`
   split further: `--staging` deep view vs `test_cli_verify_footer.py`
   for the footer, both under the 300-line cap. 595 tests.
-- **Next spec (0015): pick from TODO.md** — smoke test, spec 0002's
+- **Next spec (0016): pick from TODO.md** — smoke test, spec 0002's
   later adapter phases (LM Studio / llama.cpp / vLLM), or the
-  interactive-listing TUI. Also queued from live use: goal-definitive
-  archiving (capability report in `status`), file-kind dictionary,
-  live-hub canary (0000 roadmap).
+  interactive-listing TUI (whose `discover` half spec 0015 took; what
+  remains is `pull`'s file listing plus arrow-key/type-to-filter).
+  Also queued from live use: goal-definitive archiving (capability
+  report in `status`), file-kind dictionary, live-hub canary (0000
+  roadmap).
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
   in progress — phase 1 shipped (PR #20), later adapters open;
   0005–0014 shipped.

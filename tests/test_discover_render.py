@@ -1,51 +1,52 @@
-"""Tests for llm_preserver.discover_render — spec 0006, Phase B.
+"""Tests for llm_preserver.discover_render — specs 0006 and 0015.
 
 Pins the pure listing renderers: data in, ``list[str]`` out, no I/O.
-These tests ARE the API contract:
+The window-dependent half — footer wording, key hints, absolute numbers
+in a mid-sequence slice, continued section labels, and the fixed-chrome
+line count — lives in ``test_discover_render_windows.py`` (300-line
+rule). These tests ARE the API contract:
 
     def render_search_page(
-        rows: Sequence[ModelSummary], *, fetched: int, exhausted: bool, query: str
+        rows: Sequence[NumberedRow], *, query: str, footer: WindowFooter | None
     ) -> list[str]
 
     def render_tree_page(
         current: ModelSummary,
-        parents: Sequence[ParentLink],   # nearest parent first (build_parent_chain order)
-        children: Sequence[ModelSummary],  # relation set; pre-grouped, hub order preserved
+        parents: Sequence[ParentLink],    # nearest parent first (build_parent_chain order)
+        children: Sequence[NumberedRow],  # one window's slice, hub order, numbers pre-assigned
         *,
-        more_available: bool,
+        footer: WindowFooter | None,
+        trail: Sequence[str] = (),
+        section_continued: bool = False,
     ) -> list[str]
 
 Rendering contract (substrings and invariants, not exact layout):
 
 - A numbered row's line starts (after any leading whitespace) with
-  ``"N."`` where N is the pick number ``parse_pick`` accepts.
-- Search rows are numbered 1..len(rows) in the order given (the hub's
-  order, never re-sorted).
-- Tree numbering is continuous from 1 across sections: navigable
-  parents (status "ok"/"renamed") in given order, then children in
-  given order, then a final numbered "pull this repo" line for the
-  current repo. A "not-found" parent renders its dead id with a
-  "not found on the hub" note and takes NO number.
-- A "renamed" parent renders one line carrying the requested id, the
-  current id, and the word "renamed".
+  ``"N."`` where N is ``row.number`` — the number assigned when the row
+  was appended (spec 0015), never its position within the slice. Search
+  rows render in the order given (the hub's order, never re-sorted).
+- Tree numbering is continuous across sections: the renderer numbers the
+  navigable parents (status "ok"/"renamed") 1..P itself — the ancestry
+  ladder is pinned, fetched once, never paged — then the children print
+  the numbers they already carry, then the stable "0" pull line for the
+  current repo. A "not-found" parent renders its dead id with a "not
+  found on the hub" note and takes NO number; a "renamed" parent renders
+  one line carrying the requested id, the current id, and "renamed".
 - Each row shows the repo id, the downloads count (raw digits appear
-  somewhere in the line), and the last-modified date (the ISO date
-  part appears); "gated" appears in a row's line only when that row
-  is gated; a None fact never renders as the literal "None".
-- Children are grouped under a header line containing the relation
-  word ("quantized", "finetune", ...), each header appearing once,
-  before its group's rows.
-- The search header names the query; the footer contains
-  "more available" plus the fetched count when not exhausted, and no
-  "more available" wording once exhausted. The tree footer contains
-  "more available" iff ``more_available``.
-- Every hub-supplied string is sanitized via ``render.clean_text`` —
-  no raw ESC byte (``\\x1b``) in any output line, and the sanitized
-  row still renders (hostile rows are cleaned, never dropped).
+  somewhere in the line), and the last-modified date (the ISO date part
+  appears); "gated" appears in a row's line only when that row is gated;
+  a None fact never renders as the literal "None".
+- Children are grouped under a header line containing the relation word
+  ("quantized", "finetune", ...), before its group's rows.
+- Every hub-supplied string is sanitized via ``render.clean_text`` — no
+  raw ESC byte (``\\x1b``) in any output line, and the sanitized row
+  still renders (hostile rows are cleaned, never dropped).
 - Pure and deterministic: equal inputs yield identical lists.
 """
 
 from llm_preserver.discover import ParentLink
+from llm_preserver.discover_paging import NumberedRow, WindowFooter
 from llm_preserver.discover_render import render_search_page, render_tree_page
 from llm_preserver.hub_discovery import ModelSummary
 
@@ -61,6 +62,13 @@ def summary(repo_id, **overrides):
     }
     kwargs.update(overrides)
     return ModelSummary(**kwargs)
+
+
+def numbered(summaries, start=1):
+    """Number summaries from ``start``, the way RowSequence assigns them."""
+    return [
+        NumberedRow(number=start + offset, summary=item) for offset, item in enumerate(summaries)
+    ]
 
 
 def line_with(lines, *fragments):
@@ -93,9 +101,9 @@ def search_rows():
     ]
 
 
-def render_search(rows=None, *, fetched=3, exhausted=True, query="tiny chat"):
+def render_search(rows=None, *, query="tiny chat", footer=None, start=1):
     actual_rows = search_rows() if rows is None else rows
-    return render_search_page(actual_rows, fetched=fetched, exhausted=exhausted, query=query)
+    return render_search_page(numbered(actual_rows, start), query=query, footer=footer)
 
 
 def tree_children():
@@ -122,19 +130,28 @@ def tree_parents():
     ]
 
 
-def render_tree(current=None, parents=(), children=(), *, more_available=False):
+def navigable_count(parents):
+    """How many parent links the renderer numbers (not-found takes no number)."""
+    return sum(1 for link in parents if link.summary is not None and link.status != "not-found")
+
+
+def render_tree(current=None, parents=(), children=(), *, footer=None, trail=(), start=None):
+    """Render a tree frame, numbering children after the pinned ladder."""
+    links = list(parents)
+    child_start = navigable_count(links) + 1 if start is None else start
     return render_tree_page(
         current if current is not None else summary("acme/tiny-chat"),
-        list(parents),
-        list(children),
-        more_available=more_available,
+        links,
+        numbered(list(children), child_start),
+        footer=footer,
+        trail=trail,
     )
 
 
 # --- render_search_page ------------------------------------------------
 
 
-def test_search_rows_numbered_one_based_in_given_order():
+def test_search_rows_print_the_numbers_they_carry():
     lines = render_search()
     assert has_number(line_with(lines, "alpha/one"), 1)
     assert has_number(line_with(lines, "beta/two"), 2)
@@ -162,22 +179,12 @@ def test_gated_marker_appears_only_on_gated_rows():
     assert "gated" not in line_with(lines, "gamma/three")
 
 
-def test_search_footer_advertises_more_with_fetched_count_when_not_exhausted():
-    lines = render_search(fetched=40, exhausted=False)
-    assert "40" in line_with(lines, "more available")
-
-
-def test_search_footer_omits_more_wording_when_exhausted():
-    assert all("more available" not in line for line in render_search(exhausted=True))
-
-
-def test_search_output_names_the_query():
-    assert any("tiny chat" in line for line in render_search())
+def test_search_header_names_the_query_and_the_hubs_order():
+    assert render_search()[0] == "hub search results for 'tiny chat' (the hub's relevance order):"
 
 
 def test_search_sanitizes_hub_escape_bytes_without_dropping_the_row():
-    rows = [summary("evil/\x1b[31mred", downloads=1)]
-    lines = render_search(rows, fetched=1)
+    lines = render_search([summary("evil/\x1b[31mred", downloads=1)])
     assert all("\x1b" not in line for line in lines)
     assert any("evil/" in line for line in lines)
 
@@ -188,6 +195,12 @@ def test_search_rendering_is_deterministic():
 
 
 # --- render_tree_page --------------------------------------------------
+
+
+def test_tree_header_names_the_repo_whose_tree_is_shown():
+    # Every frame is self-sufficient: windowing removes the scrollback
+    # a user could otherwise consult for "which repo am I in" (0015).
+    assert render_tree(children=tree_children())[0] == "model tree for acme/tiny-chat:"
 
 
 def test_ok_parent_link_shows_the_parent_repo_id():
@@ -245,8 +258,7 @@ def test_not_found_parent_takes_no_number_slot():
         ParentLink(requested_id="acme/base", summary=summary("acme/base"), status="ok"),
         ParentLink(requested_id="dead/root", summary=None, status="not-found"),
     ]
-    children = [summary("q/tiny-q4", relation="quantized")]
-    lines = render_tree(parents=parents, children=children)
+    lines = render_tree(parents=parents, children=[summary("q/tiny-q4", relation="quantized")])
     assert has_number(line_with(lines, "acme/base"), 1)
     assert has_number(line_with(lines, "q/tiny-q4"), 2)
     assert has_number(line_with(lines, "pull this repo"), 0)
@@ -254,8 +266,8 @@ def test_not_found_parent_takes_no_number_slot():
 
 def test_pull_current_option_is_the_only_number_on_a_bare_tree():
     lines = render_tree()
-    assert has_number(line_with(lines, "pull this repo"), 0)
-    assert any("acme/tiny-chat" in line for line in lines)
+    numbered_lines = [line for line in lines if line.lstrip().split(".")[0].isdigit()]
+    assert numbered_lines == ["  0. pull this repo (acme/tiny-chat)"]
 
 
 def test_child_row_shows_downloads_and_date():
@@ -270,25 +282,15 @@ def test_gated_child_row_is_marked():
     assert "gated" not in line_with(lines, "q/tiny-q4")
 
 
-def test_tree_footer_advertises_more_when_available():
-    lines = render_tree(children=tree_children(), more_available=True)
-    assert any("more available" in line for line in lines)
-
-
-def test_tree_footer_omits_more_wording_when_exhausted():
-    lines = render_tree(children=tree_children(), more_available=False)
-    assert all("more available" not in line for line in lines)
-
-
 def test_tree_sanitizes_hub_escape_bytes_without_dropping_the_row():
-    children = [summary("evil/\x1b[31mred", relation="quantized")]
-    lines = render_tree(children=children)
+    lines = render_tree(children=[summary("evil/\x1b[31mred", relation="quantized")])
     assert all("\x1b" not in line for line in lines)
     assert any("evil/" in line for line in lines)
 
 
 def test_tree_rendering_is_deterministic():
     # Separately built but equal inputs must yield byte-identical output.
-    first = render_tree(parents=tree_parents(), children=tree_children(), more_available=True)
-    second = render_tree(parents=tree_parents(), children=tree_children(), more_available=True)
+    footer = WindowFooter(first=3, last=5, highest=9, more_available=True, back_available=True)
+    first = render_tree(parents=tree_parents(), children=tree_children(), footer=footer)
+    second = render_tree(parents=tree_parents(), children=tree_children(), footer=footer)
     assert first == second
