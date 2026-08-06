@@ -33,6 +33,27 @@ Check items off as they ship; update when priorities shift.
   what remains for a TUI is `pull`'s file listing plus the
   nice-to-haves a plain-print flow cannot do — arrow-key highlight,
   type-to-filter.
+- [ ] **Artifact classification and lineage requirements** (Brian,
+  2026-08-06): let tree discovery show lineage without implying a
+  recursive download. Classify each repo/artifact as one of
+  `full-checkpoint`, `merged`, `adapter`, `quant`, or `base`, and
+  record it: `artifact_type`, `base_model`, `parent_models`,
+  `requires_base: true|false`, `reconstructable: yes|no|unknown`,
+  `archive_policy: runnable|reconstruction|provenance-only`. Detect
+  adapter-style repos from markers — `adapter_config.json`, PEFT
+  metadata, or safetensors far smaller than the claimed base — and
+  warn when an artifact needs the exact base *revision* to be useful
+  offline. Treat `base_model` on a full checkpoint as provenance,
+  never an automatic recursive pull. Optionally promote common roots
+  (Qwen / Llama / Mistral base and instruct) into a canonical-roots
+  shelf. Notes: the classifier must stay deterministic and
+  marker-driven (0000: no tool judgment); the size-ratio heuristic
+  needs a stated threshold and an `unknown` verdict rather than a
+  guess; `requires_base` is the field that makes "I archived it but
+  it will not run" visible before the download, which is the point.
+  Touches the record schema, so it wants an ADR or an explicit
+  migration note for records written by 0001-0015.
+
 ## Shipped
 
 - 0014 skip confirmations on a nothing-to-do pull (PR #23): a re-pull
