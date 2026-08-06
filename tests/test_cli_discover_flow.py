@@ -242,18 +242,18 @@ def test_navigating_into_renamed_parent_opens_its_current_id_tree(
 
 
 def many_children_client(fake_hub_factory):
-    children_rows = [
-        summary(f"q/child-{i:02d}", relation="quantized") for i in range(PAGE_SIZE + 5)
-    ]
+    rows = [summary(f"q/child-{i:02d}", relation="quantized") for i in range(PAGE_SIZE + 5)]
     return fake_hub_factory(
         repo_id="acme/original-7b",
         base_model=None,
         search_results=[summary("acme/original-7b")],
-        children={("acme/original-7b", "quantized"): children_rows},
+        children={("acme/original-7b", "quantized"): rows},
     )
 
 
-def test_tree_children_first_page_caps_at_page_size(tmp_path, monkeypatch, fake_hub_factory):
+def test_tree_children_first_fetch_caps_at_page_size(tmp_path, monkeypatch, fake_hub_factory):
+    # The fetch cap, not the window: how much of a page renders is
+    # spec 0015's business (test_cli_discover_paging.py).
     archive = init_archive_dir(tmp_path)
     client = many_children_client(fake_hub_factory)
     install_fake_hub(monkeypatch, client)
@@ -262,21 +262,22 @@ def test_tree_children_first_page_caps_at_page_size(tmp_path, monkeypatch, fake_
 
     assert result.exit_code == 0
     output = unstyled_output(result)
-    assert "q/child-19" in output  # child 20, last of page one
-    assert "q/child-20" not in output  # child 21 stays unfetched
-    assert "more available" in output
+    assert "q/child-00" in output  # page one is on screen
+    assert "q/child-20" not in output  # child 21 stays unfetched, and
+    assert "— more (m)" in output  # the footer says there is more
 
 
 def test_tree_more_extends_children_with_continuous_numbering(
     tmp_path, monkeypatch, fake_hub_factory
 ):
-    # After "m" the tree holds children 1..25 (pull this repo is 26);
-    # pick "25" navigates into the 25th child fetched on page two.
+    # Numbering runs on across batches: the first "m" windows over rows
+    # already fetched, the second fetches page two, and the 25th child
+    # is pick "25" (spec 0015: a number is assigned once).
     archive = init_archive_dir(tmp_path)
     client = many_children_client(fake_hub_factory)
     install_fake_hub(monkeypatch, client)
 
-    result = invoke_discover(archive, stdin=type_lines("1", "m", "25", "q"))
+    result = invoke_discover(archive, stdin=type_lines("1", "m", "m", "25", "q"))
 
     assert result.exit_code == 0
     assert "model tree for q/child-24" in unstyled_output(result)

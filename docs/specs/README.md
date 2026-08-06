@@ -44,6 +44,7 @@ line; the source of truth is the spec file, this is a rendered cache. Run
 - [0002 — Runtime views](0002-runtime-views.md)  (in progress — phase 1 (core + Ollama) shipped (PR #20)) — depends on 0001
 - [0013 — Ollama Match](0013-ollama-match.md)  (shipped (PR #22))
 - [0014 — Skip Prompt Already Archived](0014-skip-prompt-already-archived.md)  (shipped (PR #23))
+- [0015 — Discover paging windows and stable pick numbers](0015-discover-paging-windows.md)  (shipped (PR #25)) — depends on 0006
 <!-- specs-status:end -->
 
 ## Numbering

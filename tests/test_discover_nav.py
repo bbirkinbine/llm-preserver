@@ -7,8 +7,8 @@ deterministic. These tests ARE the API contract:
 
     @dataclass(frozen=True)
     class Option:
-        key: str                      # what the user types: "1".."N", "m", "q"
-        kind: Literal["navigate", "select", "more", "quit"]
+        key: str                      # what the user types: "1".."N", "m", "b", "q"
+        kind: Literal["navigate", "select", "more", "back", "quit"]
         summary: ModelSummary | None  # target repo for navigate/select; None otherwise
 
     @dataclass(frozen=True)
@@ -16,6 +16,7 @@ deterministic. These tests ARE the API contract:
         stage: Stage
         options: tuple[Option, ...]   # numbered picks only, keys "1".."N" in display order
         more_available: bool          # True → "m" is a valid pick
+        back_available: bool = False  # True → "b" is a valid pick (spec 0015)
 
     def parse_pick(raw: str, page: DiscoveryPage) -> Option | None
 
@@ -34,7 +35,9 @@ deterministic. These tests ARE the API contract:
 string whose integer value is in ``1..len(options)`` returns
 ``options[value - 1]``; "q" always returns ``Option("q", "quit",
 None)``; "m" returns ``Option("m", "more", None)`` only when
-``more_available`` is True; everything else (empty, zero, out of
+``more_available`` is True; "b" returns ``Option("b", "back", None)``
+only when ``back_available`` is True (spec 0015 — its tests live in
+``test_discover_nav_back.py``); everything else (empty, zero, out of
 range, non-digit garbage) returns None.
 
 ``build_parent_chain`` walks repeated ``base_model`` hops starting

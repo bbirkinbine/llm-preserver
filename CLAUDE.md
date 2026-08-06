@@ -350,7 +350,54 @@ parallelize only with partitioned file ownership.
   drives it; agents do not `rm` inside an archive. Tests use tmp dirs,
   never a real archive.
 
-## Open work / current state (updated 2026-07-31, end of session 16)
+## Open work / current state (updated 2026-08-06, end of session 18)
+
+- **Session 18 (2026-08-06, medium-tier, PR #25): spec 0015 discover
+  paging windows + stable pick numbers shipped.** Live-use trigger:
+  a `mistral 7b instruct 0.2` tree frame scrolled off the top with no
+  way back under `screen`. That was the visible half; the review of
+  the paging code found the real defect — `_tree_stage` kept children
+  in a flat list **re-sorted by relation every loop**, so a newly
+  fetched quantized page was inserted ahead of finetune rows already
+  numbered on screen: measured, **60 of 80 pick numbers named a
+  different repo after one `m`**, silently (read a number, press `m`,
+  type it, land somewhere else). The existing regression test could
+  not catch it — single relation, where the re-sort is a no-op. Fix:
+  rows numbered once on arrival (`RowSequence`, never re-sorted), one
+  terminal-sized window per frame (`WindowCursor` + `fit_rows`), `b`
+  steps back a page with no network call, fetching decoupled from
+  display (one page feeds several windows; buffer tops up *before* a
+  window underfills, or the tail of a batch becomes a runt one-row
+  frame — measured 19,1,19,1 at 80x24). 0006 fetch granularity
+  untouched: one page per relation, all four advanced together.
+  Hard-won facts: **`shutil.get_terminal_size` reads `LINES`/`COLUMNS`
+  before asking the OS — verified live, `LINES=99` changes its answer
+  even under a pipe** — so the `isatty` gate must come first or an
+  exported `LINES` on CI changes piped output and breaks determinism.
+  **Window sizing must count physical lines, not logical ones**: real
+  hub ids render 90-100 chars and wrap at 80 columns, so a
+  logical-line budget promised one screen and delivered 39-45 physical
+  rows on a 24-line terminal — the exact failure the spec existed to
+  fix, reintroduced. `tree_chrome_lines` charges the chrome the same
+  way, including the `your path:` breadcrumb, which nothing bounds the
+  way `MAX_PARENT_HOPS` bounds the ladder (six hops = 444 chars).
+  `CliRunner` swaps `sys.stdout` after any patch of it, so a TTY must
+  be simulated at the resolver seam, not by faking `isatty`. Review
+  round earned its keep AGAIN — three reviewers converged on the same
+  three defects, two measured identically and independently: the
+  footer counted rows *fetched* while the prompt accepted only rows
+  *displayed* (advertised `of 80`, refused `60`); runt frames; and
+  `resolve_window_size` tracebacking on a detached/closed stdout
+  (0011/0012 class, worse than usual because it ran *before* any
+  output, turning a silent no-output run into a crash). `flow.py`
+  split into flow/stages/prompts/window. 857 tests. **Deferred: the
+  live run inside `screen` on a real terminal — sizing is simulated in
+  tests, and every live-use round here has out-found the review round
+  on usability.** Queued from this session: artifact classification /
+  lineage requirements (`requires_base`, `archive_policy`) so the tool
+  can say "archived but will not run" before the download.
+
+## Earlier sessions (updated 2026-07-31, end of session 16)
 
 - **Session 16 (2026-07-31, small/medium-tier, PR #23): spec 0014
   skip-confirmations-on-nothing-to-do shipped.** Live-use trigger
@@ -648,11 +695,13 @@ parallelize only with partitioned file ownership.
   interrupted early, before any weight shard landed. `test_cli_verify`
   split further: `--staging` deep view vs `test_cli_verify_footer.py`
   for the footer, both under the 300-line cap. 595 tests.
-- **Next spec (0015): pick from TODO.md** — smoke test, spec 0002's
+- **Next spec (0016): pick from TODO.md** — smoke test, spec 0002's
   later adapter phases (LM Studio / llama.cpp / vLLM), or the
-  interactive-listing TUI. Also queued from live use: goal-definitive
-  archiving (capability report in `status`), file-kind dictionary,
-  live-hub canary (0000 roadmap).
+  interactive-listing TUI (whose `discover` half spec 0015 took; what
+  remains is `pull`'s file listing plus arrow-key/type-to-filter).
+  Also queued from live use: goal-definitive archiving (capability
+  report in `status`), file-kind dictionary, live-hub canary (0000
+  roadmap).
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
   in progress — phase 1 shipped (PR #20), later adapters open;
   0005–0014 shipped.

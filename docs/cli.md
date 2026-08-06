@@ -498,7 +498,7 @@ uv run llm-preserver discover 'qwen3 0.6b gguf' ~/models
 #   1. Qwen/Qwen3-Embedding-0.6B-GGUF  —  181142 downloads · 2025-07-14
 #   2. Qwen/Qwen3-0.6B-GGUF            —  38687 downloads · 2025-05-09
 #   ...
-# showing 20 — more available (m)
+# showing 1-20 of 20 — more (m)
 # pick a model to explore (number; m = more, q = quit): 13
 # model tree for unsloth/Qwen3-0.6B-GGUF:
 # up — ancestry, root at top (picking a number climbs the tree):
@@ -509,6 +509,7 @@ uv run llm-preserver discover 'qwen3 0.6b gguf' ~/models
 # quantized versions:
 #   3. ...
 #   0. pull this repo (unsloth/Qwen3-0.6B-GGUF)
+# showing 3-21 of 21 — more (m)
 # hop the tree by number — 0 = pull unsloth/Qwen3-0.6B-GGUF (m = more, q = quit): 0
 # → the normal pull flow: file listing, advisories, size confirmation
 ```
@@ -532,7 +533,7 @@ type `q`. Three stages, every step a numbered pick:
    `your path:` breadcrumb shows the repos you've hopped through
    (hopping back to one pops the path), and `0` is always the
    pull-this-repo key — stable no matter how many pages you fetch. Pick a number to hop
-   anywhere; both listings page with `m`.
+   anywhere; both listings page with `m` and `b` (see below).
 3. **Pull** — "pull this repo" first asks *how* to archive:
    `1 = pick files` (quant repos — choose your quant from the
    listing) or `2 = whole-repo snapshot` (originals/masters — the
@@ -550,6 +551,42 @@ type `q`. Three stages, every step a numbered pick:
    is in your shell history, so this line is the one record of the
    pull you assembled; interrupt the download with Ctrl-C and it
    reprints as the final line, ready to paste when you come back.
+
+**Paging: one screen at a time, and numbers that stay put.** Both
+listings show a single window of rows sized to your terminal, so a
+frame never scrolls off the top — which matters on a console with
+little or no scrollback (`screen`, a serial session, a CI log). Long
+repo ids wrap, and the window counts that: a row too wide for your
+terminal is charged the two lines it actually occupies, so the frame
+fits the screen rather than the line count.
+
+`m` shows the next window; `b` (`b = back a page`) steps back to the
+window before, with no network call, and is offered only once there is
+one. Hub fetches are decoupled from windows — one fetch feeds several
+windows, and the buffer is topped up before a window would come up
+short, so `m` never hands you a one-row frame. The footer says where
+you are: `showing 21-39 of 39 — more (m)` means picks 21 through 39
+are on screen, 39 numbers have been handed out so far, and there is
+more to come. Everything counted there is typeable — the footer never
+advertises a number the prompt would refuse. Step back and the count
+stays at the furthest you have seen (`showing 1-20 of 39 — more (m) ·
+back (b)`). At the end of the listing `m` is simply withdrawn from the
+footer and the prompt; if a window was already open when the rows ran
+out, `m` answers `no further rows on the hub` rather than reprinting
+the frame.
+
+A pick number, once shown, names the same repo for the rest of that
+listing — paging never renumbers what you already read, so a number
+you noted before pressing `m` is still safe to type afterwards. (A
+number that has scrolled off still works; one that was fetched but
+never displayed does not, because you cannot have read it.) The cost
+of that guarantee is visible and deliberate: a relation's section
+label reappears when a later page brings more of it (`quantized
+versions:` a second time), and a window that opens mid-section says
+`quantized versions (continued):`. That is an honest description of
+what was fetched, not a duplicate. When output is piped rather than
+shown on a terminal, the window is a fixed 20-line budget and rows are
+never wrap-adjusted, so runs stay byte-identical.
 
 `--plan` makes the final pull the dry run (verify, then re-run for
 real); `--verbose` and `--hf-logging` as in `pull`. Failures map to the same exit codes

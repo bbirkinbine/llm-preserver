@@ -1,16 +1,32 @@
-"""Pure renderers for discovery listings (spec 0006): data → lines.
+"""Pure renderers for discovery listings (spec 0006, windowed by 0015): data → lines.
 
 Rows carry hub facts only — downloads, dates, gated markers — never a
 score or ranking of the tool's own. Every line passes through
 ``clean_text``: discovery output is 100% hub-supplied text, and
 terminal control characters must never reach a terminal raw.
+
+Spec 0015 made a page a *window* rather than the whole accumulated
+listing: rows arrive already numbered (``NumberedRow``, numbered once
+at fetch time so a number never renames a repo), the renderer prints
+the slice it is handed, and a footer says where that slice sits.
 """
 
-from collections.abc import Sequence
+import math
+from collections.abc import Callable, Sequence
 
 from llm_preserver.discover import ParentLink
+from llm_preserver.discover_paging import NumberedRow, WindowFooter
 from llm_preserver.hub_discovery import ModelSummary
 from llm_preserver.render import clean_text
+
+# Lines a tree frame spends on something other than the lines counted
+# explicitly by ``tree_chrome_lines``: the frame separator rule and its
+# blank line. Budgeting for them is what keeps a frame inside one screen.
+_FRAME_RESERVE = 2
+
+_DERIVATIVES_LABEL = (
+    "down — derivatives of this repo (hub-sorted by downloads; picking drills into one):"
+)
 
 
 def _line(text: str) -> str:
@@ -30,71 +46,109 @@ def summary_facts(summary: ModelSummary) -> str:
     return f"  —  {' · '.join(parts)}" if parts else ""
 
 
-def render_search_page(
-    rows: Sequence[ModelSummary], *, fetched: int, exhausted: bool, query: str
-) -> list[str]:
-    """Render one page of search results, the hub's order verbatim.
+def key_hints(*, more_available: bool, back_available: bool) -> str:
+    """List the keys this frame offers, quit last.
+
+    Only offered keys appear: naming ``b`` on the first frame, where
+    there is nothing to go back to, would advertise a rejected pick.
+    ``b`` says "back a page" rather than bare "back" — the tree stage
+    already means something by going back (the ``your path:`` trail
+    pops when you hop to a repo you came from), and a user typing ``b``
+    to leave a repo must not silently get a previous window instead
+    (review round, 2026-08-06).
+    """
+    parts = []
+    if more_available:
+        parts.append("m = more")
+    if back_available:
+        parts.append("b = back a page")
+    parts.append("q = quit")
+    return ", ".join(parts)
+
+
+def wrapped_height(text: str, width: int | None) -> int:
+    """Physical lines ``text`` occupies at ``width``; 1 when unknown."""
+    if width is None or width <= 0:
+        return 1
+    return max(1, math.ceil(len(text) / width))
+
+
+def row_line(row: NumberedRow) -> str:
+    """Render one listing row — the single source of the row format.
+
+    Both renderers and the window-budget cost read this, so a frame can
+    never be sized against a shape different from the one it prints.
+    """
+    return _line(f"  {row.number}. {row.summary.repo_id}{summary_facts(row.summary)}")
+
+
+def row_line_cost(width: int | None) -> Callable[[NumberedRow], int]:
+    """Build the per-row line cost ``fit_rows`` charges at ``width``.
 
     Args:
-        rows: This page's rows, in the order the hub returned them.
-        fetched: Total rows fetched so far (across pages).
-        exhausted: True when the hub has no further rows.
-        query: The free-text query, echoed in the header.
+        width: Terminal columns, or None for a piped run.
 
     Returns:
-        Printable lines: header, numbered rows, and a
-        "more available" footer only while the hub has more.
+        A callable giving each row its wrapped height — always 1 when
+        the width is unknown, which keeps piped output byte-identical.
+    """
+
+    def cost(row: NumberedRow) -> int:
+        return wrapped_height(row_line(row), width)
+
+    return cost
+
+
+def render_footer(footer: WindowFooter) -> str:
+    """Say which picks are on screen, out of how many exist, and what works.
+
+    ``highest`` grows as you page — it is the count of numbers handed
+    out so far, not a total. The hub publishes no total.
+    """
+    text = f"showing {footer.first}-{footer.last} of {footer.highest}"
+    if footer.more_available:
+        text += " — more (m)"
+    if footer.back_available:
+        text += " · back (b)"
+    return text
+
+
+def render_search_page(
+    rows: Sequence[NumberedRow], *, query: str, footer: WindowFooter | None
+) -> list[str]:
+    """Render one window of search results, the hub's order verbatim.
+
+    Args:
+        rows: This window's rows, already numbered, in hub order.
+        query: The free-text query, echoed in the header.
+        footer: Position line for the window; None renders no footer.
+
+    Returns:
+        Printable lines: header, numbered rows, optional footer.
     """
     lines = [_line(f"hub search results for '{query}' (the hub's relevance order):")]
-    lines.extend(
-        _line(f"  {number}. {row.repo_id}{summary_facts(row)}")
-        for number, row in enumerate(rows, start=1)
-    )
-    if not exhausted:
-        lines.append(f"showing {fetched} — more available (m)")
+    lines.extend(row_line(row) for row in rows)
+    if footer is not None:
+        lines.append(render_footer(footer))
     return lines
 
 
-def render_tree_page(
-    current: ModelSummary,
-    parents: Sequence[ParentLink],
-    children: Sequence[ModelSummary],
-    *,
-    more_available: bool,
-    trail: Sequence[str] = (),
-) -> list[str]:
-    """Render one model-tree page: ancestry ladder, children, one pull.
+def _ancestry_lines(current: ModelSummary, parents: Sequence[ParentLink]) -> list[str]:
+    """Render the upward chain as a ladder, root at top.
 
-    The ancestry renders as a ladder — root at the top, indenting
-    down to the current repo — so lineage direction is visible
-    structure, not a caption (live-use feedback 2026-07-13: a flat
-    "nearest first" list read as a ranked menu, and which end was
-    the root was guesswork). Numbering is continuous across sections
-    so pick numbers are unambiguous; a not-found parent is shown but
-    takes no number (it cannot be navigated into).
+    Lineage direction is visible structure, not a caption (live-use
+    feedback 2026-07-13: a flat "nearest first" list read as a ranked
+    menu, and which end was the root was guesswork).
 
-    IMPORTANT ordering contract: numbered ancestry options render
-    ROOT FIRST — callers building pick options must number the
-    navigable parents in reversed ``build_parent_chain`` order.
-
-    Args:
-        current: The repo whose tree is shown.
-        parents: Upward chain, nearest first (``build_parent_chain``).
-        children: Derivative rows, pre-grouped by relation, hub order.
-        more_available: True when the children listing has more rows.
-        trail: Repo ids navigated through to get here, oldest first
-            (the current repo last).
-
-    Returns:
-        Printable lines ending with the numbered "pull this repo"
-        option (and the more-available footer when applicable).
+    IMPORTANT ordering contract: numbered ancestry options render ROOT
+    FIRST — callers building pick options must number the navigable
+    parents in reversed ``build_parent_chain`` order. A not-found
+    parent is shown but takes no number (it cannot be navigated into).
     """
-    lines = [_line(f"model tree for {current.repo_id}:")]
-    if len(trail) > 1:
-        lines.append(_line(f"your path: {' → '.join(trail)}  (you are here)"))
+    if not parents:
+        return []
+    lines = ["up — ancestry, root at top (picking a number climbs the tree):"]
     number = 1
-    if parents:
-        lines.append("up — ancestry, root at top (picking a number climbs the tree):")
     depth = 0
     for index, link in enumerate(reversed(parents)):
         branch = f"{'   ' * depth}{'└─ ' if depth else ''}"
@@ -117,21 +171,101 @@ def render_tree_page(
         lines.append(_line(f"  {number}. {branch}{entry}{summary_facts(link.summary)}{root_tag}"))
         number += 1
         depth += 1
-    if parents:
-        branch = f"{'   ' * depth}└─ "
-        lines.append(_line(f"      {branch}{current.repo_id}  [this repo — you are here]"))
-    previous_relation = None
-    if children:
-        lines.append(
-            "down — derivatives of this repo (hub-sorted by downloads; picking drills into one):"
+    branch = f"{'   ' * depth}└─ "
+    lines.append(_line(f"      {branch}{current.repo_id}  [this repo — you are here]"))
+    return lines
+
+
+def tree_chrome_lines(
+    current: ModelSummary,
+    parents: Sequence[ParentLink],
+    trail: Sequence[str],
+    *,
+    width: int | None = None,
+) -> int:
+    """Count the lines a tree frame spends on everything but child rows.
+
+    The window budget is the terminal height less this, so the count
+    must come from the same code that renders the chrome — a
+    hand-maintained constant would drift the first time the ladder
+    changed shape. Each chrome line is charged its *wrapped* height:
+    the breadcrumb in particular is unbounded (nothing caps trail
+    length the way ``MAX_PARENT_HOPS`` caps the ladder), and a six-hop
+    trail measured 444 characters — six physical lines charged as one
+    before the review round caught it (2026-08-06).
+
+    Args:
+        current: The repo whose tree is shown.
+        parents: Its upward chain.
+        trail: The navigation breadcrumb.
+        width: Terminal columns, or None to charge one line each.
+
+    Returns:
+        Header, breadcrumb, ancestry ladder, the "down —" label, the
+        pull-this-repo line, the footer, the prompt, and the reserve.
+    """
+    texts = [_line(f"model tree for {current.repo_id}:")]
+    if len(trail) > 1:
+        texts.append(_line(f"your path: {' → '.join(trail)}  (you are here)"))
+    texts.extend(_ancestry_lines(current, parents))
+    texts.append(_DERIVATIVES_LABEL)
+    texts.append(_line(f"  0. pull this repo ({current.repo_id})"))
+    # The footer and prompt at their widest shape — both keys offered —
+    # so a frame is never sized against a narrower variant than it prints.
+    texts.append("showing 000-000 of 000 — more (m) · back (b)")
+    texts.append(
+        _line(
+            f"hop the tree by number — 0 = pull {current.repo_id} "
+            f"({key_hints(more_available=True, back_available=True)})"
         )
-    for child in children:
-        if child.relation != previous_relation:
-            lines.append(_line(f"{child.relation or 'related'} versions:"))
-            previous_relation = child.relation
-        lines.append(_line(f"  {number}. {child.repo_id}{summary_facts(child)}"))
-        number += 1
+    )
+    return sum(wrapped_height(text, width) for text in texts) + _FRAME_RESERVE
+
+
+def render_tree_page(
+    current: ModelSummary,
+    parents: Sequence[ParentLink],
+    children: Sequence[NumberedRow],
+    *,
+    footer: WindowFooter | None,
+    trail: Sequence[str] = (),
+    section_continued: bool = False,
+) -> list[str]:
+    """Render one model-tree window: ancestry ladder, children, one pull.
+
+    Every frame reprints the header, the ladder and the pull line, so a
+    window is actionable without scrollback — the terminals this spec
+    was written for may have none.
+
+    Args:
+        current: The repo whose tree is shown.
+        parents: Upward chain, nearest first (``build_parent_chain``).
+        children: This window's derivative rows, already numbered.
+        footer: Position line; None renders no footer.
+        trail: Repo ids navigated through to get here, oldest first.
+        section_continued: True when this window's first row continues
+            the section the previous window ended in, which labels it
+            "(continued)" rather than repeating it as if it were new.
+
+    Returns:
+        Printable lines ending with the numbered "pull this repo"
+        option and the footer.
+    """
+    lines = [_line(f"model tree for {current.repo_id}:")]
+    if len(trail) > 1:
+        lines.append(_line(f"your path: {' → '.join(trail)}  (you are here)"))
+    lines.extend(_ancestry_lines(current, parents))
+    if children:
+        lines.append(_DERIVATIVES_LABEL)
+    previous_relation: str | None = None
+    for index, row in enumerate(children):
+        relation = row.summary.relation
+        if relation is not None and (index == 0 or relation != previous_relation):
+            suffix = " (continued):" if index == 0 and section_continued else ":"
+            lines.append(_line(f"{relation} versions{suffix}"))
+        previous_relation = relation
+        lines.append(row_line(row))
     lines.append(_line(f"  0. pull this repo ({current.repo_id})"))
-    if more_available:
-        lines.append(f"showing {len(children)} children — more available (m)")
+    if footer is not None:
+        lines.append(render_footer(footer))
     return lines

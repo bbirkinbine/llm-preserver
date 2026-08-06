@@ -5,12 +5,20 @@ What's next, in rough order. Feature detail lives in
 and the numbered specs; this file is the short-term working list.
 Check items off as they ship; update when priorities shift.
 
-## Next spec (0015) — pick one
+## Next spec (0016) — pick one
 
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
   PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over
   the same core, plus the phase-1 deferrals (sharded-GGUF linking,
-  `--model` scoping).
+  `--model` scoping). Candidate addition (researched 2026-08-01):
+  **Unsloth Studio** — Unsloth's local inference app (beta;
+  installer-based, not the `unsloth` pip fine-tuning library). Runs
+  GGUF/safetensors via llama.cpp, serves OpenAI/Anthropic-compatible
+  APIs, and detects models from the HF hub cache or a user-selected
+  folder — so unlike Ollama, no manifest/blob synthesis: the adapter
+  is likely just a directory of symlinks to archived GGUFs (same
+  shape as the planned LM Studio / llama.cpp adapters). Hold until
+  it leaves beta before pinning tests to its layout.
 - [ ] **Smoke test**: load an archived model offline in a local
   runtime (llama.cpp / ollama), check a trivial deterministic
   prompt, record the result in the record's `runtime_tested` field
@@ -19,10 +27,51 @@ Check items off as they ship; update when priorities shift.
   loadable in place, smoke test proves they load.
 - [ ] **Interactive listing TUI** (promoted from smaller items —
   see its entry below for scope): after 0006's live testing, the
-  numbered-pick UX is workable but the scroll pain is real.
+  numbered-pick UX is workable but the scroll pain is real. Spec
+  0015 took the `discover` half of this (windowed frames, `b` to
+  step back, numbers that never renumber) with no new dependency;
+  what remains for a TUI is `pull`'s file listing plus the
+  nice-to-haves a plain-print flow cannot do — arrow-key highlight,
+  type-to-filter.
+- [ ] **Artifact classification and lineage requirements** (Brian,
+  2026-08-06): let tree discovery show lineage without implying a
+  recursive download. Classify each repo/artifact as one of
+  `full-checkpoint`, `merged`, `adapter`, `quant`, or `base`, and
+  record it: `artifact_type`, `base_model`, `parent_models`,
+  `requires_base: true|false`, `reconstructable: yes|no|unknown`,
+  `archive_policy: runnable|reconstruction|provenance-only`. Detect
+  adapter-style repos from markers — `adapter_config.json`, PEFT
+  metadata, or safetensors far smaller than the claimed base — and
+  warn when an artifact needs the exact base *revision* to be useful
+  offline. Treat `base_model` on a full checkpoint as provenance,
+  never an automatic recursive pull. Optionally promote common roots
+  (Qwen / Llama / Mistral base and instruct) into a canonical-roots
+  shelf. Notes: the classifier must stay deterministic and
+  marker-driven (0000: no tool judgment); the size-ratio heuristic
+  needs a stated threshold and an `unknown` verdict rather than a
+  guess; `requires_base` is the field that makes "I archived it but
+  it will not run" visible before the download, which is the point.
+  Touches the record schema, so it wants an ADR or an explicit
+  migration note for records written by 0001-0015.
 
 ## Shipped
 
+- 0015 discover paging windows + stable pick numbers (PR #25): both
+  listings now render one terminal-sized window instead of reprinting
+  the whole accumulated list on every `m`, and rows are numbered once
+  as they arrive so a number permanently names a repo. The live-use
+  trigger was scroll pain under `screen`; the bug underneath it was
+  worse — the tree re-sorted children by relation each loop, so a new
+  quantized page displaced already-numbered finetune rows and **60 of
+  80 numbers named a different repo after one `m`**, silently. `b`
+  steps back a page with no network call; fetching is decoupled from
+  display (one page feeds several windows, buffer tops up before a
+  window underfills) with 0006's per-relation granularity untouched.
+  Sizing counts *physical* lines — real hub ids wrap at 80 columns, so
+  a logical-line budget promised one screen and delivered two. Review
+  round (three reviewers, converging) caught the footer advertising
+  numbers the prompt refused, runt one-row frames, and a
+  detached-stdout traceback. 857 tests.
 - 0014 skip confirmations on a nothing-to-do pull (PR #23): a re-pull
   whose whole selection is already archived under a *user-chosen*
   home (the typed repo id, or `--model`) asks no questions — the plan
@@ -187,9 +236,11 @@ Check items off as they ship; update when priorities shift.
   The `docs/cli.md` "Archiving for a goal" table is the interim
   reference.
 - [ ] Interactive listing TUI (future spec candidate; live-use
-  2026-07-13): discovery's accumulate-paging re-renders the whole
-  fetched list on every `m` (80+ lines after two pages), and pull's
-  file listing has the same long-scroll problem. A terminal UI —
+  2026-07-13): **the `discover` half of this shipped as spec 0015**
+  — accumulate-paging is gone, frames are windowed to the terminal,
+  and `b` steps back — so what is left here is `pull`'s file
+  listing, which still has the long-scroll problem, plus the
+  interaction affordances plain print cannot reach. A terminal UI —
   scrollable viewport sized to the terminal, arrow-key
   highlight-and-enter selection, optional type-to-filter — replaces
   numbered picks as presentation only; the deterministic

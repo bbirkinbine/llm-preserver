@@ -1,8 +1,12 @@
 """Interactive-edge pins for ``discover`` (spec 0006 review round).
 
-EOF quits cleanly, invalid input re-prompts, tree-stage hub failures
-map to the hub fault domain, and paged tree children stay grouped
-under one relation header per section.
+EOF quits cleanly, invalid input re-prompts, and tree-stage hub
+failures map to the hub fault domain.
+
+Paging itself moved out with spec 0015: the section-label pins that
+used to live here (children grouped under one relation header, which
+only held while every "m" reprinted a re-sorted listing) are replaced
+by the window-rendering tests in ``test_cli_discover_paging.py``.
 """
 
 import contextlib
@@ -55,9 +59,11 @@ def invoke_discover(archive, *args, stdin=None):
 
 
 def test_each_rendered_frame_starts_with_a_rule_line(tmp_path, monkeypatch, fake_hub_factory):
-    # Accumulate-paging re-renders whole listings; scrollback needs a
-    # visible boundary per frame (live-use feedback 2026-07-13). One
-    # search frame + its "m" re-render + one tree frame = 3 rules.
+    # Every frame needs a visible boundary (live-use feedback
+    # 2026-07-13). Search window one + the "m" window over page two +
+    # the tree frame = 3 rules. Pick "1" comes from window one, which
+    # has scrolled off by then: a displayed number stays pickable
+    # (spec 0015).
     archive = init_archive_dir(tmp_path)
     rows = [summary(f"hub/repo-{i}") for i in range(PAGE_SIZE + 2)]
     client = fake_hub_factory(search_results=rows)
@@ -170,31 +176,12 @@ def test_trail_pops_when_hopping_back_to_a_visited_repo(tmp_path, monkeypatch, f
     assert "your path:" not in final_render
 
 
-def test_paged_tree_children_stay_grouped_under_one_header(tmp_path, monkeypatch, fake_hub_factory):
-    # After "m", the new quantized page joins its section — no
-    # duplicate relation header trailing the finetune group.
-    quantized = [summary(f"q/tiny-{i}", relation="quantized") for i in range(PAGE_SIZE + 3)]
-    finetunes = [summary("f/tiny-ft", relation="finetune")]
-    archive = init_archive_dir(tmp_path)
-    client = fake_hub_factory(
-        search_results=[summary("acme/tiny-chat")],
-        children={
-            ("acme/tiny-chat", "quantized"): quantized,
-            ("acme/tiny-chat", "finetune"): finetunes,
-        },
-    )
-    install_fake_hub(monkeypatch, client)
-
-    result = invoke_discover(archive, stdin="1\nm\nq\n")
-
-    assert result.exit_code == 0
-    output = combined_output(result)
-    # Only the final render matters: take the last tree section.
-    final_render = output.rsplit("model tree for", 1)[1]
-    assert final_render.count("quantized versions:") == 1
-    assert final_render.count("finetune versions:") == 1
-    last_quant_row = final_render.rindex("q/tiny-")
-    assert final_render.index("finetune versions:") > last_quant_row
+# Section labels across batches and windows are pinned in
+# test_cli_discover_paging.py (spec 0015). The test that stood here —
+# test_paged_tree_children_stay_grouped_under_one_header — asserted the
+# accumulate-and-regroup rendering that spec deletes: re-sorting the
+# accumulated rows by relation on every "m" is exactly what made a
+# later quantized page displace already-numbered finetune rows.
 
 
 # --- positional contract after spec 0013 made query/path optional ----------

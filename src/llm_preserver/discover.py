@@ -25,14 +25,15 @@ class Option:
     """One pick a page offers.
 
     Attributes:
-        key: What the user types — "1".."N", "m", or "q".
+        key: What the user types — "1".."N", "m", "b", or "q".
         kind: What picking it means: navigate into a repo's tree,
-            select the repo for pull, fetch more rows, or quit.
+            select the repo for pull, fetch more rows, step back to the
+            previous window, or quit.
         summary: The target repo for navigate/select; None otherwise.
     """
 
     key: str
-    kind: Literal["navigate", "select", "more", "quit"]
+    kind: Literal["navigate", "select", "more", "back", "quit"]
     summary: ModelSummary | None
 
 
@@ -45,11 +46,15 @@ class DiscoveryPage:
         options: The numbered picks, keys "1".."N" in display order.
         more_available: True when "m" is a valid pick (the hub has
             more rows).
+        back_available: True when "b" is a valid pick (an earlier
+            window was shown and can be re-shown). Defaults False so a
+            single-frame listing offers no way back to nothing.
     """
 
     stage: Stage
     options: tuple[Option, ...]
     more_available: bool
+    back_available: bool = False
 
 
 def parse_pick(raw: str, page: DiscoveryPage) -> Option | None:
@@ -61,15 +66,17 @@ def parse_pick(raw: str, page: DiscoveryPage) -> Option | None:
 
     Returns:
         The picked option — "q" always quits, "m" pages only when
-        more rows are available, a digit picks its numbered option —
-        or None for anything invalid (empty, zero, out of range,
-        garbage).
+        more rows are available, "b" steps back only when an earlier
+        window exists, a digit picks its numbered option — or None for
+        anything invalid (empty, zero, out of range, garbage).
     """
     text = raw.strip().lower()
     if text == "q":
         return Option(key="q", kind="quit", summary=None)
     if text == "m":
         return Option(key="m", kind="more", summary=None) if page.more_available else None
+    if text == "b":
+        return Option(key="b", kind="back", summary=None) if page.back_available else None
     # Exact key match — options carry their own keys ("1".."N", and the
     # tree's stable "0" = pull-this-repo, adjudicated 2026-07-13: the
     # last number shifted on every page fetch). "01"-style aliases stay
