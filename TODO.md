@@ -10,7 +10,15 @@ Check items off as they ship; update when priorities shift.
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
   PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over
   the same core, plus the phase-1 deferrals (sharded-GGUF linking,
-  `--model` scoping).
+  `--model` scoping). Candidate addition (researched 2026-08-01):
+  **Unsloth Studio** — Unsloth's local inference app (beta;
+  installer-based, not the `unsloth` pip fine-tuning library). Runs
+  GGUF/safetensors via llama.cpp, serves OpenAI/Anthropic-compatible
+  APIs, and detects models from the HF hub cache or a user-selected
+  folder — so unlike Ollama, no manifest/blob synthesis: the adapter
+  is likely just a directory of symlinks to archived GGUFs (same
+  shape as the planned LM Studio / llama.cpp adapters). Hold until
+  it leaves beta before pinning tests to its layout.
 - [ ] **Smoke test**: load an archived model offline in a local
   runtime (llama.cpp / ollama), check a trivial deterministic
   prompt, record the result in the record's `runtime_tested` field
