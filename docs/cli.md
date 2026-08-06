@@ -118,6 +118,11 @@ independence, the safetensors master for training. The
 full-precision-master advisory names the exact `--whole-repo`
 command whenever a quant pull leaves the third row uncovered.
 
+[`what-to-archive.md`](what-to-archive.md) walks the same three rows
+end to end with a real model — why a quant is a one-way export, how to
+check which models on your shelf have a full-precision source, and the
+`llama.cpp` commands that turn one into any other quant offline.
+
 ## pull — download files from a Hugging Face repo
 
 Running example: `unsloth/Qwen3.6-27B-MTP-GGUF`, a real quant repo
@@ -674,6 +679,30 @@ One row per archived model: roles (role-less models group under
 rendering as pull's confirmations and remove's previews), completeness.
 The fast answer to "what is on the shelf." Exact byte counts live in
 `show`.
+
+### The completeness column
+
+The last column reports the health of the model's *record*, and it is
+derived from the record alone — nothing in that column (or in `size`)
+touches the filesystem. Several problems join with commas.
+
+| Cell | Meaning |
+| --- | --- |
+| `ok` | None of the below apply |
+| `no record` | The model directory has no `model-record.json` |
+| `record unreadable` | The record is present but failed to load or validate. The roles cell shows `-` rather than "(no role)" — roles are unknown, not absent |
+| `newer record schema` | The record's `record_schema_version` is newer than this tool understands. Flagged, never refused, so read-only inspection of a future archive still works |
+| `no license` | The record carries no license label |
+| `missing checksums` | At least one file entry has no SHA256, so `verify` cannot prove that file valid |
+
+**`ok` means the model describes itself completely — not that its files
+are present or intact.** That distinction is deliberate: `status` is a
+metadata report that runs in milliseconds and never reads a weight
+file. Auditing disk against the record is
+[`verify`](#verify--audit-the-archive-against-its-records), which has
+its own separate vocabulary (*complete* = every expected file present,
+*valid* = every hash matches). A model can read `ok` here and still be
+missing every byte on disk.
 
 ## show — one model's record
 
