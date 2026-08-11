@@ -50,13 +50,12 @@ def make_snapshot_client(fake_hub_factory, **overrides):
 
 def do_pull_all(archive_root, client, repo_id=SNAPSHOT_REPO_ID, **kwargs):
     kwargs.setdefault("include", ())
-    kwargs.setdefault("model", "acme/tiny-chat")
     kwargs.setdefault("confirm", lambda prompt: True)
     return pull.pull_model(archive_root, repo_id, client, select_all=True, **kwargs)
 
 
 def model_dir(archive_root):
-    return archive_root / "models" / "acme" / "tiny-chat"
+    return archive_root / "models" / "acme" / "tiny-orig"
 
 
 def fake_disk_free(monkeypatch, free):
@@ -120,7 +119,7 @@ def test_files_without_hub_size_count_in_confirmation_but_not_sum(archive, fake_
     assert (model_dir(archive) / "hf-snapshot" / "tokenizer.json").is_file()
 
 
-def test_all_with_no_base_model_offers_repo_id_as_grouping_default(archive, fake_hub_factory):
+def test_the_whole_repo_prompt_names_the_repo_being_pulled(archive, fake_hub_factory):
     # Spec 0004: grouping inverts for original repos — no base_model
     # defaults the canonical directory to the repo id, confirm-gated.
     prompts = []
@@ -130,40 +129,10 @@ def test_all_with_no_base_model_offers_repo_id_as_grouping_default(archive, fake
         return True
 
     client = make_snapshot_client(fake_hub_factory, base_model=None)
-    do_pull_all(archive, client, model=None, confirm=confirm)
+    do_pull_all(archive, client, confirm=confirm)
 
     assert any(SNAPSHOT_REPO_ID in prompt for prompt in prompts)
     assert (archive / "models" / "acme" / "tiny-orig" / "hf-snapshot" / "config.json").is_file()
-
-
-def test_declined_repo_id_grouping_under_all_names_model_flag(archive, fake_hub_factory):
-    prompts = []
-
-    def confirm(prompt):
-        prompts.append(prompt)
-        return False
-
-    client = make_snapshot_client(fake_hub_factory, base_model=None)
-    with pytest.raises(hub.PullUserError) as excinfo:
-        do_pull_all(archive, client, model=None, confirm=confirm)
-
-    assert any(SNAPSHOT_REPO_ID in prompt for prompt in prompts)  # default was offered
-    assert "--model" in str(excinfo.value)
-    assert list((archive / "models").iterdir()) == []
-
-
-def test_model_override_under_all_skips_the_grouping_prompt(archive, fake_hub_factory):
-    prompts = []
-
-    def confirm(prompt):
-        prompts.append(prompt)
-        return True
-
-    client = make_snapshot_client(fake_hub_factory, base_model=None)
-    do_pull_all(archive, client, model="custom/name", confirm=confirm)
-
-    assert len(prompts) == 1  # only the size + count confirmation
-    assert (archive / "models" / "custom" / "name" / "hf-snapshot" / "config.json").is_file()
 
 
 def test_refresh_docs_replaces_changed_in_tree_doc_under_all(archive, fake_hub_factory):
@@ -220,7 +189,6 @@ def test_selective_pull_logs_n_of_m_counter_per_file(archive, fake_hub_factory, 
             SNAPSHOT_REPO_ID,
             client,
             include=[SHARD_1],
-            model="acme/tiny-chat",
             confirm=lambda prompt: True,
         )
 

@@ -65,13 +65,12 @@ def make_snapshot_client(fake_hub_factory, **overrides):
 
 def do_pull_all(archive_root, client, repo_id=SNAPSHOT_REPO_ID, **kwargs):
     kwargs.setdefault("include", ())
-    kwargs.setdefault("model", "acme/tiny-chat")
     kwargs.setdefault("confirm", lambda prompt: True)
     return pull.pull_model(archive_root, repo_id, client, select_all=True, **kwargs)
 
 
 def model_dir(archive_root):
-    return archive_root / "models" / "acme" / "tiny-chat"
+    return archive_root / "models" / "acme" / "tiny-orig"
 
 
 def combined_output(result) -> str:
@@ -132,7 +131,7 @@ def test_cli_all_flag_is_rejected_as_unknown_option(tmp_path, monkeypatch):
 
     result = runner.invoke(
         app,
-        ["pull", GGUF_REPO_ID, str(archive_dir), "--all", "--model", "acme/tiny-chat"],
+        ["pull", GGUF_REPO_ID, str(archive_dir), "--all"],
     )
 
     assert result.exit_code == 2
@@ -152,13 +151,13 @@ def test_cli_whole_repo_pulls_whole_tree_without_interactive_selection(
 
     result = runner.invoke(
         app,
-        ["pull", GGUF_REPO_ID, str(archive_dir), "--whole-repo", "--model", "acme/tiny-chat"],
+        ["pull", GGUF_REPO_ID, str(archive_dir), "--whole-repo"],
         input="y\n",  # the single size + count confirmation
     )
 
     assert result.exit_code == 0
     assert "files to pull" not in combined_output(result)  # no pattern prompt
-    gguf_dir = archive_dir / "models" / "acme" / "tiny-chat" / "gguf"
+    gguf_dir = archive_dir / "models" / "bartowski" / "tiny-chat-GGUF" / "gguf"
     assert (gguf_dir / "tiny-chat-Q4_K_M.gguf").is_file()
     assert (gguf_dir / "tiny-chat-Q8_0.gguf").is_file()
     assert (gguf_dir / "README.md").is_file()
@@ -206,22 +205,26 @@ def test_all_records_per_file_provenance_and_revision(archive, fake_hub_factory)
 
 
 def test_gguf_repo_tree_lands_in_gguf_subdir_under_all(archive, fake_hub_factory):
+    # ADR 0003: the destination is the repo pulled, not a canonical home.
+    home = archive / "models" / "bartowski" / "tiny-chat-GGUF"
+
     do_pull_all(archive, fake_hub_factory(files=GGUF_FILES), repo_id=GGUF_REPO_ID)
 
-    gguf_dir = model_dir(archive) / "gguf"
-    assert (gguf_dir / "tiny-chat-Q4_K_M.gguf").is_file()
-    assert (gguf_dir / "tiny-chat-Q8_0.gguf").is_file()
-    assert load_record(model_dir(archive)).artifacts[0].format == "gguf"
+    assert (home / "gguf" / "tiny-chat-Q4_K_M.gguf").is_file()
+    assert (home / "gguf" / "tiny-chat-Q8_0.gguf").is_file()
+    assert load_record(home).artifacts[0].format == "gguf"
 
 
 def test_mlx_community_repo_lands_in_mlx_subdir_under_all(archive, fake_hub_factory):
     mlx_files = [("model.safetensors", b"mlx weights", True), ("config.json", b"{}", False)]
     client = fake_hub_factory(files=mlx_files, repo_id="mlx-community/tiny-chat-4bit")
 
+    home = archive / "models" / "mlx-community" / "tiny-chat-4bit"
+
     do_pull_all(archive, client, repo_id="mlx-community/tiny-chat-4bit")
 
-    assert (model_dir(archive) / "mlx" / "model.safetensors").is_file()
-    assert load_record(model_dir(archive)).artifacts[0].format == "mlx"
+    assert (home / "mlx" / "model.safetensors").is_file()
+    assert load_record(home).artifacts[0].format == "mlx"
 
 
 def test_all_confirms_once_with_file_count_and_total_size_only(archive, fake_hub_factory):

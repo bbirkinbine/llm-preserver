@@ -52,8 +52,6 @@ def invoke_q4_pull(archive, *extra_args, stdin=None):
         str(archive),
         "--include",
         "*Q4_K_M*",
-        "--model",
-        "acme/gemma-tiny",
         *extra_args,
     ]
     return runner.invoke(app, args, input=stdin)
@@ -93,7 +91,8 @@ def test_advisory_never_changes_the_downloaded_file_set(tmp_path, monkeypatch, f
     assert result.exit_code == 0
     assert "vision projector" in combined_output(result)
     assert set(client.download_calls) == {"gemma-tiny-Q4_K_M.gguf", "README.md"}
-    model_dir = archive / "models/acme/gemma-tiny"
+    # ADR 0003: the pulled repo names the directory.
+    model_dir = archive / "models/ggml-org/gemma-tiny-GGUF"
     assert (model_dir / "gguf/gemma-tiny-Q4_K_M.gguf").is_file()
     assert not (model_dir / "gguf/mmproj-F16.gguf").exists()
 
@@ -115,8 +114,6 @@ def test_pull_prints_full_precision_master_advisory_for_unarchived_base(
             str(archive),
             "--include",
             "*Q4_K_M*",
-            "--model",
-            "acme/tiny-chat",
             "--yes",
         ],
     )

@@ -13,6 +13,7 @@ import shutil
 from collections.abc import Callable
 from pathlib import Path
 
+from llm_preserver.file_locks import unlink_locked
 from llm_preserver.pull_record import write_manifest
 from llm_preserver.records import RECORD_FILENAME, RENDERED_FILENAME, ModelRecord, save_record
 from llm_preserver.remove.models import RemoveError, RemovePlan, escapes_model_dir
@@ -50,7 +51,7 @@ def _execute_whole(plan: RemovePlan, on_file: Callable[[str], None] | None) -> N
                 continue  # never follow a symlink out of the model directory
             target = model_dir / planned.path
             if target.exists() or target.is_symlink():
-                target.unlink()
+                unlink_locked(target)
             if on_file is not None:
                 on_file(planned.path)
         # Sweep any remaining files (rendered markdown, manifest,
@@ -59,7 +60,7 @@ def _execute_whole(plan: RemovePlan, on_file: Callable[[str], None] | None) -> N
         # link, not its target, so the sweep cannot escape either.
         for leftover in sorted(model_dir.rglob("*"), reverse=True):
             if leftover.is_file() or leftover.is_symlink():
-                leftover.unlink()
+                unlink_locked(leftover)
         shutil.rmtree(model_dir, ignore_errors=True)
         _prune_empty_dir(model_dir.parent)
     if plan.staging_dir is not None and plan.staging_dir.exists():
@@ -95,7 +96,7 @@ def _execute_pattern(plan: RemovePlan, on_file: Callable[[str], None] | None) ->
             continue  # never follow a symlink out of the model directory
         target = model_dir / planned.path
         if target.exists() or target.is_symlink():
-            target.unlink()
+            unlink_locked(target)
         if on_file is not None:
             on_file(planned.path)
     _prune_empty_subdirs(model_dir)

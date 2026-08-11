@@ -32,6 +32,18 @@ paths:
 - Reproduce the CI rendering locally with
   `FORCE_COLOR=1 GITHUB_ACTIONS=true TERM=xterm-256color uv run pytest ...`
   before pushing a fix.
+- **Never *count* lines through the shared `combined_output` helper.**
+  It returns `result.output + result.stderr`, and this click version
+  already folds stderr into `result.output` — so every stderr line
+  appears twice. Substring asserts (`x in out`) are unaffected, which is
+  why the helper is safe everywhere else and the trap is invisible until
+  someone asserts `len(matches) == 1`. Count on
+  `click.unstyle(result.output)` alone. Cost an implementation round on
+  spec 0017: a note printed once looked like it printed twice, and
+  "fixing" the product would have moved a diagnostic off stderr for no
+  reason. Verify a suspected double-print by invoking the CLI directly
+  and printing `result.output` and `result.stderr` separately before
+  changing any product code.
 
 ## External-reference provenance (implement phase)
 

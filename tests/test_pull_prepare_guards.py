@@ -36,7 +36,6 @@ def prepare(archive, client):
         REPO_ID,
         client,
         include=["adapter_model*"],
-        model="acme/tiny-adapter",
         confirm=lambda prompt: True,
     )
 
@@ -136,7 +135,6 @@ def test_undeclared_size_config_is_never_downloaded(archive, fake_hub_factory):
         REPO_ID,
         client,
         include=["adapter_model*"],
-        model="acme/tiny-adapter",
         repo_info=info,
         confirm=lambda prompt: True,
     )

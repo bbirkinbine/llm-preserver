@@ -17,9 +17,14 @@ from llm_preserver.cli.app import fail
 from llm_preserver.cli.pull_exec.plumbing import exit_for_pull_error
 from llm_preserver.cli.pull_exec.prompts import confirm_or_stop, prompt_for_selection
 from llm_preserver.cli.resume_hint import compose_resume_hint
-from llm_preserver.hub import HubClientProtocol, PullError, PullInvalidIdError, RepoInfo
+from llm_preserver.hub import (
+    HubClientProtocol,
+    PullError,
+    PullInvalidIdError,
+    RepoInfo,
+)
 from llm_preserver.ollama_store import ollama_shape_hint
-from llm_preserver.pull import pull_model, validated_roles
+from llm_preserver.pull import pull_model, validated_base_model, validated_roles
 from llm_preserver.pull_preflight import require_disk_budget
 from llm_preserver.pull_prepare import prepare_pull
 from llm_preserver.pull_report import render_plan
@@ -33,8 +38,8 @@ def run_pull(
     *,
     include: list[str],
     select_all: bool = False,
-    model: str | None = None,
     roles: tuple[str, ...] = (),
+    base_model: str | None = None,
     refresh_docs: bool = False,
     plan: bool = False,
     yes: bool = False,
@@ -51,8 +56,8 @@ def run_pull(
         include: fnmatch patterns; empty (without ``select_all``)
             triggers the interactive file listing.
         select_all: Whole-tree snapshot mode (``--whole-repo``).
-        model: Canonical model directory override.
         roles: Roles to assign at pull time.
+        base_model: Curator-asserted lineage for the record.
         refresh_docs: Replace changed upstream doc files.
         plan: Dry run (spec 0005) — report and exit, write nothing.
         yes: Auto-accept the size confirmation.
@@ -80,6 +85,7 @@ def run_pull(
     # not end with the pull-success line — scripts and scrollback key
     # on it.
     no_op = False
+    metadata_only = False
     try:
         patterns = list(include)
         info = repo_info
@@ -96,6 +102,7 @@ def run_pull(
             # Roles validate here too: plan exit 0 must mean the real
             # command would proceed, and a bad --role would exit 2.
             validated_roles(roles)
+            validated_base_model(base_model)
             would_ask: list[str] = []
 
             def record_prompt(prompt: str) -> bool:
@@ -107,7 +114,6 @@ def run_pull(
                 repo_id,
                 client,
                 include=patterns,
-                model=model,
                 repo_info=info,
                 refresh_docs=refresh_docs,
                 select_all=select_all,
@@ -115,14 +121,14 @@ def run_pull(
             )
             for line in render_plan(prep, would_ask):
                 if line.startswith("warning:"):
-                    # Likely human error (e.g. grouping mismatch) —
+                    # Likely human error —
                     # highlight it; click strips color off-terminal.
                     typer.secho(line, fg=typer.colors.YELLOW, bold=True)
                 else:
                     typer.echo(line)
             if emit_hint:
                 # No --model: plan mode recorded the confirmations
-                # instead of asking, so no grouping was human-confirmed
+                # instead of asking; the destination is the typed repo
                 # and the hint must not bake one in (0006 adjudication).
                 # No --plan: the follow-up wanted is the real pull.
                 plan_hint = compose_resume_hint(
@@ -131,6 +137,7 @@ def run_pull(
                     include=patterns,
                     select_all=select_all,
                     roles=roles,
+                    base_model=base_model,
                     refresh_docs=refresh_docs,
                     hf_logging=hf_logging,
                 )
@@ -142,7 +149,7 @@ def run_pull(
         def capture_resume_hint(resolved_model: str) -> None:
             # Runs after every confirmation, before the first byte
             # (pull_model's on_transfer_start seam). resolved_model is
-            # the grouping the human just confirmed — replaying it as
+            # the selection the human just confirmed — replaying it as
             # --model keeps the continue in the same model directory.
             # The scrollback print is owed only to interactively
             # shaped pulls (a user-typed shape is in shell history),
@@ -158,8 +165,8 @@ def run_pull(
                 path,
                 include=patterns,
                 select_all=select_all,
-                model=resolved_model,
                 roles=roles,
+                base_model=base_model,
                 refresh_docs=refresh_docs,
                 hf_logging=hf_logging,
             )
@@ -170,13 +177,17 @@ def run_pull(
             nonlocal no_op
             no_op = True
 
+        def mark_metadata_only() -> None:
+            nonlocal metadata_only
+            metadata_only = True
+
         model_dir = pull_model(
             path,
             repo_id,
             client,
             include=patterns,
-            model=model,
             roles=roles,
+            base_model=base_model,
             repo_info=info,
             refresh_docs=refresh_docs,
             select_all=select_all,
@@ -185,6 +196,7 @@ def run_pull(
             confirm=lambda prompt: confirm_or_stop(prompt, yes),
             on_transfer_start=capture_resume_hint,
             on_no_op=mark_no_op,
+            on_metadata_only=mark_metadata_only,
         )
     except KeyboardInterrupt:
         # Ctrl-C mid-transfer (spec 0007): repeat the hint as the final
@@ -206,7 +218,9 @@ def run_pull(
             if shape_hint is not None:
                 typer.echo(shape_hint, err=True)
         raise exit_exc from exc
-    if no_op:
+    if metadata_only:
+        final = f"{repo_id} was already archived; recorded the metadata you passed, no files pulled"
+    elif no_op:
         final = f"{repo_id} is already archived in {model_dir}; nothing new to pull"
     else:
         final = f"pulled {repo_id} into {model_dir}"

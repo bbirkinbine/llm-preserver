@@ -109,8 +109,6 @@ def test_valid_repo_id_pull_never_prints_the_hint(tmp_path, monkeypatch, fake_hu
             str(archive),
             "--include",
             "*Q4_K_M*",
-            "--model",
-            "acme/tiny-chat",
             "--yes",
         ],
     )

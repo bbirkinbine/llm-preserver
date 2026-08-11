@@ -14,28 +14,32 @@ import typer
 
 from llm_preserver.archive import inventory
 from llm_preserver.cli.app import fail
-from llm_preserver.records import ID_COMPONENT_RE
+from llm_preserver.layout import split_repo_id
 from llm_preserver.render import clean_text
 
 
 def split_model_id(model: str) -> tuple[str, str]:
-    """Validate a ``<creator>/<model>`` argument before any path use.
+    """Validate an ``<owner>/<repo>`` argument before any path use.
+
+    Delegates the rule to ``layout.split_repo_id`` — one validator for
+    the whole tool — and maps its ``ValueError`` into this command's
+    fault domain.
 
     Args:
-        model: The user-supplied model id.
+        model: The user-supplied repo id.
 
     Returns:
-        The ``(creator, name)`` pair.
+        The ``(owner, repo)`` pair.
 
     Raises:
         typer.Exit: Exit 1 (via ``fail``) when the id does not match
             the strict component pattern — nothing outside
             ``models/`` must ever be addressable from user input.
     """
-    creator, sep, name = model.partition("/")
-    if not sep or not ID_COMPONENT_RE.fullmatch(creator) or not ID_COMPONENT_RE.fullmatch(name):
-        raise fail(f"model id must look like <creator>/<model>, got {model!r}")
-    return creator, name
+    try:
+        return split_repo_id(model)
+    except ValueError as exc:
+        raise fail(str(exc)) from exc
 
 
 def _reject_unknown(

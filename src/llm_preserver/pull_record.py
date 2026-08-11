@@ -13,15 +13,18 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from llm_preserver.hub import RepoInfo
+from llm_preserver.layout import source_repo_url
 from llm_preserver.records import (
     MANIFEST_FILENAME,
     RECORD_FILENAME,
     ArtifactEntry,
     ArtifactFormat,
+    BaseModelSource,
     FileEntry,
     ModelRecord,
     Role,
     derive_artifact_provenance,
+    stamp_current_schema,
 )
 
 
@@ -34,6 +37,7 @@ def update_record(
     roles: list[Role],
     subdir: ArtifactFormat,
     new_entries: Sequence[FileEntry],
+    asserted_base: str | None = None,
 ) -> ModelRecord:
     """Fold this pull's files into the one record that spans formats.
 
@@ -56,12 +60,22 @@ def update_record(
         roles: Validated roles to assign; merged into existing roles.
         subdir: The format subdirectory the pull landed in.
         new_entries: File entries for everything this pull archived.
+        asserted_base: A curator-asserted ``base_model`` from
+            ``--base-model``. Beats the card's declaration, because a
+            human looking at the repo outranks metadata they can see is
+            wrong or absent (spec 0017 criterion 6).
 
     Returns:
         The updated (or freshly built) record, ready to save.
     """
-    source_repo = f"https://huggingface.co/{repo_id}"
+    source_repo = source_repo_url(repo_id)
     today = datetime.date.today()
+    # Lineage the ADR 0003 layout no longer states structurally: a quant
+    # is its own directory, so the relationship lives in the record.
+    # Attribution travels with the claim — an unattributable lineage is
+    # exactly what the field pair exists to prevent.
+    base_source: BaseModelSource = "asserted" if asserted_base else "card"
+    base = asserted_base or info.base_model
     if record is None:
         record = ModelRecord(
             name=name,
@@ -69,6 +83,8 @@ def update_record(
             roles=roles,
             pipeline_tag=info.pipeline_tag,
             license=info.license,
+            base_model=base,
+            base_model_source=base_source if base else None,
         )
     else:
         if info.pipeline_tag is not None:
@@ -76,6 +92,12 @@ def update_record(
         if record.license is None:
             record.license = info.license
         record.roles.extend(role for role in roles if role not in record.roles)
+        # A curator assertion overwrites; a card declaration only fills
+        # a gap, so re-pulling never downgrades a human's judgment to
+        # whatever the card happens to say today.
+        if asserted_base or (base and record.base_model is None):
+            record.base_model = base
+            record.base_model_source = base_source
     artifact = next(
         (a for a in record.artifacts if a.format == subdir and a.source_repo == source_repo),
         None,
@@ -128,6 +150,9 @@ def write_manifest(model_dir: Path, record: ModelRecord, record_sha256: str | No
             byte-identical to the file it came from, and a manifest
             line ``sha256sum -c`` rejects would defeat the sidecar.
     """
+    # The record is about to be saved; stamp it first so the digest
+    # anticipated here is of the bytes that actually land.
+    stamp_current_schema(record)
     if record_sha256 is None:
         record_json = record.model_dump_json(indent=2) + "\n"
         record_sha256 = hashlib.sha256(record_json.encode("utf-8")).hexdigest()

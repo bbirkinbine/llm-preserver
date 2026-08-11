@@ -43,13 +43,12 @@ def make_client(fake_hub_factory, **overrides):
 
 def do_pull(archive_root, client, **kwargs):
     kwargs.setdefault("include", ["*Q4_K_M*"])
-    kwargs.setdefault("model", "acme/tiny-chat")
     kwargs.setdefault("confirm", lambda prompt: True)
     return pull.pull_model(archive_root, REPO_ID, client, **kwargs)
 
 
 def model_dir(archive_root):
-    return archive_root / "models" / "acme" / "tiny-chat"
+    return archive_root / "models" / "bartowski" / "tiny-chat-GGUF"
 
 
 def test_mixed_commit_merge_keeps_per_file_revisions(archive, fake_hub_factory):

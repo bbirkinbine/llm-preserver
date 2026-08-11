@@ -45,13 +45,12 @@ def make_snapshot_client(fake_hub_factory, **overrides):
 
 def do_pull_all(archive_root, client, repo_id=SNAPSHOT_REPO_ID, **kwargs):
     kwargs.setdefault("include", ())
-    kwargs.setdefault("model", "acme/tiny-chat")
     kwargs.setdefault("confirm", lambda prompt: True)
     return pull.pull_model(archive_root, repo_id, client, select_all=True, **kwargs)
 
 
 def model_dir(archive_root):
-    return archive_root / "models" / "acme" / "tiny-chat"
+    return archive_root / "models" / "acme" / "tiny-orig"
 
 
 def fake_disk_free(monkeypatch, free):
@@ -73,7 +72,7 @@ def test_resume_preflight_discounts_bytes_already_in_staging(
     with pytest.raises(hub.PullHubError):
         do_pull_all(archive, failing)
 
-    staging = archive / ".staging" / "acme" / "tiny-chat"
+    staging = archive / ".staging" / "acme" / "tiny-orig"
     staged_bytes = sum(
         p.stat().st_size for p in staging.rglob("*") if p.is_file() and ".cache" not in p.parts
     )

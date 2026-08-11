@@ -49,7 +49,7 @@ def make_prep(
         info=info,
         creator="acme",
         name="tiny-chat",
-        model_dir=tmp_path / "models" / "acme" / "tiny-chat",
+        model_dir=tmp_path / "models" / "bartowski" / "tiny-chat-GGUF",
         subdir="gguf",
         selected=selected,
         plan=plan,

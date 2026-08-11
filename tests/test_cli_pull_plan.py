@@ -28,7 +28,7 @@ REPO_ID = "bartowski/tiny-chat-GGUF"
 Q4_SIZE = len(b"q4 weight bytes")
 README_SIZE = len(b"# tiny-chat quantized\n")
 TOTAL_BYTES = Q4_SIZE + README_SIZE
-PLAN_ARGS = ("--include", "*Q4_K_M*", "--model", "acme/tiny-chat", "--plan")
+PLAN_ARGS = ("--include", "*Q4_K_M*", "--plan")
 
 GEMMA_REPO_ID = "ggml-org/gemma-tiny-GGUF"
 GEMMA_FILES = [
@@ -96,7 +96,7 @@ def test_plan_prints_report_and_leaves_archive_untouched(tmp_path, monkeypatch, 
     assert any("tiny-chat-Q4_K_M.gguf" in line and str(Q4_SIZE) in line for line in lines)
     assert any("README.md" in line and str(README_SIZE) in line for line in lines)
     assert f"{TOTAL_BYTES} B" in output  # the total
-    assert str(archive / "models" / "acme" / "tiny-chat") in output
+    assert str(archive / "models" / "bartowski" / "tiny-chat-GGUF") in output
     assert REPO_ID in output
     assert "nothing downloaded" in output  # the closing line
     assert f"from {REPO_ID}?" not in output  # no size confirmation under --plan
@@ -131,7 +131,7 @@ def test_plan_composes_with_whole_repo(tmp_path, monkeypatch, fake_hub_factory):
     client = fake_hub_factory()
     install_fake_hub(monkeypatch, client)
 
-    result = invoke_pull(archive, "--whole-repo", "--model", "acme/tiny-chat", "--plan")
+    result = invoke_pull(archive, "--whole-repo", "--plan")
 
     assert result.exit_code == 0
     output = combined_output(result)
@@ -147,29 +147,12 @@ def test_plan_after_interactive_listing_selection(tmp_path, monkeypatch, fake_hu
     client = fake_hub_factory()
     install_fake_hub(monkeypatch, client)
 
-    result = invoke_pull(archive, "--model", "acme/tiny-chat", "--plan", stdin="*Q4_K_M*\n")
+    result = invoke_pull(archive, "--plan", stdin="*Q4_K_M*\n")
 
     assert result.exit_code == 0
     output = combined_output(result)
     assert f"files in {REPO_ID}:" in output  # the listing still printed
     assert f"{TOTAL_BYTES} B" in output  # then the plan did
-    assert client.download_calls == []
-
-
-def test_plan_surfaces_grouping_question_as_would_ask_line(tmp_path, monkeypatch, fake_hub_factory):
-    # Without --model the conftest repo (base_model=acme/tiny-chat, gguf
-    # tree) would prompt to group; --plan resolves it and reports it.
-    # No stdin: an accidental real prompt would abort with exit 2.
-    archive = init_archive_dir(tmp_path)
-    client = fake_hub_factory()
-    install_fake_hub(monkeypatch, client)
-
-    result = invoke_pull(archive, "--include", "*Q4_K_M*", "--plan")
-
-    assert result.exit_code == 0
-    output = combined_output(result)
-    assert "would ask:" in output
-    assert f"group {REPO_ID} under canonical model acme/tiny-chat?" in output
     assert client.download_calls == []
 
 
@@ -182,7 +165,7 @@ def test_plan_surfaces_every_weight_question_as_would_ask_line(
     client = fake_hub_factory()
     install_fake_hub(monkeypatch, client)
 
-    result = invoke_pull(archive, "--include", "*.gguf", "--model", "acme/tiny-chat", "--plan")
+    result = invoke_pull(archive, "--include", "*.gguf", "--plan")
 
     assert result.exit_code == 0
     output = combined_output(result)
@@ -235,9 +218,7 @@ def test_plan_includes_companion_advisories(tmp_path, monkeypatch, fake_hub_fact
     client = fake_hub_factory(files=GEMMA_FILES, repo_id=GEMMA_REPO_ID, base_model=None)
     install_fake_hub(monkeypatch, client)
 
-    result = invoke_pull(
-        archive, *PLAN_ARGS[:2], "--model", "acme/gemma-tiny", "--plan", repo=GEMMA_REPO_ID
-    )
+    result = invoke_pull(archive, *PLAN_ARGS[:2], "--plan", repo=GEMMA_REPO_ID)
 
     assert result.exit_code == 0
     output = combined_output(result)
@@ -272,8 +253,6 @@ def test_plan_fetches_adapter_config_for_advisory_only(tmp_path, monkeypatch, fa
         archive,
         "--include",
         "*adapter_model*",
-        "--model",
-        "acme/tiny-adapter",
         "--plan",
         repo=ADAPTER_REPO_ID,
     )

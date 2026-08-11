@@ -25,7 +25,7 @@ REPO_ID = "bartowski/tiny-chat-GGUF"
 # Seeds the archive at the repo's own home — exactly the default a
 # base_model-less repo proposes, so re-pulls without --model find a
 # complete selection there.
-SEED_ARGS = ("--include", "*Q4_K_M*", "--model", "bartowski/tiny-chat-GGUF", "--yes")
+SEED_ARGS = ("--include", "*Q4_K_M*", "--yes")
 
 
 def combined_output(result) -> str:
@@ -110,38 +110,4 @@ def test_plan_on_fully_archived_selection_has_no_would_ask_grouping(
     output = unstyle(combined_output(result))
     assert "already archived" in output  # the report still renders in full
     assert "would ask:" not in output  # no question survives a no-op plan
-    assert plan_client.download_calls == []
-
-
-def test_plan_with_hub_derived_home_keeps_would_ask_grouping(
-    tmp_path, monkeypatch, fake_hub_factory
-):
-    # A hub-derived home (declared base_model) always confirms — so its
-    # --plan keeps the would-ask line even on a fully-archived
-    # selection: the line mirrors what the real pull would ask.
-    archive = init_archive_dir(tmp_path)
-    install_fake_hub(monkeypatch, fake_hub_factory())  # base_model=acme/tiny-chat
-    seeded = runner.invoke(
-        app,
-        [
-            "pull",
-            REPO_ID,
-            str(archive),
-            "--include",
-            "*Q4_K_M*",
-            "--model",
-            "acme/tiny-chat",
-            "--yes",
-        ],
-    )
-    assert seeded.exit_code == 0
-    plan_client = fake_hub_factory()
-    install_fake_hub(monkeypatch, plan_client)
-
-    result = runner.invoke(app, ["pull", REPO_ID, str(archive), "--include", "*Q4_K_M*", "--plan"])
-
-    assert result.exit_code == 0
-    output = unstyle(combined_output(result))
-    assert "would ask:" in output
-    assert f"group {REPO_ID} under canonical model acme/tiny-chat?" in output
     assert plan_client.download_calls == []

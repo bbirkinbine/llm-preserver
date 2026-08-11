@@ -82,7 +82,7 @@ def test_snapshot_mode_pulls_the_whole_tree_without_a_file_listing(
     output = combined_output(result)
     assert "files to pull" not in output  # no pattern prompt in snapshot mode
     assert "3 of 3 files" in output  # the whole tree in one confirmation
-    record = archive / "models" / "acme" / "tiny-chat" / "model-record.json"
+    record = archive / "models" / "bartowski" / "tiny-chat-GGUF" / "model-record.json"
     assert record.is_file()
     assert len(client.download_calls) == 3
 

@@ -49,7 +49,6 @@ def make_client(fake_hub_factory, **overrides):
 
 def do_pull(archive_root, client, **kwargs):
     kwargs.setdefault("include", ["*Q4_K_M*"])
-    kwargs.setdefault("model", "acme/tiny-chat")
     kwargs.setdefault("confirm", lambda prompt: True)
     return pull.pull_model(archive_root, REPO_ID, client, **kwargs)
 
@@ -132,7 +131,7 @@ def test_adopt_only_pull_asks_no_size_confirmation(archive, fake_hub_factory):
     # files (0 B)" would block scripted re-pulls for nothing
     # (spec 0005 adjudication, 2026-07-12). The record still updates.
     client = fake_hub_factory(files=[(Q4_NAME, Q4_BYTES, True)])
-    target = archive / "models" / "acme" / "tiny-chat" / "gguf" / Q4_NAME
+    target = archive / "models" / "bartowski" / "tiny-chat-GGUF" / "gguf" / Q4_NAME
     target.parent.mkdir(parents=True)
     target.write_bytes(Q4_BYTES)
     prompts = []
@@ -144,7 +143,7 @@ def test_adopt_only_pull_asks_no_size_confirmation(archive, fake_hub_factory):
     do_pull(archive, client, confirm=confirm)
 
     assert [prompt for prompt in prompts if prompt.startswith("pull ")] == []
-    assert (archive / "models" / "acme" / "tiny-chat" / "model-record.json").is_file()
+    assert (archive / "models" / "bartowski" / "tiny-chat-GGUF" / "model-record.json").is_file()
 
 
 def test_fully_archived_selective_repull_asks_no_size_confirmation(archive, fake_hub_factory):

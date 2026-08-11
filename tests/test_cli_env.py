@@ -71,15 +71,13 @@ def test_pull_omits_path_when_env_var_set(tmp_path, monkeypatch, fake_hub_factor
             "bartowski/tiny-chat-GGUF",
             "--include",
             "*Q4_K_M*",
-            "--model",
-            "acme/tiny-chat",
             "--yes",
         ],
         env={ENV_VAR: str(archive)},
     )
 
     assert result.exit_code == 0
-    assert (archive / "models" / "acme" / "tiny-chat").is_dir()
+    assert (archive / "models" / "bartowski" / "tiny-chat-GGUF").is_dir()
 
 
 def test_show_omits_path_when_env_var_set(tmp_path, monkeypatch, fake_hub_factory):
@@ -96,15 +94,13 @@ def test_show_omits_path_when_env_var_set(tmp_path, monkeypatch, fake_hub_factor
             "bartowski/tiny-chat-GGUF",
             "--include",
             "*Q4_K_M*",
-            "--model",
-            "acme/tiny-chat",
             "--yes",
         ],
         env={ENV_VAR: str(archive)},
     )
     assert pulled.exit_code == 0
 
-    result = runner.invoke(app, ["show", "acme/tiny-chat"], env={ENV_VAR: str(archive)})
+    result = runner.invoke(app, ["show", "bartowski/tiny-chat-GGUF"], env={ENV_VAR: str(archive)})
 
     assert result.exit_code == 0
 

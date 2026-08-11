@@ -43,36 +43,12 @@ def make_client(fake_hub_factory, **overrides):
 
 def do_pull(archive_root, client, repo_id=REPO_ID, **kwargs):
     kwargs.setdefault("include", ["*Q4_K_M*"])
-    kwargs.setdefault("model", "acme/tiny-chat")
     kwargs.setdefault("confirm", lambda prompt: True)
     return pull.pull_model(archive_root, repo_id, client, **kwargs)
 
 
 def model_dir(archive_root):
-    return archive_root / "models" / "acme" / "tiny-chat"
-
-
-def test_two_source_repos_never_collide_on_docs(archive, fake_hub_factory):
-    # Same format, same doc filename, different source repos: each gets
-    # its own docs directory and both are recorded — no hard stop.
-    do_pull(archive, make_client(fake_hub_factory))
-    other_readme = b"# same model, different quant shop\n"
-    other = make_client(
-        fake_hub_factory,
-        files=[
-            ("tiny-chat-Q8_0.gguf", b"q8 weight bytes", True),
-            ("README.md", other_readme, False),
-        ],
-    )
-
-    do_pull(archive, other, repo_id=OTHER_REPO_ID, include=["*Q8*"])
-
-    assert (model_dir(archive) / DOCS_REL / "README.md").read_bytes() == README_BYTES
-    assert (model_dir(archive) / OTHER_DOCS_REL / "README.md").read_bytes() == other_readme
-    record = load_record(model_dir(archive))
-    recorded_paths = {f.path for a in record.artifacts for f in a.files}
-    assert f"{DOCS_REL}/README.md" in recorded_paths
-    assert f"{OTHER_DOCS_REL}/README.md" in recorded_paths
+    return archive_root / "models" / "bartowski" / "tiny-chat-GGUF"
 
 
 def test_changed_doc_without_flag_hard_stops_naming_refresh_docs(archive, fake_hub_factory):

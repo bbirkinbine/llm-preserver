@@ -264,12 +264,8 @@ def test_resume_hint_carries_hf_logging_only_when_enabled(tmp_path: Path) -> Non
     serves, so the continue command must not silently drop it
     (adjudicated 2026-07-13).
     """
-    with_flag = compose_resume_hint(
-        "acme/tiny-chat", tmp_path, include=["*Q4*"], model="acme/tiny-chat", hf_logging=True
-    )
-    without_flag = compose_resume_hint(
-        "acme/tiny-chat", tmp_path, include=["*Q4*"], model="acme/tiny-chat"
-    )
+    with_flag = compose_resume_hint("acme/tiny-chat", tmp_path, include=["*Q4*"], hf_logging=True)
+    without_flag = compose_resume_hint("acme/tiny-chat", tmp_path, include=["*Q4*"])
 
     assert with_flag is not None and "--hf-logging" in with_flag
     assert without_flag is not None and "--hf-logging" not in without_flag

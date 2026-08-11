@@ -21,7 +21,7 @@ def test_init_creates_skeleton_dirs(tmp_path):
 def test_init_writes_versioned_root_marker(tmp_path):
     init_archive(tmp_path)
     marker = json.loads((tmp_path / "archive.json").read_text())
-    assert marker["schema_version"] == 1
+    assert marker["schema_version"] == 2
 
 
 def test_init_rerun_on_existing_archive_changes_nothing(tmp_path):

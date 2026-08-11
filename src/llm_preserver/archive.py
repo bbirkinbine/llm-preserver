@@ -19,7 +19,16 @@ from llm_preserver.records import (
     peek_record_schema_version,
 )
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+"""Archive layout version.
+
+v2 (spec 0017, ADR 0003) is one directory per source repo; v1 grouped
+third-party artifacts under the original model. Raised here, with the
+pass that makes ``pull`` write the new layout — a marker claiming v2
+over v1 content would be worse than no marker at all. A v1 archive
+still *reads*: ``migrate`` has to be able to open the archive it exists
+to convert."""
+
 MARKER_FILENAME = "archive.json"
 SKELETON_DIRS = ("models", "runtimes", "manifests")
 
@@ -47,6 +56,9 @@ class ModelSummary:
         missing_checksums: True when any file entry lacks a SHA256.
         total_size: Sum of file sizes from record entries, in bytes.
             Never derived from the filesystem.
+        base_model: The model this repo declares as its base, or None.
+            What ADR 0003's layout no longer states structurally
+            (spec 0017); ``status`` groups on it.
     """
 
     model_id: str
@@ -58,6 +70,7 @@ class ModelSummary:
     missing_license: bool = False
     missing_checksums: bool = False
     total_size: int = 0
+    base_model: str | None = None
 
 
 def _read_marker(path: Path) -> dict[str, object]:
@@ -157,6 +170,7 @@ def _summarize_record(model_id: str, record: ModelRecord) -> ModelSummary:
         missing_license=record.license is None,
         missing_checksums=any(entry.sha256 is None for entry in files),
         total_size=sum(entry.size or 0 for entry in files),
+        base_model=record.base_model,
     )
 
 

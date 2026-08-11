@@ -192,7 +192,7 @@ def test_record_json_carries_schema_version(tmp_path):
     # "hashed-locally", optional-empty roles).
     save_record(make_model_record(), tmp_path)
     data = json.loads((tmp_path / "model-record.json").read_text())
-    assert data["record_schema_version"] == 2
+    assert data["record_schema_version"] == 3
 
 
 def test_unknown_fields_survive_round_trip(tmp_path):

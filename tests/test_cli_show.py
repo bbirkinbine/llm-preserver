@@ -74,7 +74,10 @@ def test_show_prints_artifact_details(tmp_path, write_model, sample_record_dict)
     output = combined_output(result)
     assert "gguf" in output
     assert "Q4_K_M" in output
-    assert "tiny-chat-GGUF" in output  # source repo
+    # The full URL, not the bare id: under ADR 0003 the source repo
+    # equals the hub id, so a bare-id assert would pass on the "Hub id"
+    # line even if the Source repo line vanished.
+    assert "Source repo: https://huggingface.co/acme/tiny-chat" in output
     assert FULL_COMMIT_HASH in output  # pinned revision
     assert "verified" in output  # provenance flag
     assert "12345" in output  # size from the record

@@ -13,6 +13,8 @@ import typer
 from llm_preserver.archive import ArchiveError, require_archive
 from llm_preserver.cli.app import ArchivePath, app, fail
 from llm_preserver.cli.pull_exec import make_hub_client, run_pull, setup_logging
+from llm_preserver.layout import UnmigratedArchiveError, require_migrated_archive
+from llm_preserver.render import clean_text
 
 
 @app.command()
@@ -34,11 +36,19 @@ def pull(
     ] = False,
     model: Annotated[
         str | None,
-        typer.Option("--model", help="Canonical model directory (<creator>/<model>) override."),
+        typer.Option("--model", hidden=True),
     ] = None,
     role: Annotated[
         list[str] | None,
         typer.Option("--role", help="Role to assign the model at pull time; repeatable."),
+    ] = None,
+    base_model: Annotated[
+        str | None,
+        typer.Option(
+            "--base-model",
+            help="Record <owner>/<repo> as this model's lineage. Affects the record only, "
+            "never where the files land.",
+        ),
     ] = None,
     refresh_docs: Annotated[
         bool,
@@ -74,6 +84,18 @@ def pull(
 ) -> None:
     """Pull selected files (or with --whole-repo, the whole tree) from a Hugging Face repo."""
     setup_logging(verbose, hf_logging=hf_logging)
+    if model is not None:
+        # ADR 0003: the destination is a pure function of the typed repo
+        # id, so there is no directory left to choose. Kept as a hidden
+        # option rather than deleted outright — click's bare "no such
+        # option" would not say what to do instead.
+        typer.echo(
+            "error [user input]: --model is gone; a pull now lands in the directory named by "
+            "the repo id you type. Pull the repo id you want archived "
+            f"(for {model}, run: pull {model})",
+            err=True,
+        )
+        raise typer.Exit(code=2)
     if select_all and include:
         # Mutually exclusive shapes (spec 0004); refuse before any
         # network call or client construction.
@@ -84,18 +106,25 @@ def pull(
         )
         raise typer.Exit(code=2)
     # Fail fast on a bad archive path — before any network call or prompt.
+    # The content gate rides here too: an unconverted archive must not
+    # take new content (spec 0017 criteria 23-25), and refusing before
+    # the hub client is even built keeps it off the network.
     try:
         require_archive(path)
+        require_migrated_archive(path)
     except ArchiveError as exc:
         raise fail(str(exc)) from exc
+    except UnmigratedArchiveError as exc:
+        typer.echo(f"error [user input]: {clean_text(str(exc), single_line=True)}", err=True)
+        raise typer.Exit(code=2) from exc
     run_pull(
         path,
         repo_id,
         make_hub_client(),
         include=list(include or []),
         select_all=select_all,
-        model=model,
         roles=tuple(role or ()),
+        base_model=base_model,
         refresh_docs=refresh_docs,
         plan=plan,
         yes=yes,

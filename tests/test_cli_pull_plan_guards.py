@@ -47,8 +47,6 @@ def invoke_plan(archive, *extra_args):
             str(archive),
             "--include",
             "*Q4_K_M*",
-            "--model",
-            "acme/tiny-chat",
             "--plan",
             *extra_args,
         ],
@@ -81,76 +79,6 @@ def test_plan_with_bad_role_exits_2_like_a_real_pull(tmp_path, monkeypatch, fake
     assert result.exit_code == 2
     assert "unknown role" in combined_output(result)
     assert client.download_calls == []
-
-
-def test_plan_advises_when_model_override_contradicts_declared_base(
-    tmp_path, monkeypatch, fake_hub_factory
-):
-    # The live footgun repro (2026-07-12): --model copy-pasted from a
-    # different model's pull. The conftest repo declares
-    # base_model=acme/tiny-chat; --model names an unrelated directory.
-    archive = init_archive_dir(tmp_path)
-    install_fake_hub(monkeypatch, fake_hub_factory())
-
-    result = runner.invoke(
-        app,
-        [
-            "pull",
-            REPO_ID,
-            str(archive),
-            "--include",
-            "*Q4_K_M*",
-            "--model",
-            "Qwen/Qwen3.6-35B-A3B",
-            "--plan",
-        ],
-    )
-
-    output = combined_output(result)
-    assert result.exit_code == 0
-    warning_lines = [
-        line
-        for line in output.splitlines()
-        if line.startswith("warning:")
-        and "acme/tiny-chat" in line
-        and "Qwen/Qwen3.6-35B-A3B" in line
-    ]
-    assert warning_lines, output
-    # Human error outranks missing companions: the warning precedes
-    # every advisory: line in the report.
-    first_warning = output.index(warning_lines[0])
-    advisory_positions = [
-        output.index(line) for line in output.splitlines() if line.startswith("advisory:")
-    ]
-    assert all(first_warning < pos for pos in advisory_positions)
-
-
-def test_real_pull_prints_the_mismatch_advisory_but_still_honors_model(
-    tmp_path, monkeypatch, fake_hub_factory
-):
-    # Advisory only: the pull proceeds into the directory --model named.
-    archive = init_archive_dir(tmp_path)
-    client = fake_hub_factory()
-    install_fake_hub(monkeypatch, client)
-
-    result = runner.invoke(
-        app,
-        [
-            "pull",
-            REPO_ID,
-            str(archive),
-            "--include",
-            "*Q4_K_M*",
-            "--model",
-            "Qwen/Qwen3.6-35B-A3B",
-            "--yes",
-        ],
-    )
-
-    output = combined_output(result)
-    assert result.exit_code == 0
-    assert "acme/tiny-chat" in output  # the declared base, named in the advisory
-    assert (archive / "models" / "Qwen" / "Qwen3.6-35B-A3B" / "model-record.json").is_file()
 
 
 def test_plan_report_strips_terminal_control_characters(tmp_path, monkeypatch, fake_hub_factory):

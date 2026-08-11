@@ -120,31 +120,6 @@ def test_entering_tree_fetches_children_in_fixed_relation_order(
     ]
 
 
-def test_full_discovery_pull_groups_under_confirmed_default_model(
-    tmp_path, monkeypatch, fake_hub_factory
-):
-    # The spec's thesis end to end: name -> numbered picks -> pull, with
-    # the archive home proposed by pull's format-directed default and
-    # confirmed with a y — never typed, never silently decided.
-    archive = init_archive_dir(tmp_path)
-    client = quant_client(fake_hub_factory)
-    install_fake_hub(monkeypatch, client)
-
-    result = invoke_discover(archive, stdin=HAPPY_PATH_STDIN)
-
-    assert result.exit_code == 0
-    output = unstyled_output(result)
-    assert f"files in {QUANT_REPO}:" in output  # the standard listing ran
-    record = archive / "models" / "acme" / "tiny-chat" / "model-record.json"
-    assert record.is_file()  # grouped under the confirmed default
-    assert set(client.download_calls) == {"tiny-chat-Q4_K_M.gguf", "README.md"}
-    # No model override exists, so the 0005 mismatch warning is
-    # structurally silent on every discovery-driven pull. Assert on
-    # the warning's rendered text — the internal kind label never
-    # appears in output, so matching it would be vacuous.
-    assert "declares base model" not in output
-
-
 def test_pull_handoff_fetches_repo_metadata_exactly_once(tmp_path, monkeypatch, fake_hub_factory):
     # Spec 0003's one-metadata-call rule holds through the handoff: the
     # listing and the pull share a single repo_info fetch.

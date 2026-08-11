@@ -20,7 +20,61 @@ Check items off as they ship; update when priorities shift.
   live question ("I have a Q4 — what else do I need?") against today's
   tool.
 
-## Next spec (0017) — pick one
+- [x] **0017 per-repo model directories** — shipped 2026-08-11. All six
+  passes, gate green (1051 tests), and the live conversion run on the
+  real archive: 11 directories, 682.6 GiB, verified 33/33 complete with
+  zero unmigrated, zero empty directories, and no payload lost or
+  double-counted. ADR 0003 accepted by Brian. Three defects were found
+  by live use that the review round and 90 pass-2 tests missed — nested
+  directory removals, EPERM on `uchg`-locked payload over SMB, and
+  silence during the run. Not yet committed or opened as a PR.
+  One directory per source repo, replacing
+  ADR 0001's canonical-model grouping, plus the `migrate` command that
+  converts an existing archive in place or into a copy at a new root.
+  Runs as six checkpointed passes (see the spec's `## Sketch` →
+  landing order); migration lands *before* the pull simplification so
+  the escape hatch exists first. Scope includes view repair after the
+  move and a full end-to-end CLI pass on a migrated archive (criteria
+  18-20) — `discover` and every read-side command need no code change,
+  but all get exercised. Measured scope on the live shelf: 11
+  of 25 directories affected — 3 pure renames (138.0 GiB), 8 splits
+  (544.5 GiB of foreign payload). Blocks nothing, blocked by nothing;
+  note the `record_schema_version` 3 collision with 0016.
+
+## Hardening (independent of any spec)
+
+- [x] **`remove` could not delete locked payload on an SMB archive** —
+  fixed 2026-08-11. `remove/execute.py` unlinked with a plain
+  `Path.unlink()` and no file-flag handling; ADR 0001's payload lock
+  comes back as the BSD immutable flag (`uchg`) over SMB, and
+  `unlink(2)` on an immutable file fails with EPERM. Because `remove`
+  deletes the record *first* (crash-safe order, spec 0010), it would
+  have destroyed a model's source of truth and then failed on its first
+  weight, orphaning the payload. Found while fixing the same bug in
+  `migrate`; both now share `file_locks.py`, and
+  `tests/test_remove_immutable.py` pins that nothing survives under
+  `models/`. Pre-existing on `main`, unrelated to spec 0017's design.
+
+- [ ] **`discover`'s tree frame overruns the terminal — spec 0015 bug,
+  found in live use 2026-08-11** (the live terminal check session 18
+  deferred). `tree_chrome_lines`
+  (`src/llm_preserver/discover_render.py:179`) charges the header,
+  breadcrumb, ancestry ladder, `down —` label, pull line, footer,
+  prompt and a 2-line reserve — but **not the per-relation section
+  labels** (`quantized versions:` etc.) that `render_tree_page` prints
+  at line 264, nor the leading separator. Measured on a real 187x63
+  terminal: `Qwen/Qwen3-Coder-30B-A3B-Instruct` has three relations, so
+  the frame printed 62 lines against a budget that believed 56 rows
+  fit; with a two-line shell prompt that is 64 on a 63-line screen and
+  the top scrolls away — exactly what windowing exists to prevent, and
+  unrecoverable under `screen`. Fix: charge one line per distinct
+  relation label in the visible window (they are known before the frame
+  renders) plus the separator, and re-check the reserve. Same class as
+  session 18's own finding — count *physical* lines — missed because
+  every test used a single relation, where one label hides inside the
+  reserve. Belongs on its own branch, not spec 0017's.
+
+## Next spec (0018) — pick one
 
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
   PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over

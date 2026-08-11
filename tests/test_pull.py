@@ -3,7 +3,7 @@
 Everything drives the ``FakeHubClient`` from conftest; no network.
 Pins the seam from the spec-0003 plan:
 
-    pull_model(archive_root, repo_id, client, *, include, model=None,
+    pull_model(archive_root, repo_id, client, *, include,
                roles=(), confirm=<callable taking a prompt string>)
 
 Files stage under ``<root>/.staging/``, are hashed, then move to
@@ -49,13 +49,12 @@ def make_client(fake_hub_factory, **overrides):
 
 def do_pull(archive_root, client, **kwargs):
     kwargs.setdefault("include", ["*Q4_K_M*"])
-    kwargs.setdefault("model", "acme/tiny-chat")
     kwargs.setdefault("confirm", lambda prompt: True)
     return pull.pull_model(archive_root, REPO_ID, client, **kwargs)
 
 
 def model_dir(archive_root):
-    return archive_root / "models" / "acme" / "tiny-chat"
+    return archive_root / "models" / "bartowski" / "tiny-chat-GGUF"
 
 
 # Docs land in a per-source-repo directory (spec 0003 adjudications).
@@ -209,36 +208,9 @@ def test_interrupted_pull_records_nothing(archive, fake_hub_factory):
     assert list((archive / "models").rglob("model-record.json")) == []
 
 
-def test_model_override_used_verbatim_without_grouping_confirmation(archive, fake_hub_factory):
-    prompts = []
-
-    def confirm(prompt):
-        prompts.append(prompt)
-        return True
-
-    do_pull(archive, make_client(fake_hub_factory), model="custom/name", confirm=confirm)
-    assert (archive / "models" / "custom" / "name" / "gguf" / Q4_NAME).is_file()
-    # --model skips the grouping confirm; the size confirmation that
-    # rides every pull (spec 0005) is the only prompt left.
-    assert len(prompts) == 1
-    assert prompts[0].startswith("pull ")
-
-
-def test_base_model_grouping_is_confirmed_with_user(archive, fake_hub_factory):
-    prompts = []
-
-    def confirm(prompt):
-        prompts.append(prompt)
-        return True
-
-    do_pull(archive, make_client(fake_hub_factory), model=None, confirm=confirm)
-    assert any("acme/tiny-chat" in prompt for prompt in prompts)
-    assert (model_dir(archive) / "gguf" / Q4_NAME).is_file()
-
-
 def test_declined_grouping_writes_nothing(archive, fake_hub_factory):
     with contextlib.suppress(hub.PullUserError):
-        do_pull(archive, make_client(fake_hub_factory), model=None, confirm=lambda prompt: False)
+        do_pull(archive, make_client(fake_hub_factory), confirm=lambda prompt: False)
     assert list((archive / "models").iterdir()) == []
 
 
@@ -246,10 +218,12 @@ def test_repull_updates_record_without_clobbering_artifacts(
     archive, fake_hub_factory, write_model, sample_record_dict
 ):
     existing = sample_record_dict(
+        hub_id=REPO_ID,
         roles=["chat"],
         artifacts=[
             {
                 "format": "mlx",
+                "source_repo": f"https://huggingface.co/{REPO_ID}",
                 "provenance": "unverified",
                 "files": [
                     {
@@ -262,7 +236,9 @@ def test_repull_updates_record_without_clobbering_artifacts(
             }
         ],
     )
-    write_model(archive, existing)
+    # Seeded in the pulled repo's own directory: under ADR 0003 a
+    # record only merges with a re-pull of the same repo.
+    write_model(archive, existing, creator="bartowski", model="tiny-chat-GGUF")
     do_pull(archive, make_client(fake_hub_factory))
     record = load_record(model_dir(archive))
     assert {artifact.format for artifact in record.artifacts} == {"mlx", "gguf"}

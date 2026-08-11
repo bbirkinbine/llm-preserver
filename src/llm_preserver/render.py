@@ -83,6 +83,29 @@ def _artifact_section(artifact: ArtifactEntry) -> list[str]:
     return lines
 
 
+_BASE_SOURCE_PROSE = {
+    "card": "as declared by this repo's model card",
+    "asserted": "as recorded by the curator",
+    "migrated": "carried over from the directory this repo's files used to sit under",
+}
+
+
+def _lineage_lines(record: ModelRecord) -> list[str]:
+    """The lineage sentence, or nothing when no claim exists.
+
+    ADR 0003 gave every repo its own directory, so the filesystem no
+    longer says that a quant derives from a model. This line is where
+    that survives for a reader with ``ls`` and ``cat`` and no tool —
+    ADR 0001's durability test, which the old nested layout passed
+    structurally and this layout has to pass in words.
+    """
+    if record.base_model is None:
+        return []
+    how = _BASE_SOURCE_PROSE.get(record.base_model_source or "", "")
+    suffix = f" ({how})" if how else ""
+    return [f"- Derived from: {clean_text(record.base_model)}{suffix}"]
+
+
 def render_model_record(record: ModelRecord, *, file_header: bool = True) -> str:
     """Render a model record as markdown.
 
@@ -111,6 +134,7 @@ def render_model_record(record: ModelRecord, *, file_header: bool = True) -> str
         f"# {clean_text(record.name)}",
         "",
         f"- Hub id: {clean_text(record.hub_id)}",
+        *_lineage_lines(record),
         f"- Roles: {', '.join(record.roles) or '(no role)'}",
         f"- Capabilities: {_value(capabilities)}",
         f"- Pipeline tag: {_value(record.pipeline_tag)}",

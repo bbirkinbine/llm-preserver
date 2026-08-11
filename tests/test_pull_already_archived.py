@@ -21,7 +21,6 @@ import pytest
 
 import llm_preserver.pull as pull
 from llm_preserver.archive import init_archive
-from llm_preserver.records import load_record
 
 REPO_ID = "bartowski/tiny-chat-GGUF"
 Q4_NAME = "tiny-chat-Q4_K_M.gguf"
@@ -48,8 +47,8 @@ def archive(tmp_path):
 
 def default_home(archive_root: Path) -> Path:
     # The conftest default repo declares base_model=acme/tiny-chat over
-    # a GGUF tree, so the default home under model=None is acme/tiny-chat.
-    return archive_root / "models" / "acme" / "tiny-chat"
+    # a GGUF tree, so under ADR 0003 the destination is the typed repo id.
+    return archive_root / "models" / "bartowski" / "tiny-chat-GGUF"
 
 
 def repo_home(archive_root: Path) -> Path:
@@ -60,7 +59,6 @@ def repo_home(archive_root: Path) -> Path:
 
 def do_pull(archive_root: Path, client, **kwargs) -> Path:
     kwargs.setdefault("include", ["*Q4_K_M*"])
-    kwargs.setdefault("model", None)
     kwargs.setdefault("confirm", lambda prompt: True)
     return pull.pull_model(archive_root, REPO_ID, client, **kwargs)
 
@@ -129,74 +127,6 @@ def test_fully_archived_all_weights_repull_asks_no_prompts(archive, fake_hub_fac
     assert result == repo_home(archive)
 
 
-def test_hub_derived_home_still_asks_grouping_when_fully_archived(archive, fake_hub_factory):
-    # The 0006 invariant, upheld at the 0014 review round: a home taken
-    # from hub metadata (the declared base_model) never names an
-    # archive directory without a human yes — even when the plan would
-    # find nothing to do. A hostile base_model plus a name+size-matched
-    # hashless file must not earn a silent "already archived" exit 0.
-    client = fake_hub_factory()  # declares base_model=acme/tiny-chat
-    do_pull(archive, client)
-    downloads_after_seed = len(client.download_calls)
-    prompts: list[str] = []
-
-    result = do_pull(archive, client, confirm=recording_confirm(prompts))
-
-    assert len(prompts) == 1  # the grouping question, and only it
-    assert "group" in prompts[0]
-    assert "acme/tiny-chat" in prompts[0]
-    assert result == default_home(archive)
-    assert len(client.download_calls) == downloads_after_seed  # still a no-op
-
-
-def test_fully_archived_repull_with_model_override_asks_no_prompts(archive, fake_hub_factory):
-    # Spec 0014: the early exit is unified across paths — --model
-    # (which never asked the grouping question) now also skips the
-    # every-weight confirmation when there is nothing to do.
-    client = fake_hub_factory()
-    do_pull(archive, client, include=["*.gguf"], model="acme/tiny-chat")
-
-    result = do_pull(
-        archive, client, include=["*.gguf"], model="acme/tiny-chat", confirm=refuse_confirm
-    )
-
-    assert result == default_home(archive)
-
-
-def test_partial_overlap_asks_grouping_then_size(archive, fake_hub_factory):
-    # One archived quant plus one new quant: there is work to do, so
-    # the check is file-level, never repo-level — prompts fire in
-    # today's order, grouping first, size last.
-    client = fake_hub_factory(files=THREE_QUANT_FILES)
-    do_pull(archive, client)
-    prompts: list[str] = []
-
-    do_pull(archive, client, include=["*Q4_K_M*", "*Q8_0*"], confirm=recording_confirm(prompts))
-
-    assert len(prompts) == 2
-    assert "group" in prompts[0]
-    assert "acme/tiny-chat" in prompts[0]
-    assert prompts[1].startswith("pull ")
-    assert (default_home(archive) / "gguf" / Q8_NAME).is_file()
-
-
-def test_adopt_only_repull_still_asks_grouping(archive, fake_hub_factory):
-    # Adoption downloads nothing but writes a record; the grouping
-    # answer decides where that record lands — never skipped.
-    client = fake_hub_factory(files=[(Q4_NAME, Q4_BYTES, True), (Q8_NAME, Q8_BYTES, True)])
-    on_disk = default_home(archive) / "gguf" / Q4_NAME
-    on_disk.parent.mkdir(parents=True)
-    on_disk.write_bytes(Q4_BYTES)
-    prompts: list[str] = []
-
-    result = do_pull(archive, client, confirm=recording_confirm(prompts))
-
-    assert len(prompts) == 1  # grouping only: adopt-only skips the size prompt
-    assert "group" in prompts[0]
-    assert client.download_calls == []
-    assert load_record(result).artifacts  # the adoption was recorded
-
-
 def test_refresh_docs_with_changed_doc_still_prompts(archive, fake_hub_factory):
     # --refresh-docs with a changed upstream doc counts as work to do.
     do_pull(archive, fake_hub_factory())
@@ -211,9 +141,10 @@ def test_refresh_docs_with_changed_doc_still_prompts(archive, fake_hub_factory):
 
     do_pull(archive, changed, refresh_docs=True, confirm=recording_confirm(prompts))
 
-    assert len(prompts) == 2
-    assert "group" in prompts[0]
-    assert prompts[1].startswith("pull ")
+    # One question now, not two: ADR 0003 removed the grouping confirm,
+    # so only the plan's own question is asked.
+    assert len(prompts) == 1
+    assert prompts[0].startswith("pull ")
 
 
 def test_archive_drift_repull_still_prompts(archive, fake_hub_factory):
@@ -228,7 +159,8 @@ def test_archive_drift_repull_still_prompts(archive, fake_hub_factory):
 
     do_pull(archive, client, confirm=recording_confirm(prompts))
 
-    assert len(prompts) == 2
-    assert "group" in prompts[0]
-    assert prompts[1].startswith("pull ")
+    # One question now, not two: ADR 0003 removed the grouping confirm,
+    # so only the plan's own question is asked.
+    assert len(prompts) == 1
+    assert prompts[0].startswith("pull ")
     assert target.read_bytes() == Q4_BYTES

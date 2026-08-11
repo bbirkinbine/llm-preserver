@@ -124,7 +124,8 @@ def test_discover_whole_repo_handoff_prints_one_full_resume_command(
 ):
     # The spec's headline line: one greppable hint carrying the exact
     # direct-pull shape — repo id, absolute archive path, mode flag,
-    # and the human-confirmed grouping as --model.
+    # The grouping is gone (ADR 0003), so the repo id alone
+    # reproduces the pull.
     archive = init_archive_dir(tmp_path)
     install_fake_hub(monkeypatch, quant_client(fake_hub_factory))
 
@@ -138,7 +139,7 @@ def test_discover_whole_repo_handoff_prints_one_full_resume_command(
     assert QUANT_REPO in hint
     assert str(archive.resolve()) in hint
     assert "--whole-repo" in hint
-    assert f"--model {BASE_MODEL}" in hint
+    assert "--model" not in hint
 
 
 def test_hint_is_already_printed_when_the_first_transfer_fails(
@@ -181,7 +182,8 @@ def test_discover_pick_files_hint_carries_each_pattern_as_quoted_include(
 
 def test_discover_plan_hint_omits_model_and_plan_flags(tmp_path, monkeypatch, fake_hub_factory):
     # Plan mode records confirmations instead of asking, so no grouping
-    # was human-confirmed: the hint must not bake in --model (0006
+    # the destination is the typed repo id (ADR 0003), so the hint
+    # never carries --model (0006
     # adjudication), and the follow-up the user wants is the real pull,
     # so no --plan either.
     archive = init_archive_dir(tmp_path)
@@ -219,7 +221,7 @@ def test_pull_interactive_listing_prints_hint_with_include_and_model(
     assert QUANT_REPO in hint
     assert str(archive.resolve()) in hint
     assert f"--include {shlex.quote('*Q4_K_M*')}" in hint
-    assert f"--model {BASE_MODEL}" in hint
+    assert "--model" not in hint
 
 
 def test_pull_plan_with_interactive_listing_hint_omits_model_and_plan(
@@ -290,7 +292,7 @@ def test_no_hint_when_user_passed_whole_repo_themselves(tmp_path, monkeypatch, f
     archive = init_archive_dir(tmp_path)
     install_fake_hub(monkeypatch, fake_hub_factory())
 
-    result = invoke_pull(archive, "--whole-repo", "--model", BASE_MODEL, "--yes")
+    result = invoke_pull(archive, "--whole-repo", "--yes")
 
     assert result.exit_code == 0
     assert LEAD_IN not in unstyled_output(result)
@@ -300,7 +302,7 @@ def test_no_hint_when_user_passed_include_themselves(tmp_path, monkeypatch, fake
     archive = init_archive_dir(tmp_path)
     install_fake_hub(monkeypatch, fake_hub_factory())
 
-    result = invoke_pull(archive, "--include", "*Q4_K_M*", "--model", BASE_MODEL, "--yes")
+    result = invoke_pull(archive, "--include", "*Q4_K_M*", "--yes")
 
     assert result.exit_code == 0
     assert LEAD_IN not in unstyled_output(result)
@@ -345,7 +347,7 @@ def test_ctrl_c_on_a_user_typed_pull_still_prints_the_hint(tmp_path, monkeypatch
     )
     install_fake_hub(monkeypatch, client)
 
-    result = invoke_pull(archive, "--whole-repo", "--model", BASE_MODEL, "--yes")
+    result = invoke_pull(archive, "--whole-repo", "--yes")
 
     assert result.exit_code == 130
     hints = hint_lines(click.unstyle(result.output))
@@ -353,7 +355,7 @@ def test_ctrl_c_on_a_user_typed_pull_still_prints_the_hint(tmp_path, monkeypatch
     final_line = click.unstyle(result.output).rstrip().splitlines()[-1]
     assert LEAD_IN in final_line
     assert "--whole-repo" in final_line
-    assert f"--model {BASE_MODEL}" in final_line
+    assert "--model" not in final_line
 
 
 def test_ctrl_c_is_never_swallowed_into_a_retry(tmp_path, monkeypatch, fake_hub_factory):

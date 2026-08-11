@@ -19,6 +19,7 @@ import typer
 from llm_preserver.archive import ArchiveError
 from llm_preserver.cli.app import ArchivePath, app, fail
 from llm_preserver.cli.model_errors import reject_unknown_model, split_model_id
+from llm_preserver.layout import UnmigratedArchiveError
 from llm_preserver.pull_preflight import human_size
 from llm_preserver.remove import (
     ModelNotFound,
@@ -161,7 +162,7 @@ def remove(
         plan = plan_removal(path, model_id, patterns or None)
     except ModelNotFound:
         raise reject_unknown_model(path, model_id) from None
-    except RemoveUserError as exc:
+    except (RemoveUserError, UnmigratedArchiveError) as exc:
         typer.echo(f"error: {clean_text(str(exc), single_line=True)}", err=True)
         raise typer.Exit(code=2) from exc
     except RemoveError as exc:

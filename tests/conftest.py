@@ -207,6 +207,13 @@ def sample_record_dict():
     """Factory for a complete, valid model-record dict (JSON shape).
 
     Top-level fields can be overridden via keyword arguments.
+
+    The artifact's ``source_repo`` follows ``hub_id`` on purpose: under
+    ADR 0003 a model directory holds exactly one repo's bytes, so the
+    default is a *migrated* record and `verify` reads it as ``valid``.
+    Tests that need the pre-migration shape (an artifact from another
+    repo) override ``source_repo`` explicitly — an unmigrated default
+    would silently turn every verify-based test into a layout test.
     """
 
     def make(**overrides):
@@ -222,7 +229,7 @@ def sample_record_dict():
                 {
                     "format": "gguf",
                     "quantization": "Q4_K_M",
-                    "source_repo": "https://huggingface.co/other/tiny-chat-GGUF",
+                    "source_repo": "https://huggingface.co/acme/tiny-chat",
                     "revision": FULL_COMMIT_HASH,
                     "download_date": "2026-07-09",
                     "runtime_tested": "llama.cpp b4000",
@@ -239,6 +246,14 @@ def sample_record_dict():
             ],
         }
         record.update(overrides)
+        if "artifacts" not in overrides:
+            # Keep source_repo following an overridden hub_id, so a
+            # helper that renames the model still produces a migrated
+            # record. Without this, every caller passing hub_id= would
+            # silently build the unmigrated shape and verify would read
+            # it as a layout problem rather than whatever it was testing.
+            for artifact in record["artifacts"]:
+                artifact["source_repo"] = f"https://huggingface.co/{record['hub_id']}"
         return record
 
     return make
