@@ -155,7 +155,11 @@ mentioned in documentation only, never in a recorded verdict.
 
 Per ADR 0002: store only the facts the download moment knows —
 `artifact_type` with its evidence, `base_model`, `parent_models`, on
-`ArtifactEntry` — at record schema v3, a pure widening. Derive every
+`ArtifactEntry` — at record schema **v4**, a pure widening. (Was v3;
+re-based 2026-08-11 because spec 0017 ships the layout change and takes
+v3 for `base_model` plus its provenance. 0017 also takes the
+`base_model` field itself — this spec keeps only `artifact_type`, its
+evidence, and `parent_models`.) Derive every
 verdict at read time: "needs a base" from the type, "base satisfied"
 from an archive-wide lookup, "derivable" from whether a sibling artifact
 in the same record is a full-precision source. One derivation function

@@ -2,6 +2,18 @@
 
 **Status:** accepted
 **Last updated:** 2026-07-09 (accepted by Brian)
+**Amended by:** [ADR 0003](0003-one-directory-per-source-repo.md) —
+model identity only
+
+> **One rule below has been amended.** ADR 0003 replaces the
+> **model-identity** rule — that a model directory is named for the
+> *original* model (`<creator>/<model>`) and that third-party artifacts
+> file underneath it — with one directory per source repo. Read the
+> `## Decision` bullets on model identity, and the "canonical identity
+> is a judgment call at download time" consequence, as historical. The
+> rest of this ADR stands: plain tree, no database, per-model JSON
+> record as source of truth, generated markdown, `sha256sum`-compatible
+> manifests, immutable payload, views as disposable adapters.
 
 ## Context
 
