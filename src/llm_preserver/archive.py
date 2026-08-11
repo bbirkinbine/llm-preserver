@@ -159,6 +159,26 @@ def init_archive(path: Path) -> None:
         raise ArchiveError(f"cannot initialize archive at {path}: {exc}") from exc
 
 
+def set_schema_version(path: Path, version: int) -> None:
+    """Rewrite the archive marker at a new schema version.
+
+    Atomic (tmp file then rename), like ``init_archive``'s own write.
+    Used only by ``migrate`` at the end of a full conversion — the flip
+    is ADR 0003's durable signal that the layout is converted, and an
+    older tool refuses an archive claiming a version it does not know.
+
+    Raises:
+        ArchiveError: If the marker cannot be replaced.
+    """
+    try:
+        marker = {"tool": "llm-preserver", "schema_version": version}
+        tmp = path / (MARKER_FILENAME + ".tmp")
+        tmp.write_text(json.dumps(marker, indent=2) + "\n", encoding="utf-8")
+        tmp.replace(path / MARKER_FILENAME)
+    except OSError as exc:
+        raise ArchiveError(f"cannot update the archive marker in {path}: {exc}") from exc
+
+
 def _summarize_record(model_id: str, record: ModelRecord) -> ModelSummary:
     """Build the summary for a model with a readable record."""
     files = [entry for artifact in record.artifacts for entry in artifact.files]

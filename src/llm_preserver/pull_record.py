@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from llm_preserver.hub import RepoInfo
-from llm_preserver.layout import source_repo_url
+from llm_preserver.layout import source_repo_url, split_repo_id
 from llm_preserver.records import (
     MANIFEST_FILENAME,
     RECORD_FILENAME,
@@ -26,6 +26,29 @@ from llm_preserver.records import (
     derive_artifact_provenance,
     stamp_current_schema,
 )
+
+
+def _usable_claim(base_model: str | None) -> str | None:
+    """The card's ``base_model`` if it is a repo id, else nothing.
+
+    Card values are hub-supplied free text: real cards carry a full
+    URL, a bare model name, or a ``.../tree/main`` suffix. Feeding one
+    into the record raised a validator error *after* the payload had
+    landed, leaving bytes with no record and a repo that could never be
+    archived (review, 2026-08-11).
+
+    Dropping an unusable claim is the same discipline as never
+    inventing one: the advisory has already told the human the value is
+    not a usable repo id, and a lineage field the tool cannot represent
+    is better absent than fatal.
+    """
+    if base_model is None:
+        return None
+    try:
+        split_repo_id(base_model)
+    except ValueError:
+        return None
+    return base_model
 
 
 def update_record(
@@ -75,7 +98,7 @@ def update_record(
     # Attribution travels with the claim — an unattributable lineage is
     # exactly what the field pair exists to prevent.
     base_source: BaseModelSource = "asserted" if asserted_base else "card"
-    base = asserted_base or info.base_model
+    base = asserted_base or _usable_claim(info.base_model)
     if record is None:
         record = ModelRecord(
             name=name,

@@ -102,6 +102,9 @@ class MigratePlan:
 
     units: list[DirectoryMigration] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    scoped: bool = False
+    """True when ``--repo`` narrowed the walk, so this plan converts
+    only part of the archive and must not flip the schema marker."""
 
     @property
     def total_size(self) -> int:

@@ -210,3 +210,37 @@ def test_a_partial_destination_is_resumed_not_refused(archive: Path, tmp_path: P
 
     assert result.exit_code == 0, output_of(result)
     assert (dest / "models" / RENAME_TARGET_ID / Q4_REL).is_file()
+
+
+def test_the_preview_names_the_bytes_that_will_actually_be_copied(
+    archive: Path, tmp_path: Path
+) -> None:
+    """Review finding, 2026-08-11: the preview showed the *source* plan
+    (only the artifacts that move) while an unscoped ``--to`` copies
+    every model directory. At archive scale that reads '682.6 GiB' in
+    front of a 5.9 TiB copy, and a user sizing the destination volume
+    from it fills the disk. The preview is the whole safety mechanism
+    for a bulk move."""
+    dest = tmp_path / "copy"
+
+    out = output_of(invoke_migrate(archive, "--to", str(dest), "--plan"))
+
+    assert "copy" in out.lower()
+    # The snapshot total, not just the moving artifacts.
+    assert "will be copied" in out or "copying" in out.lower()
+
+
+def test_an_already_converted_archive_still_writes_the_requested_copy(
+    archive: Path, tmp_path: Path
+) -> None:
+    """``--to`` is a rehearsal and a backup, so asking for a copy of an
+    archive that needs no conversion must produce one — previously it
+    returned on `plan.is_empty` and silently wrote nothing."""
+    invoke_migrate(archive, "--yes")  # convert in place first
+    dest = tmp_path / "copy"
+
+    result = invoke_migrate(archive, "--yes", "--to", str(dest))
+
+    assert result.exit_code == 0, output_of(result)
+    assert (dest / "models").is_dir()
+    assert any(dest.rglob("model-record.json"))

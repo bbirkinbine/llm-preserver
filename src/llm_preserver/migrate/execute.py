@@ -14,8 +14,10 @@ regenerated from the record rather than from the bytes.
 """
 
 import errno
+from contextlib import suppress
 from pathlib import Path
 
+from llm_preserver.archive import ArchiveError
 from llm_preserver.file_locks import clear_immutable, immutable_flags, restore_immutable
 from llm_preserver.migrate.models import (
     DirectoryMigration,
@@ -47,11 +49,32 @@ def execute_migration(root: Path, plan: MigratePlan, events: MigrateEvents | Non
             resumes — the plan is re-derived from disk.
     """
     events = events or MigrateEvents()
+    scoped = plan.scoped
     for unit in plan.units:
         if events.on_directory_start is not None:
             files = sum(len(move.files) for move in unit.moves)
             events.on_directory_start(unit.model_id, files, sum(m.total_size for m in unit.moves))
         _migrate_directory(unit, events)
+    if not scoped:
+        _flip_marker_when_converted(root)
+
+
+def _flip_marker_when_converted(root: Path) -> None:
+    """Raise the archive marker once nothing is left unmigrated.
+
+    Criterion 24: the flip is the single durable signal that migration
+    finished, so it happens only when a fresh scan finds no directory
+    still holding another repo's files — never after a ``--repo`` run,
+    which converts part of an archive and must not claim the whole one
+    is done.
+    """
+    from llm_preserver.archive import SCHEMA_VERSION, set_schema_version
+    from llm_preserver.layout import unmigrated_directories
+
+    if unmigrated_directories(root):
+        return
+    with suppress(ArchiveError):
+        set_schema_version(root, SCHEMA_VERSION)
 
 
 def _migrate_directory(unit: DirectoryMigration, events: MigrateEvents) -> None:
@@ -147,19 +170,53 @@ def _write_target_record(
     target_dir.mkdir(parents=True, exist_ok=True)
     if (target_dir / RECORD_FILENAME).is_file():
         record = load_record(target_dir)
-        record.artifacts = [*record.artifacts, *artifacts]
+        record.artifacts = _merged_artifacts(record.artifacts, artifacts)
     else:
-        record = ModelRecord(
-            name=repo_id.split("/")[-1],
-            hub_id=repo_id,
-            roles=list(source_record.roles),
-            license=source_record.license,
-            artifacts=list(artifacts),
-        )
+        # A copy of the source record, not five fields off it: the
+        # directory it leaves is about to be deleted, so anything not
+        # carried is destroyed. `pipeline_tag` was lost on all three
+        # renames of the live archive this way, and `notes` — free-form
+        # curator text — would have been unrecoverable (review,
+        # 2026-08-11).
+        record = source_record.model_copy(deep=True)
+        record.name = repo_id.split("/")[-1]
+        record.hub_id = repo_id
+        record.artifacts = list(artifacts)
     if record.base_model is None and source_model_id != repo_id:
         record.base_model = source_model_id
         record.base_model_source = "migrated"
     _commit_record(target_dir, record)
+
+
+def _merged_artifacts(
+    existing: list[ArtifactEntry], incoming: list[ArtifactEntry]
+) -> list[ArtifactEntry]:
+    """Fold arriving artifacts into a target record without duplicating.
+
+    Keyed on ``(format, source_repo)`` — the same key ``update_record``
+    uses — because a resumed run re-plans a move whose target record was
+    already written. Appending blindly produced two identical artifacts
+    listing one file: `verify` calls that `valid` (each entry hashes
+    fine) and `status` doubles the size, so nothing would ever surface
+    it (review, 2026-08-11).
+    """
+    merged = list(existing)
+    for artifact in incoming:
+        key = (artifact.format, artifact.source_repo)
+        match = next(
+            (a for a in merged if (a.format, a.source_repo) == key),
+            None,
+        )
+        if match is None:
+            merged.append(artifact)
+            continue
+        by_path = {entry.path: index for index, entry in enumerate(match.files)}
+        for entry in artifact.files:
+            if entry.path in by_path:
+                match.files[by_path[entry.path]] = entry
+            else:
+                match.files.append(entry)
+    return merged
 
 
 def _rewrite_source_record(

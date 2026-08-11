@@ -20,7 +20,7 @@ import typer
 
 from llm_preserver.archive import ArchiveError, require_archive
 from llm_preserver.cli.app import ArchivePath, app, fail
-from llm_preserver.cli.migrate_cmd.preview import echo_plan
+from llm_preserver.cli.migrate_cmd.preview import echo_copy_scope, echo_plan
 from llm_preserver.cli.migrate_cmd.progress import MigrateProgress
 from llm_preserver.migrate import (
     MigrateError,
@@ -90,8 +90,17 @@ def migrate(
         raise fail(str(exc)) from exc
 
     echo_plan(plan, path, dests)
-    if plan_only or plan.is_empty:
+    if to is not None:
+        echo_copy_scope(path, to, repos)
+    if plan_only:
         return
+    if plan.is_empty and to is None:
+        return
+    if plan.is_empty and to is not None:
+        # --to is a rehearsal and a backup, not only a conversion:
+        # asking for a copy of an already-converted archive must
+        # produce one rather than silently returning (review).
+        typer.echo("nothing to convert; writing the requested copy")
 
     if not yes:
         if not sys.stdin.isatty():

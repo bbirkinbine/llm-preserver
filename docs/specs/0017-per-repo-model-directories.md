@@ -677,7 +677,42 @@ as-is" and converged on the same defects. Applied here:
   two tests renamed to what they actually pin, and stale comments
   describing deleted flags corrected.
 
-**Open, not fixed here** — these need design decisions, not cleanup:
+### Executor round (2026-08-11) — the open findings, closed
+
+The reviewers' shared diagnosis drove the shape: five findings were the
+*plan* failing to refuse what it could already see, so the executor met
+the problem after payload had moved. Those checks moved into the
+planner (`migrate/guards.py`, split out at the 300-line cap), which is
+what makes `docs/cli.md`'s "refuses as a whole — never half-converts"
+true rather than aspirational.
+
+- **Plan-time refusals**: a recorded file absent from *both* source and
+  target (an interrupted pull, which `verify` calls `incomplete`) — but
+  not one merely absent from the source, which is the resumable case; a
+  target that is the source under another spelling, caught with
+  `samefile` because macOS does not normalise case in a resolved path;
+  and two artifacts claiming one path.
+- **A resumed run no longer double-records.** `_merged_artifacts` folds
+  on the `(format, source_repo)` key `update_record` already uses.
+- **A rename carries the whole record forward** (`model_copy`), not
+  five fields off it. The directory it leaves is deleted, so anything
+  not carried is destroyed; `pipeline_tag` was lost on the live
+  archive's three renames this way.
+- **An unusable card `base_model` is dropped rather than fatal.** Real
+  cards carry URLs, bare names, `/tree/main` suffixes; feeding one to
+  the validator crashed *after* the payload landed and left it with no
+  record, permanently unarchivable. The advisory already says the value
+  is unusable — declining to record a claim the tool cannot represent
+  is the same discipline as never inventing one.
+- **Criterion 24 is implemented**: the marker flips only when a fresh
+  scan finds nothing unmigrated, so a `--repo` run never claims the
+  whole archive is converted.
+- **`--to` states what it will copy** (every model directory, not the
+  moving artifacts) and writes the requested copy even when there is
+  nothing to convert — it is a rehearsal and a backup, not only a
+  conversion.
+
+**Superseded by the above** — recorded for the design log:
 an unusable card `base_model` crashing `pull` after the payload lands;
 a resumed migration double-recording the artifact; a case-insensitive
 filesystem collapsing a rename onto itself and deleting the record; a

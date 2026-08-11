@@ -20,6 +20,34 @@ STALE_VIEWS_NOTE = (
 )
 
 
+def echo_copy_scope(archive_root: Path, dest: Path, repos: list[str]) -> None:
+    """Say what ``--to`` will copy, which is not what the plan moves.
+
+    The plan counts only the artifacts that change directory; an
+    unscoped ``--to`` copies every model directory. Showing the plan's
+    figure in front of a whole-archive copy invites someone to size a
+    destination volume from it and fill the disk (review, 2026-08-11).
+    """
+    from llm_preserver.archive import iter_model_dirs
+
+    selected = [
+        (model_id, model_dir)
+        for model_id, model_dir in iter_model_dirs(archive_root)
+        if not repos or model_id in repos
+    ]
+    total = sum(
+        path.stat().st_size
+        for _, model_dir in selected
+        for path in model_dir.rglob("*")
+        if path.is_file()
+    )
+    noun = "directory" if len(selected) == 1 else "directories"
+    typer.echo(
+        f"copying {len(selected)} model {noun} ({human_size(total)}) into {dest} "
+        "— the source archive is not modified"
+    )
+
+
 def echo_plan(plan: MigratePlan, archive_root: Path, view_dests: list[Path]) -> None:
     """Print every directory, its target, its bytes, and its removals."""
     if plan.is_empty:

@@ -15,10 +15,16 @@ that fails mid-run, after files have already moved.
 
 from pathlib import Path
 
-from pydantic import ValidationError
-
 from llm_preserver.archive import iter_model_dirs
-from llm_preserver.layout import model_dir_for, repo_id_from_url, split_repo_id
+from llm_preserver.layout import model_dir_for, split_repo_id
+from llm_preserver.migrate.guards import (
+    _check_distinct_target,
+    _check_movable,
+    _check_paths_distinct,
+    _check_target,
+    _load_or_refuse,
+    _target_repo,
+)
 from llm_preserver.migrate.models import (
     ArtifactMove,
     DirectoryMigration,
@@ -29,59 +35,10 @@ from llm_preserver.migrate.models import (
 from llm_preserver.records import (
     RECORD_FILENAME,
     TOOL_OWNED_ROOT_FILENAMES,
-    ArtifactEntry,
-    ModelRecord,
-    load_record,
 )
-from llm_preserver.remove.models import escapes_model_dir, reached_through_symlink
+from llm_preserver.remove.models import reached_through_symlink
 
 MODELS_DIRNAME = "models"
-
-
-def _load_or_refuse(model_dir: Path, model_id: str) -> ModelRecord:
-    """Load a record, or refuse the whole run naming the directory."""
-    try:
-        return load_record(model_dir)
-    except (ValidationError, ValueError, OSError) as exc:
-        raise MigrateError(
-            f"cannot read the record in {model_id} ({exc}); "
-            "fix or move that directory before migrating"
-        ) from exc
-
-
-def _target_repo(artifact: ArtifactEntry, model_id: str) -> str | None:
-    """The repo id an artifact's files belong to, or None when it is home.
-
-    Raises:
-        MigrateError: If the artifact records no usable source. Moving
-            files needs a claim about where they came from; absent or
-            unreadable, the tool will not guess (spec 0017 open
-            question 3 — refuse and name the directory).
-    """
-    if artifact.source_repo is None:
-        raise MigrateError(
-            f"{model_id} has a {artifact.format} artifact with no recorded source_repo; "
-            "migration cannot tell which repo its files belong to — "
-            "record a source or remove the artifact before migrating"
-        )
-    repo_id = repo_id_from_url(artifact.source_repo)
-    if repo_id is None:
-        raise MigrateError(
-            f"{model_id} records source_repo {artifact.source_repo!r}, "
-            "which is not a hub repo URL this tool can resolve to a directory; "
-            "fix the record before migrating"
-        )
-    return None if repo_id == model_id else repo_id
-
-
-def _check_movable(model_dir: Path, model_id: str, rel_paths: list[str]) -> None:
-    """Refuse recorded paths that would move data out of the archive."""
-    for rel_path in rel_paths:
-        if escapes_model_dir(model_dir, rel_path):
-            raise MigrateError(
-                f"{model_id} records {rel_path!r}, which is a symlink or resolves outside "
-                "its own directory; migration will not follow it"
-            )
 
 
 def _emptied_dirs(model_dir: Path, moving: set[str], staying: set[str]) -> list[Path]:
@@ -171,7 +128,7 @@ def plan_migration(root: Path, repos: list[str] | None = None) -> MigratePlan:
     """
     directories = iter_model_dirs(root)
     scope = _validated_scope(repos, [model_id for model_id, _ in directories], root)
-    plan = MigratePlan()
+    plan = MigratePlan(scoped=scope is not None)
     for model_id, model_dir in directories:
         if scope is not None and model_id not in scope:
             continue
@@ -241,6 +198,7 @@ def _plan_directory(
             f"{model_id} is reached through a symlink; migration will not move files through it"
         )
     record = _load_or_refuse(model_dir, model_id)
+    _check_paths_distinct(record, model_id)
     moves: list[ArtifactMove] = []
     moving: set[str] = set()
     staying: set[str] = set()
@@ -250,8 +208,9 @@ def _plan_directory(
         if target_repo is None:
             staying.update(rel_paths)
             continue
-        _check_movable(model_dir, model_id, rel_paths)
         target_dir = model_dir_for(root, target_repo)
+        _check_movable(model_dir, model_id, rel_paths, target_dir)
+        _check_distinct_target(model_dir, model_id, target_dir, target_repo)
         _check_target(target_dir, target_repo, model_dir, rel_paths)
         moving.update(rel_paths)
         moves.append(
@@ -276,33 +235,3 @@ def _plan_directory(
         moves=moves,
         removed_dirs=removals,
     )
-
-
-def _check_target(
-    target_dir: Path, target_repo: str, model_dir: Path, rel_paths: list[str]
-) -> None:
-    """Refuse a destination that is unsafe or already holds other bytes.
-
-    A file already at the target with the *same recorded size* is a
-    resumed move, not a collision — the previous run moved it and
-    stopped before rewriting the records. Size, never a re-hash: the
-    no-re-hash promise is what makes migration minutes rather than
-    hours at archive scale.
-    """
-    if target_dir.is_symlink() or target_dir.parent.is_symlink():
-        raise MigrateError(
-            f"the destination for {target_repo} is reached through a symlink; refusing to write "
-            "outside the archive"
-        )
-    for rel_path in rel_paths:
-        existing = target_dir / rel_path
-        if not existing.exists():
-            continue
-        source = model_dir / rel_path
-        if not source.exists():
-            continue  # already moved by an interrupted run
-        if existing.stat().st_size != source.stat().st_size:
-            raise MigrateError(
-                f"{target_dir / rel_path} already exists with different contents; "
-                "migration will not overwrite it — resolve it by hand and re-run"
-            )
