@@ -356,11 +356,25 @@ treats 80 columns as narrow.
 - **Resolved at the plan round** (was an open question here): a repo
   whose flat listing fits gets no key line at all, not merely no `f`.
   See the fifth adjudication.
-- **Verification owed live, not just in tests.** Every listing spec in
-  this repo has been out-found by a real run — 0015's sizing was
-  simulated in tests and the `screen` check is still owed, and the
-  live-use round has beaten the review round on usability on this
-  surface repeatedly. The Kimi repo above is the reproduction case: it
-  should be walked end to end on a real terminal before this ships,
-  including a narrow (80-column) window where the long shard names
-  wrap.
+- **Verified against the live repo, 2026-08-12.** The reproduction case
+  was re-run through the real `HubClient` (one read-only `model_info`
+  call, nothing downloaded) rather than a fixture.
+  `unsloth/Kimi-K3-GGUF` returns 171 files, matching the reported run
+  line for line. At 80x24: **before, 172 physical rows — overrunning
+  the screen by 149; after, a 17-row first frame with 7 rows to
+  spare**, and the paged frames measure 24/24/24, exactly on budget.
+  Re-run at 42, 43, 60, and 100 columns: no frame overflows at any of
+  them.
+- **One real-data finding: at 42-43 columns the roll-up is withheld
+  entirely.** Its directory lines are 48 characters, so each wraps and
+  the roll-up fails `fits` — the listing falls to the third rung and
+  pages 9 files at a time, 19 pages, with no `s` offered. That is
+  adjudication 4 behaving as written, not a bug, but it means the
+  frame this spec exists to provide is absent on a narrow pane. The
+  `_NAME_PAD` floor of 26 is what costs the width; deriving the pad
+  from the actual names would fit 40 columns. Left open deliberately.
+- **Still owed: the interactive walk on a real terminal.** The frames
+  above are rendered from live hub data at simulated geometries; what
+  is untested is a human driving `discover` under `screen`, where
+  scrollback is the thing that made the original report unrecoverable.
+  Every listing spec in this repo has been out-found by a real run.
