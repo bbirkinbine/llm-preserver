@@ -660,6 +660,21 @@ as-is" and converged on the same defects. Applied here:
   when that base is itself a header, otherwise it heads its own group.
   Every model appears exactly once; chains, orphans, self-references
   and mutual cycles are all pinned.
+
+  **Correction (2026-08-12, `fix/lineage-grouping-order`).** That rule
+  was implemented as a single pass over ids sorted alphabetically,
+  asking whether the base had *already* been promoted to a header — so
+  grouping depended on how a derivative's id sorted against its base's
+  rather than on the records. Found in live use: the archive held both
+  `unsloth/GLM-4.7-Flash-GGUF` and the `zai-org/GLM-4.7-Flash` it
+  declares, and because `unsloth` sorts first the pair rendered as two
+  unrelated top-level rows while eight other pairs grouped. The rule
+  is now **a base adopts only if it declares no base of its own** —
+  a pure function of the records, so id order cannot reach it. The
+  visible consequence beyond the fix: a grandchild heads its own group
+  even when its parent is printed as a header, where the old pass
+  sometimes indented it. Both shapes are pinned in
+  `tests/test_lineage_view.py`.
 - **Owner-directory removal was decided per unit**, so two renames
   sharing an owner each saw a sibling and neither claimed the parent.
   Decided once across the whole plan now.

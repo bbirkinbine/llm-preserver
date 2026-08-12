@@ -161,6 +161,41 @@ def test_a_chain_lists_every_model_exactly_once(sample_record_dict):
     ]
 
 
+def test_a_grandchild_heads_its_own_group_even_when_its_parent_is_a_header(
+    sample_record_dict,
+):
+    """The one shape the 2026-08-12 fix renders differently, pinned so it
+    is a decision rather than an accident (adversarial review).
+
+    ``b`` declares ``a``, which declares a base the archive does not
+    hold — so ``a`` is indented under a placeholder and ``b``, unable to
+    be adopted by a child, is printed at the left margin. ``c`` declares
+    ``b``. The old sorted-pass rule indented ``c`` under ``b``; adopting
+    only on "declares no base of its own" does not, because ``b`` is
+    itself a derivative. One indent level is what makes this a trade
+    rather than a loss: nesting ``c`` under ``b`` would put a derivative
+    of a derivative on screen without its own parent's lineage visible.
+    """
+    from llm_preserver.archive import ModelSummary
+
+    rows = group_by_lineage(
+        [
+            ModelSummary(model_id="a/mid", base_model="gone/missing"),
+            ModelSummary(model_id="b/leaf", base_model="a/mid"),
+            ModelSummary(model_id="c/tip", base_model="b/leaf"),
+        ]
+    )
+
+    # Headers print in id order, each followed by its own derivatives —
+    # so the placeholder group lands last and carries `a/mid` with it.
+    assert [(row.model_id, row.depth, row.archived) for row in rows] == [
+        ("b/leaf", 0, True),
+        ("c/tip", 0, True),
+        ("gone/missing", 0, False),
+        ("a/mid", 1, True),
+    ]
+
+
 def test_no_model_is_ever_listed_twice(sample_record_dict):
     from llm_preserver.archive import ModelSummary
 
@@ -177,6 +212,51 @@ def test_no_model_is_ever_listed_twice(sample_record_dict):
     listed = [row.model_id for row in rows if row.archived]
     assert sorted(listed) == sorted(s.model_id for s in summaries)
     assert len(listed) == len(set(listed))
+
+
+def test_grouping_does_not_depend_on_how_the_ids_sort(sample_record_dict):
+    """Live-use bug (2026-08-12): the archive held both
+    ``unsloth/GLM-4.7-Flash-GGUF`` and the ``zai-org/GLM-4.7-Flash`` it
+    declares, and ``status`` printed them as two unrelated top-level
+    rows while all eight other pairs grouped. The single pass over
+    sorted ids adopted only bases already promoted to headers, so a base
+    whose id sorts *after* its derivative had not been seen yet.
+
+    Same lineage, two id orderings, one shape — the assertion the
+    ordering-dependent version cannot satisfy.
+    """
+    from llm_preserver.archive import ModelSummary
+
+    def shape(base_id: str, quant_id: str) -> list[tuple[str, int]]:
+        rows = group_by_lineage(
+            [
+                ModelSummary(model_id=quant_id, base_model=base_id),
+                ModelSummary(model_id=base_id),
+            ]
+        )
+        return [(row.model_id, row.depth) for row in rows]
+
+    assert shape("acme/x", "unsloth/x-GGUF") == [("acme/x", 0), ("unsloth/x-GGUF", 1)]
+    assert shape("zai-org/x", "unsloth/x-GGUF") == [("zai-org/x", 0), ("unsloth/x-GGUF", 1)]
+
+
+def test_status_indents_a_quant_whose_base_sorts_after_it(
+    tmp_path, write_model, sample_record_dict
+):
+    # The end-to-end half of the same bug: what the shelf prints is what
+    # the human reads to decide whether a full-precision pull closed a
+    # gap, so the unit-level shape is not enough on its own.
+    archive = init_archive_dir(tmp_path)
+    late_base = "zzz-org/tiny-chat"
+    seed(archive, write_model, sample_record_dict, late_base)
+    seed(archive, write_model, sample_record_dict, QUANT_ID, base=late_base)
+
+    lines = status_of(archive).splitlines()
+    base_line = next(i for i, line in enumerate(lines) if line.startswith(late_base))
+    quant_line = next(i for i, line in enumerate(lines) if QUANT_ID in line)
+
+    assert quant_line == base_line + 1
+    assert lines[quant_line].startswith("  ")
 
 
 def test_a_mutual_cycle_terminates_and_lists_both(sample_record_dict):
