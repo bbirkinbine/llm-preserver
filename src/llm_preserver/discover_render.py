@@ -11,13 +11,13 @@ at fetch time so a number never renames a repo), the renderer prints
 the slice it is handed, and a footer says where that slice sits.
 """
 
-import math
 from collections.abc import Callable, Sequence
 
 from llm_preserver.discover import ParentLink
 from llm_preserver.discover_paging import NumberedRow, WindowFooter
 from llm_preserver.hub_discovery import ModelSummary
 from llm_preserver.render import clean_text
+from llm_preserver.text_window import wrapped_height
 
 # Lines a tree frame spends on something other than the lines counted
 # explicitly by ``tree_chrome_lines``: the frame separator rule and its
@@ -64,13 +64,6 @@ def key_hints(*, more_available: bool, back_available: bool) -> str:
         parts.append("b = back a page")
     parts.append("q = quit")
     return ", ".join(parts)
-
-
-def wrapped_height(text: str, width: int | None) -> int:
-    """Physical lines ``text`` occupies at ``width``; 1 when unknown."""
-    if width is None or width <= 0:
-        return 1
-    return max(1, math.ceil(len(text) / width))
 
 
 def row_line(row: NumberedRow) -> str:

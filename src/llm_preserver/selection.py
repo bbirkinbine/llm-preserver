@@ -135,14 +135,43 @@ def require_nondoc_selection(
     """
     if any(not is_doc_file(repo_file.path) for repo_file in selected):
         return
-    listing = ", ".join(
-        repo_file.path for repo_file in available if not is_doc_file(repo_file.path)
-    )
+    paths = [repo_file.path for repo_file in available if not is_doc_file(repo_file.path)]
     raise PullUserError(
         f"no files in {repo_id} match include patterns {list(include)!r} "
         "(docs always ride along but cannot be the whole pull); adjust --include — "
-        f"available files: {listing or 'none'}"
+        f"available files: {_available_summary(paths)}"
     )
+
+
+# How many paths a no-match error names before it starts counting.
+# Spec 0013's live-use adjudication set the same shape on the no-GGUF
+# roll-up: truncate at ten and say how many were left out. Spec 0018
+# made this error far easier to reach — the roll-up puts directory
+# names on screen and typing one un-globbed matches nothing — and the
+# untruncated form measured 16,796 characters, 210 physical rows on a
+# 24-row terminal. A wall thrown *at* a typo is worse than the wall
+# this listing work removed.
+_MAX_LISTED_PATHS = 10
+
+
+def _available_summary(paths: Sequence[str]) -> str:
+    """Name a few available files, then count the rest.
+
+    Args:
+        paths: The non-documentation paths the repo offers.
+
+    Returns:
+        A comma-separated sample capped at ``_MAX_LISTED_PATHS``, with
+        a trailing count when more exist, or ``none`` when the repo
+        offers no non-documentation file at all.
+    """
+    if not paths:
+        return "none"
+    shown = ", ".join(paths[:_MAX_LISTED_PATHS])
+    remaining = len(paths) - _MAX_LISTED_PATHS
+    if remaining <= 0:
+        return shown
+    return f"{shown} — and {remaining} more of {len(paths)}"
 
 
 def require_case_distinct_targets(selected: Sequence[RepoFile]) -> None:

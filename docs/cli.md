@@ -237,6 +237,85 @@ Options:
 
 Behavior worth knowing:
 
+- **The interactive file listing pages instead of walling** (spec
+  0018). A repo whose listing fits your terminal prints exactly as it
+  always has: every file, one row each, size then path, then the
+  pattern prompt. A repo whose listing would overrun the screen opens
+  on a **roll-up** instead — one line per top-level directory and one
+  per sharded weight set, each with its file count and total size,
+  everything else listed individually, because the fact that decides
+  your pattern is which groups exist, not the 166 shard names inside
+  them:
+
+  ```text
+  files in unsloth/Kimi-K3-GGUF (171 files, 6.9 TiB):
+      25.5 KiB  .gitattributes
+      43.5 KiB  README.md
+     630.0 GiB  UD-IQ1_M/                 15 files
+     ...
+       1.4 TiB  UD-Q4_K_XL/               32 files
+     862.4 MiB  mmproj-BF16.gguf  — vision projector
+  f = list every file (paged), q = quit
+  files to pull (comma-separated patterns, e.g. *Q4_K_M* or *.gguf,*mmproj*):
+  ```
+
+  A full-weights snapshot has no directories at all — it is ~96 files
+  of `model-NNNNN-of-NNNNNN.safetensors` at the root — so a shard set
+  rolls up the same way a directory does, and its line names the set as
+  a pattern you can paste (`model-*.safetensors`):
+
+  ```text
+  files in Uniboshi/Kimi-K3-Abliterated-V1 (113 files, 1.4 TiB):
+       1.1 KiB  README.md
+       7.1 KiB  config.json
+       ...
+       1.4 TiB  model-*.safetensors       96 files
+      57.0 MiB  model.safetensors.index.json
+       2.7 MiB  tiktoken.model
+  f = list every file (paged), q = quit
+  files to pull (comma-separated patterns, e.g. model-*.safetensors or *.gguf,*mmproj*):
+  ```
+
+  Directory is the outer rule, so shards inside `UD-Q4_K_XL/` stay
+  under the directory; a set needs more than one member to earn a line.
+  The same convention drives the incomplete-shard-set advisory, so the
+  listing and that warning can never disagree about what a set is.
+
+  The roll-up summarizes and never replaces: `f` lists every file, one
+  screen at a time, with `m` for the next page, `b` for the previous,
+  and `s` back to the roll-up. Nothing is fetched in either direction —
+  the whole file list arrived with the metadata call the pull already
+  made — so paging is free and the footer's total (`showing 21-40 of
+  171`) is a true count, not a running tally. Groups appear in hub
+  order, at the position of their first file; nothing is sorted or
+  ranked. You can type a pattern at any frame, including page four,
+  without paging back.
+
+  A directory whose total is a floor — because the hub reports no size
+  for one of its files — is marked with a trailing `+` (`369.8 GiB+`),
+  and the header says `at least`. That is the number you weigh against
+  free disk, so it says when it is understating.
+
+  Two consequences of the key line worth knowing. **Keys are only keys
+  where a key line is showing** — a listing that fits prints none, so a
+  bare `q` there is a pattern matching a file named `q`, while on an
+  overflowing listing it quits (exit 2). And keys match the whole
+  answer before the comma split, so `f` is the key but `f,` and
+  `f, *.gguf` are pattern lists. Since patterns match the full repo
+  path and want a leading `*`, a real pattern never collides.
+
+  Inside a windowed listing all five of `f m b s q` are keys whether or
+  not the frame currently acts on them: pressing one that does nothing
+  here re-prompts with a line saying why, rather than being read as a
+  glob. `m` on the last page answers `no further pages — b, s, q, or
+  type a pattern` and asks again. The roll-up's prompt also names one
+  of the repo's own directories in its example (`*UD-Q4_K_XL*`), since
+  typing a directory name without wildcards matches nothing — patterns
+  are matched against the full repo path.
+
+  **Piped and redirected runs are unaffected**: no roll-up, no window,
+  no key line — the full flat listing, byte for byte as before. A pipe
+  has no scroll problem; it has a file.
 - **Every pull states its size before moving bytes.** Whatever the
   mode — `--include`, interactive, `--whole-repo` — the pull runs a
   disk preflight (refusing with exit 3 when the archive volume is
@@ -531,7 +610,11 @@ type `q`. Three stages, every step a numbered pick:
    listing) or `2 = whole-repo snapshot` (originals/masters — the
    tree is the artifact, spec 0004 semantics). Then the exact `pull`
    flow: file listing (mode 1 only), advisories, then the size
-   confirmation. There is no grouping question — the repo row you
+   confirmation. The file listing pages the same way these frames do —
+   a big quant repo opens on a directory roll-up with `f` to list every
+   file, so the handoff out of `discover` no longer drops a 171-row
+   wall on a terminal that cannot scroll back (spec 0018; see the pull
+   section). There is no grouping question — the repo row you
    picked *is* the directory (ADR 0003), so hub metadata cannot name
    an archive directory at all, which is the spec 0006 invariant now
    held structurally rather than by a prompt. Once the confirmation

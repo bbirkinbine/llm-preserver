@@ -1,4 +1,4 @@
-"""Tests for llm_preserver.cli.discover_cmd.window — spec 0015.
+"""Tests for llm_preserver.cli.window — spec 0015.
 
 One helper decides how many rows a discover frame may print, so the
 non-TTY determinism guarantee is checkable in one place. These tests ARE
@@ -30,7 +30,7 @@ import io
 import os
 import shutil
 
-from llm_preserver.cli.discover_cmd.window import (
+from llm_preserver.cli.window import (
     MIN_WINDOW_ROWS,
     NON_TTY_WINDOW_ROWS,
     resolve_window_size,

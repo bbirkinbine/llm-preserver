@@ -26,7 +26,7 @@ piped output stays byte-identical (the determinism criterion).
 import io
 import math
 
-from llm_preserver.cli.discover_cmd.window import (
+from llm_preserver.cli.window import (
     NON_TTY_WINDOW_ROWS,
     resolve_window_size,
     resolve_window_width,
@@ -99,7 +99,7 @@ def test_a_piped_stream_reports_no_width() -> None:
 
 def test_a_terminal_reports_its_column_count(monkeypatch) -> None:
     monkeypatch.setattr(
-        "llm_preserver.cli.discover_cmd.window.shutil.get_terminal_size",
+        "llm_preserver.cli.window.shutil.get_terminal_size",
         lambda: os_terminal_size(columns=100, lines=40),
     )
     assert resolve_window_width(FakeStream(tty=True)) == 100

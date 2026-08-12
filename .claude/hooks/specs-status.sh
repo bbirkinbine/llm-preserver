@@ -118,7 +118,17 @@ render_row() {
     local blocked=0 d
     for d in $(printf '%s' "$dep" | tr ',' ' '); do
       case "$d" in
-        [0-9][0-9][0-9][0-9]) [ "$(status_of "$d")" != "shipped" ] && blocked=1 ;;
+        # A shipped spec often records its PR — "shipped (PR #25)" —
+        # and an exact-string compare called those dependencies
+        # unshipped, so spec 0018 rendered "(blocked)" on a dependency
+        # that merged three specs earlier (review round, 2026-08-12,
+        # the first Depends-on to point at the "shipped (PR #N)" form).
+        [0-9][0-9][0-9][0-9])
+          case "$(status_of "$d")" in
+            shipped | shipped\ *) ;;
+            *) blocked=1 ;;
+          esac
+          ;;
       esac
     done
     if [ "$blocked" = 1 ]; then

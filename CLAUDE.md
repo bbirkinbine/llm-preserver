@@ -802,16 +802,71 @@ parallelize only with partitioned file ownership.
   and `verify` calls the record invalid forever; and `pull_advisory.py`
   is already 304 lines, over the cap, which pass 3's shared
   archive-walk extraction happens to fix.
-- **Next spec (0018): pick from TODO.md** — smoke test, spec 0002's
-  later adapter phases (LM Studio / llama.cpp / vLLM), or the
-  interactive-listing TUI (whose `discover` half spec 0015 took; what
-  remains is `pull`'s file listing plus arrow-key/type-to-filter).
-  Also queued from live use: goal-definitive archiving (capability
-  report in `status`), file-kind dictionary, live-hub canary (0000
-  roadmap).
+- **Session 23 (2026-08-12): spec 0018 pull file listing window
+  shipped, PR #31.** Live trigger: `discover 'kimi k3'` →
+  `unsloth/Kimi-K3-GGUF` → `1 = pick files` printed **171 file rows
+  into a 24-line terminal**, one stage after discover's own windowed
+  frames — spec 0015 had fixed that stage and named this listing out
+  of scope in its own non-goals. Windowing alone would have been the
+  wrong fix: this stage prompts for a *glob*, and what decides the
+  glob is which quant directories exist, not the 166 shard names, so
+  paging it costs nine keypresses to learn what a roll-up says in one
+  frame. Shape: overflow on a TTY opens on a **directory roll-up**
+  (171 rows → 14), every file one `f` away, `m`/`b` paging, `s` back
+  to the roll-up keeping your place; piped runs and repos that fit are
+  byte-identical to before, which is what kept every existing pull
+  test valid unchanged. Carried by two neutral refactors —
+  `cli/discover_cmd/window.py` → `cli/window.py` with `is_interactive`
+  public (the pull flow needs the *verdict*, not a size derived from
+  it: `resolve_window_size` answers a 20-line window for a pipe, right
+  for discover and wrong here), and a neutral `text_window.py` owning
+  the one physical-line rule (`wrapped_height` + new `fit_by_cost`,
+  `fit_rows` as its adapter). **The plan round earned its keep before
+  a line was written**: the spec claimed it would reuse `fit_rows` and
+  `row_line_cost`, and neither is callable from here — `fit_rows`
+  reads a relation off a `NumberedRow`, `row_line_cost` renders
+  `  {n}. {repo_id}` — so "reuse" had to become "extract". **The
+  review round found the headline criterion failing in a width band
+  nobody looked at**: the frame was sized against `footer_line(1, …)`,
+  the *narrowest* first index, so at 42-43 columns the real footer
+  wrapped and frames rendered 25 physical rows on a 24-row screen —
+  found and measured identically by both reviewers, and invisible to
+  the test written to pin that very criterion because it was hardwired
+  to `COLUMNS = 80`. **Six further load-bearing guards survived
+  deletion with all 46 tests green** (the `b` history stack, the
+  `and back` / `and more` / `and offer_rollup` gates, the prompt's
+  chrome charge, key matching on the expanded frame) — the spec 0017
+  lesson repeating, all now mutation-proved by a 141-case geometry
+  sweep over widths 30-120 and heights 14-60. Durable rules learned:
+  **charge chrome at its widest *form*, not merely its widest line** —
+  a footer whose numbers grow as you page is a different width later
+  than at frame one; and **a frame-sizing test pinned to one terminal
+  width cannot fail**, so sweep the geometry. **Four product calls went
+  to Brian and all four changed the product**, each an instance of the
+  same rule — *a frame that teaches something must not punish the human
+  for acting on it*: a reserved key that does nothing on this frame now
+  re-prompts instead of falling through as a glob (`m` on the last page
+  cost a 210-row no-match error, a bigger wall than the one removed);
+  that no-match error now samples ten paths and counts the rest (spec
+  0013's shape, and it meant reaching into `selection.py`, which this
+  spec's non-goals excluded — taken anyway because the roll-up is what
+  makes the error reachable); the roll-up's prompt names one of the
+  repo's own directories, since the frame puts those names on screen
+  and typing one un-globbed matches nothing; and a directory total that
+  is a floor is marked `+`. 1297 tests. Declined and queued:
+  type-to-filter, a match-preview loop. Found and deliberately left:
+  EOF at this prompt exits 1 rather than 2 (pre-existing, in TODO), and
+  below 48 columns the roll-up is withheld so a narrow pane degrades to
+  paging.
+- **Next spec (0019): pick from TODO.md** — smoke test, spec 0002's
+  later adapter phases (LM Studio / llama.cpp / vLLM), or the remaining
+  TUI nice-to-haves (arrow-key highlight, type-to-filter, match
+  preview). Also queued from live use: goal-definitive archiving
+  (capability report in `status`), file-kind dictionary, live-hub
+  canary (0000 roadmap).
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
   in progress — phase 1 shipped (PR #20), later adapters open;
-  0005–0014 shipped; `0016` draft; `0017` shipped (this session).
+  0005–0014 shipped; `0016` draft; `0017` shipped; `0018` draft.
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

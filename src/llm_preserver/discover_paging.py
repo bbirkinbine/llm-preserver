@@ -21,6 +21,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from llm_preserver.hub_discovery import ModelSummary
+from llm_preserver.text_window import fit_by_cost
 
 
 @dataclass(frozen=True)
@@ -206,17 +207,16 @@ def fit_rows(
     """
     if start >= len(rows):
         return start
-    lines = 0
-    end = start
+    # Costs for the tail from `start`, then one shared fitting rule
+    # (`text_window.fit_by_cost`) decides where it stops. Rows past the
+    # window get a cost computed and unused, which is cheap and keeps
+    # the section-header charge in one readable pass.
+    costs: list[int] = []
     previous_relation: str | None = None
     for index in range(start, len(rows)):
         row = rows[index]
         relation = row.summary.relation
         header = relation is not None and (index == start or relation != previous_relation)
-        cost = (line_cost(row) if line_cost is not None else 1) + (1 if header else 0)
-        if lines + cost > budget and end > start:
-            break
-        lines += cost
-        end = index + 1
+        costs.append((line_cost(row) if line_cost is not None else 1) + (1 if header else 0))
         previous_relation = relation
-    return end
+    return start + fit_by_cost(costs, 0, budget)
