@@ -350,7 +350,66 @@ parallelize only with partitioned file ownership.
   drives it; agents do not `rm` inside an archive. Tests use tmp dirs,
   never a real archive.
 
-## Open work / current state (updated 2026-08-06, end of session 18)
+## Open work / current state (updated 2026-08-11, session 22)
+
+- **Sessions 19–21 left no trace on `main`.** Their work (spec 0016
+  implementation, an abandoned spec 0018, and a first draft of spec
+  0017 + ADR 0003) lived on branches that were never pushed, in a
+  working tree that is gone — this checkout is a fresh clone with a
+  single-entry reflog. Treat any session note referring to those
+  branches as history, not as recoverable state. The durable
+  survivors: spec 0016 and ADR 0002 are merged and on `main`; the
+  design conclusion of the lost 0017 work is re-derived from scratch
+  in ADR 0003 below.
+- **Session 22 (2026-08-11): spec 0017 per-repo model directories
+  specced and clarified; ADR 0003 accepted by Brian.** Live-use trigger:
+  Brian's friction with a quant repo nesting under its parent
+  (`unsloth/...-GGUF` under the meta model). A read-only measurement
+  of the live archive decided it — 25 models: the two GGUF
+  repos of one model sit in **two different layouts despite declaring
+  the same base** (verified against the archived cards; scalar vs.
+  single-element-list YAML, which `_first_str` normalizes the same —
+  so the split came from a pull-time override the record does not
+  keep), and **three directories are named for models the archive does
+  not hold** (`Qwen/Qwen3-Coder-Next`, `Qwen/Qwen3.5-122B-A10B`,
+  `zai-org/GLM-4.7-Flash` hold only unsloth GGUFs, and `status`
+  reports them as archived models). 11 of 25 directories hold a
+  foreign `source_repo`: 3 pure renames (138.0 GiB), 8 splits
+  (544.5 GiB). Decision: one directory per source repo, lineage moves
+  into the record, and a `migrate` command converts in place or into
+  a copy at a new root — no re-download, no payload re-hash, because
+  paths *inside* an artifact do not change.
+  **All six passes are implemented; the archive is converted and
+  the gate is green (1064 tests).** `layout.py` owns repo-id → path/URL and the three-way
+  invariant; `migrate/` converts in place or into a scoped `--to`
+  copy; `pull` lost grouping, `--model`, and
+  `require_single_snapshot_source` and gained `--base-model`;
+  `status` groups by lineage and `show` reads it both ways.
+  `verify.py` and `cli/verify_cmd.py` became packages when the diff
+  pushed them past 300 lines; `pull_advisory.py` fell back under the
+  cap for free. Review round found two guards that passed with the
+  code they named deleted — a remedy assertion satisfied by the
+  substring inside *unmigrated*, and the `hub_id` leg of the invariant
+  — both now mutation-proved. Two sequencing errors were corrected
+  mid-branch, both the same lesson: **the alarm must not precede the
+  fix.** `pull --model`'s refusal moved to pass 3 (it would have
+  rewritten 57 call sites twice), and the archive-marker bump moved
+  from pass 1 to pass 3 (stamping v2 while pulls still wrote v1
+  content manufactured the exact state the content gate exists to
+  prevent). `/clarify` settled five
+  calls: `migrate --to` takes `--repo` for a cheap scoped rehearsal
+  (hardlinking rejected); a v1 archive must convert before `pull` /
+  `remove` will write to it (exit 2) while `verify` says `unmigrated`
+  at exit 1 and the schema marker flips only after a *full* migration —
+  which is what keeps the duplicate-target case at the zero it measures
+  today; `status` groups by lineage with an unarchived base shown as a
+  `not archived` header; `--model` becomes `--repo` on `verify`
+  with the old name as an alias (`remove`'s id is a positional, so it
+  has no flag to rename — `/test-first` caught that); empty owner dirs go by
+  `os.rmdir`, never `rmtree`. **The live conversion ran: 11 directories,
+  682.6 GiB, verified 33/33. Six defects came from live use and six
+  more from the full review round; all auto-fixes are applied and the
+  executor findings are open. Nothing is committed.**
 
 - **Session 18 (2026-08-06, medium-tier, PR #25): spec 0015 discover
   paging windows + stable pick numbers shipped.** Live-use trigger:
@@ -714,7 +773,7 @@ parallelize only with partitioned file ownership.
   and `verify` calls the record invalid forever; and `pull_advisory.py`
   is already 304 lines, over the cap, which pass 3's shared
   archive-walk extraction happens to fix.
-- **Next spec (0017): pick from TODO.md** — smoke test, spec 0002's
+- **Next spec (0018): pick from TODO.md** — smoke test, spec 0002's
   later adapter phases (LM Studio / llama.cpp / vLLM), or the
   interactive-listing TUI (whose `discover` half spec 0015 took; what
   remains is `pull`'s file listing plus arrow-key/type-to-filter).
@@ -723,7 +782,7 @@ parallelize only with partitioned file ownership.
   roadmap).
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
   in progress — phase 1 shipped (PR #20), later adapters open;
-  0005–0014 shipped.
+  0005–0014 shipped; `0016` draft; `0017` shipped (this session).
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

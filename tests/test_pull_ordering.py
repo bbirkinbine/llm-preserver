@@ -41,20 +41,18 @@ def make_client(fake_hub_factory):
 
 def do_pull(archive_root, client, **kwargs):
     kwargs.setdefault("include", ["*Q4_K_M*"])
-    kwargs.setdefault("model", "acme/tiny-chat")
     kwargs.setdefault("confirm", lambda prompt: True)
     return pull.pull_model(archive_root, REPO_ID, client, **kwargs)
 
 
 def do_pull_all(archive_root, client, **kwargs):
     kwargs.setdefault("include", ())
-    kwargs.setdefault("model", "acme/tiny-chat")
     kwargs.setdefault("confirm", lambda prompt: True)
     return pull.pull_model(archive_root, REPO_ID, client, select_all=True, **kwargs)
 
 
 def model_dir(archive_root):
-    return archive_root / "models" / "acme" / "tiny-chat"
+    return archive_root / "models" / "bartowski" / "tiny-chat-GGUF"
 
 
 def assert_both_copies_and_manifest_verifies(mdir):

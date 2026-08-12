@@ -12,6 +12,7 @@ from llm_preserver.hub import HubClient
 from . import (  # noqa: F401  (importing registers the commands)
     archive_cmds,
     discover_cmd,
+    migrate_cmd,
     pull_cmd,
     remove_cmd,
     verify_cmd,

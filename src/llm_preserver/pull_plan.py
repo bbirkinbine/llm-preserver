@@ -1,7 +1,7 @@
 """Pull planning: the idempotent skip matrix.
 
 Split out of ``pull.py`` (300-line rule): this module decides *what* a
-pull must download (grouping lives in ``pull_grouping``); ``pull.py``
+pull must download; ``pull.py``
 stages, verifies, moves, and records. Every planned download carries
 its validated target path — the move phase consumes exactly what
 planning checked, so no later join can re-derive (and thereby weaken)

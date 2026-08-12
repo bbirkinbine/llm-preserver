@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from llm_preserver.archive import require_archive
+from llm_preserver.layout import require_migrated_archive
 from llm_preserver.model_scan import unrecorded_files
 from llm_preserver.pull_prepare import STAGING_DIRNAME
 from llm_preserver.records import (
@@ -59,6 +60,8 @@ def plan_removal(root: Path, model_id: str, include: Sequence[str] | None) -> Re
 
     Raises:
         ArchiveError: If ``root`` is not an archive this tool may touch.
+        UnmigratedArchiveError: If the archive still holds pre-ADR-0003
+            directories; it must be converted first.
         RemoveError: If the model directory is reached through a
             symlink, or pattern removal targets a model with no readable
             record.
@@ -68,6 +71,10 @@ def plan_removal(root: Path, model_id: str, include: Sequence[str] | None) -> Re
             leftovers exist for ``model_id``.
     """
     require_archive(root)
+    # remove relocates content too: it rewrites the very source_repo
+    # records a migration plan is derived from (spec 0017 criteria
+    # 23-25).
+    require_migrated_archive(root)
     creator, sep, name = model_id.partition("/")
     # Defense in depth: the CLI validates the id shape before calling,
     # but a direct core caller must not be able to address anything

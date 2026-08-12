@@ -103,13 +103,13 @@ def two_quant_model(build_model: Callable[..., Path], archive: Path) -> Path:
 
 
 def test_malformed_model_id_exits_one(tmp_path: Path) -> None:
-    """Same strict <creator>/<model> validation as show, before any path."""
+    """Same strict <owner>/<repo> validation as show, before any path."""
     archive = init_archive_dir(tmp_path)
 
     result = runner.invoke(app, ["remove", "noslash", str(archive), "--yes"])
 
     assert result.exit_code == 1
-    assert "creator" in output_of(result)
+    assert "<owner>/<repo>" in output_of(result)
 
 
 def test_unknown_model_exits_two_and_lists_archived_ids(

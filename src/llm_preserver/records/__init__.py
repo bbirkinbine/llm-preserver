@@ -12,6 +12,7 @@ from .io import (
     load_record,
     peek_record_schema_version,
     save_record,
+    stamp_current_schema,
 )
 from .schema import (
     ID_COMPONENT_RE,
@@ -22,6 +23,7 @@ from .schema import (
     TOOL_OWNED_ROOT_FILENAMES,
     ArtifactEntry,
     ArtifactFormat,
+    BaseModelSource,
     FileEntry,
     FileSource,
     ModelRecord,
@@ -40,6 +42,7 @@ __all__ = [
     "TOOL_OWNED_ROOT_FILENAMES",
     "ArtifactEntry",
     "ArtifactFormat",
+    "BaseModelSource",
     "FileEntry",
     "FileSource",
     "ModelRecord",
@@ -49,4 +52,5 @@ __all__ = [
     "load_record",
     "peek_record_schema_version",
     "save_record",
+    "stamp_current_schema",
 ]

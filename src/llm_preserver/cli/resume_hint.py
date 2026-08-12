@@ -27,8 +27,8 @@ def compose_resume_hint(
     *,
     include: Sequence[str] = (),
     select_all: bool = False,
-    model: str | None = None,
     roles: Sequence[str] = (),
+    base_model: str | None = None,
     refresh_docs: bool = False,
     hf_logging: bool = False,
 ) -> str | None:
@@ -50,10 +50,8 @@ def compose_resume_hint(
         archive_path: Archive root as the CLI received it.
         include: fnmatch patterns; each rides as a repeated --include.
         select_all: Whole-repo snapshot mode (--whole-repo).
-        model: The human-confirmed canonical model directory, or None
-            when no grouping decision was confirmed (plan mode) — a
-            hint must never bake in a directory nobody approved.
         roles: Roles assigned at pull time.
+        base_model: Curator-asserted lineage, replayed like a role.
         refresh_docs: Whether --refresh-docs was in effect.
         hf_logging: Whether --hf-logging was in effect; it rides along
             because the stalled-transfer scenario the hint serves is
@@ -72,10 +70,12 @@ def compose_resume_hint(
         parts.append("--whole-repo")
     for pattern in include:
         parts.extend(["--include", pattern])
-    if model is not None:
-        parts.extend(["--model", model])
     for role in roles:
         parts.extend(["--role", role])
+    if base_model is not None:
+        # Curator judgment, exactly like --role: a resumed pull that
+        # dropped it would silently lose the lineage assertion.
+        parts.extend(["--base-model", base_model])
     if refresh_docs:
         parts.append("--refresh-docs")
     if hf_logging:

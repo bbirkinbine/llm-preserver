@@ -70,8 +70,6 @@ def invoke_pull(archive, *extra_args):
         str(archive),
         "--include",
         "*Q4_K_M*",
-        "--model",
-        "acme/tiny-chat",
         "--yes",
         *extra_args,
     ]

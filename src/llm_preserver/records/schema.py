@@ -14,13 +14,13 @@ from collections.abc import Sequence
 from pathlib import PurePosixPath
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-RECORD_SCHEMA_VERSION = 2
-"""Schema v2 (spec 0003): per-file provenance, ``hashed-locally``
-provenance state, and optional-empty ``roles``. v1 records still load —
-every v2 change is a widening (new optional field, new enum value,
-relaxed constraint)."""
+RECORD_SCHEMA_VERSION = 3
+"""Schema v3 (spec 0017): ``base_model`` and ``base_model_source``, the
+lineage the ADR 0003 layout no longer states structurally. v1 and v2
+records still load — every change so far is a widening (new optional
+field, new enum value, relaxed constraint)."""
 
 RECORD_FILENAME = "model-record.json"
 RENDERED_FILENAME = "MODEL-RECORD.md"
@@ -35,18 +35,28 @@ reserved — a nested file sharing the name is a different file."""
 Role = Literal["chat", "coding", "embedding", "reranker", "multimodal"]
 ArtifactFormat = Literal["gguf", "hf-snapshot", "mlx"]
 Provenance = Literal["verified", "hashed-locally", "unverified"]
+BaseModelSource = Literal["card", "asserted", "migrated"]
+"""Where a recorded ``base_model`` claim came from (spec 0017).
+
+``card`` — the source repo's model card declared it. ``asserted`` — the
+curator passed ``--base-model``. ``migrated`` — harvested from the
+directory a pre-ADR-0003 archive filed the artifact under, which is the
+only place that judgment survived. Three origins with different
+trustworthiness; a record that flattened them into one field could not
+be audited later, so the origin is stored beside the claim.
+"""
 FileSource = Literal["original", "generated"]
 
 _COMMIT_HASH_PATTERN = r"^[0-9a-fA-F]{40}$"
 _SHA256_PATTERN = r"^[0-9a-fA-F]{64}$"
 
 ID_COMPONENT_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
-"""One segment of a ``<creator>/<model>`` id.
+"""One segment of an ``<owner>/<repo>`` id.
 
 Hub namespaces and repo names match this; anything else (``..``,
 absolute paths, extra slashes) could address files outside an
 archive's ``models/`` tree and is rejected before path construction.
-The single definition shared by the CLI (``show``) and pull grouping.
+The single definition shared by the CLI (``show``) and ``layout``.
 """
 
 
@@ -161,9 +171,18 @@ class ModelRecord(_PreservingModel):
             a lone rsynced model directory stays self-describing even
             without the archive-level marker.
         name: Short human name of the model.
-        hub_id: The *original* model's hub id (``creator/model``), which
-            also names the model directory (ADR 0001) — even when every
-            archived artifact came from third-party repos.
+        hub_id: The **source repo's** hub id (``owner/repo``), which
+            the model directory's path mirrors verbatim (ADR 0003).
+            This is the *post-migration* contract: one directory holds
+            one repo's bytes, so it agrees with every artifact's
+            ``source_repo``. Records written before the layout change
+            (and records this tool still writes until spec 0017 pass 3
+            lands) carry the pre-ADR-0003 meaning — the *original*
+            model's id, with third-party artifacts filed underneath.
+            ``layout.layout_state`` is what tells the two apart, and
+            ``verify`` reports the old shape as ``unmigrated``. The
+            schema version does **not**: v3 records exist in both
+            shapes.
         roles: Curator-assigned purposes — why the model is on the
             shelf. May be empty (schema v2): roles are judgment the
             tool never fabricates, so a freshly pulled model can carry
@@ -183,6 +202,16 @@ class ModelRecord(_PreservingModel):
         parameter_count: Human-readable size (e.g. ``7B``), or None.
         context_length: Context window in tokens, or None.
         notes: Free-form curator notes.
+        base_model: The model this repo derives from, as a hub repo id,
+            or None when no claim exists. Lineage the ADR 0003 layout
+            no longer states structurally — a quant repo is its own
+            directory, so the relationship lives here (spec 0017).
+            Never inferred: the tool records what a card declares, what
+            the curator asserts, or what an old nested path meant, and
+            guesses nothing.
+        base_model_source: Where the ``base_model`` claim came from, so
+            the three origins stay distinguishable. None whenever
+            ``base_model`` is None.
         artifacts: Every archived form of the model.
     """
 
@@ -196,7 +225,37 @@ class ModelRecord(_PreservingModel):
     parameter_count: str | None = None
     context_length: int | None = Field(default=None, ge=0)
     notes: str | None = None
+    base_model: str | None = None
+    base_model_source: BaseModelSource | None = None
     artifacts: list[ArtifactEntry] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _check_lineage(self) -> "ModelRecord":
+        """Keep a lineage claim and its attribution inseparable.
+
+        Two ways a record could otherwise lie about provenance, which is
+        the one thing this field pair exists to prevent: an attribution
+        with nothing attributed (``base_model_source: card`` and no
+        ``base_model`` claims a card declared something it did not), and
+        a claim that is not a usable repo id (it is rendered into
+        ``MODEL-RECORD.md`` and, from pass 4, composed into commands).
+
+        Raises:
+            ValueError: If the two fields disagree, or the claim is not
+                an ``<owner>/<repo>`` id.
+        """
+        if self.base_model is None:
+            if self.base_model_source is not None:
+                raise ValueError("base_model_source requires a base_model")
+            return self
+        owner, separator, repo = self.base_model.partition("/")
+        if (
+            not separator
+            or not ID_COMPONENT_RE.fullmatch(owner)
+            or not ID_COMPONENT_RE.fullmatch(repo)
+        ):
+            raise ValueError(f"base_model must look like <owner>/<repo>, got {self.base_model!r}")
+        return self
 
 
 def derive_artifact_provenance(files: Sequence[FileEntry]) -> Provenance:

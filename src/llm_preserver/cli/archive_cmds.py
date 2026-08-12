@@ -19,6 +19,7 @@ from llm_preserver.archive import (
     require_archive,
 )
 from llm_preserver.cli.app import ArchivePath, app, fail
+from llm_preserver.lineage import group_by_lineage
 from llm_preserver.pull_preflight import human_size
 from llm_preserver.records import (
     ID_COMPONENT_RE,
@@ -85,16 +86,28 @@ def status(path: ArchivePath) -> None:
     if not summaries:
         typer.echo("archive is empty (no models)")
         return
-    rows = [
-        (
-            clean_text(summary.model_id, single_line=True),
-            ",".join(summary.formats) or "-",
-            ",".join(summary.roles) or _roleless_cell(summary),
-            human_size(summary.total_size),
-            _completeness(summary),
+    # Grouped by declared lineage (spec 0017 criterion 7): ADR 0003
+    # made every repo its own directory, so the relationship a nested
+    # path used to state has to be stated here instead. A base the
+    # archive does not hold gets a row of its own — "you have the
+    # conversion, not the model" is the answer worth seeing.
+    rows: list[tuple[str, str, str, str, str]] = []
+    for entry in group_by_lineage(summaries):
+        indent = "  " if entry.depth else ""
+        label = clean_text(entry.model_id, single_line=True)
+        if not entry.archived or entry.summary is None:
+            rows.append((f"({label})", "-", "-", "-", "not archived"))
+            continue
+        summary = entry.summary
+        rows.append(
+            (
+                indent + label,
+                ",".join(summary.formats) or "-",
+                ",".join(summary.roles) or _roleless_cell(summary),
+                human_size(summary.total_size),
+                _completeness(summary),
+            )
         )
-        for summary in summaries
-    ]
     header = ("model", "formats", "roles", "size", "completeness")
     widths = [max(len(row[i]) for row in [header, *rows]) for i in range(len(header))]
     for row in [header, *rows]:
@@ -149,3 +162,28 @@ def show(model_id: Annotated[str, typer.Argument()], path: ArchivePath) -> None:
             err=True,
         )
     typer.echo(render_model_record(record, file_header=False))
+    _echo_derivatives(path, model_id)
+
+
+def _echo_derivatives(path: Path, model_id: str) -> None:
+    """Name the archived repos that declare ``model_id`` as their base.
+
+    The record states lineage one way (this repo derives from that
+    model); this is the other way, which only the archive as a whole
+    knows. Together they answer "what forms of this model do I have"
+    from one command — the question ADR 0003's flat layout took away
+    from ``ls`` (spec 0017 criterion 7).
+    """
+    try:
+        derived = [
+            summary.model_id
+            for summary in inventory(path)
+            if summary.base_model == model_id and summary.model_id != model_id
+        ]
+    except ArchiveError:
+        return
+    if not derived:
+        return
+    typer.echo("Archived repos deriving from this one:")
+    for child in sorted(derived):
+        typer.echo(f"- {clean_text(child, single_line=True)}")

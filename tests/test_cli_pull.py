@@ -52,8 +52,6 @@ def invoke_pull(archive, *extra_args):
         str(archive),
         "--include",
         "*Q4_K_M*",
-        "--model",
-        "acme/tiny-chat",
         "--yes",
         *extra_args,
     ]
@@ -67,8 +65,8 @@ def test_pull_downloads_selected_files_into_archive(tmp_path, monkeypatch, fake_
     result = invoke_pull(archive)
 
     assert result.exit_code == 0
-    assert (archive / "models/acme/tiny-chat/gguf/tiny-chat-Q4_K_M.gguf").is_file()
-    assert (archive / "models/acme/tiny-chat/model-record.json").is_file()
+    assert (archive / "models/bartowski/tiny-chat-GGUF/gguf/tiny-chat-Q4_K_M.gguf").is_file()
+    assert (archive / "models/bartowski/tiny-chat-GGUF/model-record.json").is_file()
 
 
 def test_pull_include_flag_is_repeatable(tmp_path, monkeypatch, fake_hub_factory):
@@ -83,7 +81,7 @@ def test_pull_include_flag_is_repeatable(tmp_path, monkeypatch, fake_hub_factory
     result = invoke_pull(archive, "--include", "*.json")
 
     assert result.exit_code == 0
-    gguf_dir = archive / "models/acme/tiny-chat/gguf"
+    gguf_dir = archive / "models/bartowski/tiny-chat-GGUF/gguf"
     assert (gguf_dir / "tiny-chat-Q4_K_M.gguf").is_file()
     assert (gguf_dir / "config.json").is_file()
     assert not (gguf_dir / "tiny-chat-Q8_0.gguf").exists()
@@ -96,7 +94,7 @@ def test_pull_role_flag_sets_roles(tmp_path, monkeypatch, fake_hub_factory):
     result = invoke_pull(archive, "--role", "chat")
 
     assert result.exit_code == 0
-    record = json.loads((archive / "models/acme/tiny-chat/model-record.json").read_text())
+    record = json.loads((archive / "models/bartowski/tiny-chat-GGUF/model-record.json").read_text())
     assert record["roles"] == ["chat"]
 
 
@@ -108,7 +106,7 @@ def test_pull_interactive_selection_lists_files_and_pulls(tmp_path, monkeypatch,
 
     result = runner.invoke(
         app,
-        ["pull", "bartowski/tiny-chat-GGUF", str(archive), "--model", "acme/tiny-chat"],
+        ["pull", "bartowski/tiny-chat-GGUF", str(archive)],
         input="*Q4_K_M*\ny\n",  # patterns, then the size confirmation (spec 0005)
     )
 
@@ -117,7 +115,7 @@ def test_pull_interactive_selection_lists_files_and_pulls(tmp_path, monkeypatch,
     assert "tiny-chat-Q4_K_M.gguf" in output
     assert "tiny-chat-Q8_0.gguf" in output
     assert str(len(b"q4 weight bytes")) in output  # sizes are listed
-    assert (archive / "models/acme/tiny-chat/gguf/tiny-chat-Q4_K_M.gguf").is_file()
+    assert (archive / "models/bartowski/tiny-chat-GGUF/gguf/tiny-chat-Q4_K_M.gguf").is_file()
 
 
 def test_pull_interactive_blank_input_is_user_error(tmp_path, monkeypatch, fake_hub_factory):
@@ -126,7 +124,7 @@ def test_pull_interactive_blank_input_is_user_error(tmp_path, monkeypatch, fake_
 
     result = runner.invoke(
         app,
-        ["pull", "bartowski/tiny-chat-GGUF", str(archive), "--model", "acme/tiny-chat"],
+        ["pull", "bartowski/tiny-chat-GGUF", str(archive)],
         input="\n",
     )
 
@@ -171,7 +169,7 @@ def test_interactive_listing_annotates_recognized_companion_kinds(
 
     result = runner.invoke(
         app,
-        ["pull", "bartowski/tiny-chat-GGUF", str(archive), "--model", "acme/tiny-chat"],
+        ["pull", "bartowski/tiny-chat-GGUF", str(archive)],
         input="\n",
     )
 

@@ -57,8 +57,6 @@ def invoke_pull(archive, *extra_args, stdin=None):
         str(archive),
         "--include",
         "*Q4_K_M*",
-        "--model",
-        "acme/tiny-chat",
         *extra_args,
     ]
     return runner.invoke(app, args, input=stdin)
@@ -72,7 +70,7 @@ def test_include_pull_confirms_size_before_pulling(tmp_path, monkeypatch, fake_h
 
     assert result.exit_code == 0
     assert f"{SELECTED_BYTES} B" in combined_output(result)  # the stated total
-    assert (archive / "models/acme/tiny-chat/gguf/tiny-chat-Q4_K_M.gguf").is_file()
+    assert (archive / "models/bartowski/tiny-chat-GGUF/gguf/tiny-chat-Q4_K_M.gguf").is_file()
 
 
 def test_declined_size_confirmation_exits_2_downloading_nothing(
@@ -109,7 +107,7 @@ def test_yes_auto_accepts_the_selective_size_confirmation(tmp_path, monkeypatch,
     result = invoke_pull(archive, "--yes")  # no stdin needed at all
 
     assert result.exit_code == 0
-    assert (archive / "models/acme/tiny-chat/gguf/tiny-chat-Q4_K_M.gguf").is_file()
+    assert (archive / "models/bartowski/tiny-chat-GGUF/gguf/tiny-chat-Q4_K_M.gguf").is_file()
 
 
 def test_interactive_selection_declining_size_confirmation_downloads_nothing(
@@ -122,7 +120,7 @@ def test_interactive_selection_declining_size_confirmation_downloads_nothing(
 
     result = runner.invoke(
         app,
-        ["pull", REPO_ID, str(archive), "--model", "acme/tiny-chat"],
+        ["pull", REPO_ID, str(archive)],
         input="*Q4_K_M*\nn\n",  # patterns, then decline the size confirm
     )
 

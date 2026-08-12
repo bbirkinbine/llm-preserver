@@ -88,7 +88,7 @@ model card, and source linkage. This tool asks you to make that one
 choice explicitly, because the answer is part of what gets preserved.
 The map:
 
-- **Original repo** (`Qwen/Qwen3.6-27B`) — the canonical
+- **Original repo** (`Qwen/Qwen3.6-27B`) — the
   full-precision weights, roughly 2GB per billion parameters. Archive
   these when the model matters enough to keep its source of truth;
   they are not what desktop runtimes load.
@@ -148,7 +148,7 @@ uv run llm-preserver pull unsloth/Qwen3.6-27B-MTP-GGUF ~/models \
 
 # skip the grouping confirmation with an explicit target:
 uv run llm-preserver pull unsloth/Qwen3.6-27B-MTP-GGUF ~/models \
-    --include '*Q8_0*' --model Qwen/Qwen3.6-27B
+    --include '*Q8_0*'
 ```
 
 The trailing archive path is optional whenever `LLM_PRESERVER_ARCHIVE`
@@ -189,16 +189,19 @@ Options:
   tree (see the dedicated section below). The scope is that one repo —
   it never crosses repos (an advisory names the follow-up pull when a
   related repo matters). Mutually exclusive with `--include`.
-- `--model CREATOR/MODEL` — canonical model directory override. Quant
-  repos are grouped under the *original* model's directory; without
-  this flag the tool infers the grouping from the repo's `base_model`
-  metadata and asks for confirmation. Grouping is format-directed: a
-  GGUF/MLX repo is a *conversion* and groups under its `base_model`; a
-  safetensors tree with a `base_model` is a *derived model* (different
-  weights) and defaults to its own repo id, with the base mentioned as
-  lineage. A repo with *no* `base_model` defaults to the repo id
-  regardless of format. Every default is confirmed; metadata that is
-  present but unusable is a hard stop.
+- `--base-model OWNER/REPO` — record this repo's lineage: the model it
+  derives from. Affects the **record only** — never where the files
+  land. Use it when the repo's card declares no base, or declares one
+  you can see is stale. The record notes who made the claim
+  (`base_model_source`: the card, you, or a migration), so a lineage
+  line can always be audited back to its source. `status` groups the
+  shelf by it and `show` reads it both directions.
+
+  > `--model` is **gone** (ADR 0003). It used to name the directory a
+  > pull landed in; a pull now lands in the directory named by the repo
+  > id you type, so there is nothing left to choose. Passing it exits 2
+  > with the replacement command. The half of its job worth keeping —
+  > asserting lineage — is `--base-model`.
 - `--role ROLE` — assign a curator role (`chat`, `coding`,
   `embedding`, `reranker`, `multimodal`) at pull time; repeatable.
   Without it the model is archived role-less and shows under
@@ -211,9 +214,9 @@ Options:
 - `--plan` — dry run: print what the pull would do, then exit without
   downloading or writing (see the dedicated section below).
 - `--yes` — auto-accept the size confirmation (the "pull N of M files
-  (X to download)…?" prompt, asked on every pull mode). Never the
-  grouping confirm: identity needs a deliberate value, so scripted
-  pulls pass `--model` for that.
+  (X to download)…?" prompt, asked on every pull mode). There is no
+  longer a grouping confirm to skip: the destination is a pure function
+  of the repo id you typed.
 - `--verbose` — per-file progress, resolved commit, staging paths,
   and underlying client detail on failures.
 - `--hf-logging` — surface the Hugging Face client's own transfer
@@ -246,40 +249,25 @@ Behavior worth knowing:
   companion behind: `*mmproj*` vision projectors, `*mtp-*`
   speculative-decoding heads, `*imatrix*` calibration data, and
   partially selected shard sets — each naming the exact `--include`
-  fix. Three cross-repo checks ride along: an explicit `--model` that
-  contradicts the repo's declared `base_model` (catches a copy-pasted
-  `--model` filing one model under another's directory — the pull
-  still honors `--model`), an adapter repo whose declared base model
-  isn't archived, and a quant repo whose full-precision master isn't
-  archived — the latter two naming the follow-up `llm-preserver pull`
-  command. The grouping-mismatch check flags likely *human error*, so
-  it prints first with a distinct `warning:` prefix (highlighted on a
-  terminal) instead of `advisory:`. Advisories are archive-aware (a
-  companion archived by an earlier pull stays silent) and never change
-  the selection — the tool never auto-adds. When the tree ships an
-  `adapter_config.json`, the pull fetches that one small file (to a
-  temp dir, never the archive) to read its base-model pointer, and
-  says so.
-- **Renamed parents resolve to their current name.** A repo's card
-  can declare its base model by a pre-rename name the hub now
-  redirects; the pull spends one light metadata check resolving it
-  (announced with an INFO line), so grouping proposals, advisories,
-  and archive records carry the current id — a name that still
-  resolves years later. If the declared base can't be resolved, the
-  declared name stands and the pull proceeds normally.
+  fix. Two cross-repo checks ride along: an adapter repo whose declared
+  base model isn't archived, and a quant repo whose full-precision
+  master isn't archived — each naming the follow-up `llm-preserver
+  pull` command. (A third check, warning that an explicit `--model`
+  contradicted the declared base, went with the flag: no override can
+  misfile a pull when the repo id names the directory.)
 - **Non-interactive runs never hang or die vaguely.** When stdin
   cannot answer a confirmation (cron, CI, piped input exhausted), the
-  pull exits 2 with a message naming the bypass: `--model` for the
-  grouping confirm, `--yes` for the size confirmation. The exception
+  pull exits 2 with a message naming the bypass — `--yes` for the size
+  confirmation, which is now the only question a pull asks. The exception
   is a pull with nothing to do — it asks no questions (next bullet),
   so a scripted re-pull of an already-complete selection exits 0.
 
 - **Re-pulls are idempotent, and a complete one asks nothing.** A
   file already archived with a matching hash is skipped ("already
   archived"); nothing re-downloads. When *every* selected file is
-  already archived and the pull's home is one you chose — the repo id
-  itself (no declared base model) or an explicit `--model` — no
-  confirmation is asked at all: the per-file "already archived" lines
+  already archived, no confirmation is asked at all — the destination
+  was never in question, so there is nothing a yes or no could change:
+  the per-file "already archived" lines
   and the "nothing to pull" summary print, the final line reads
   "`<repo>` is already archived in `<dir>`; nothing new to pull", and
   the command exits 0. (Any answer would reach the same no-op, so the
@@ -320,7 +308,7 @@ Behavior worth knowing:
   then "reconstructing file" — that's its Xet chunk transfer, not
   two downloads.)
 - **Abandoning an interrupted pull.** Downloads stage into
-  `<archive-root>/.staging/<creator>/<model>/` (a sibling of
+  `<archive-root>/.staging/<owner>/<repo>/` (a sibling of
   `models/` — the model only appears under `models/` once every file
   is staged, verified, and moved, which is why a mid-pull model is
   invisible to `status`). The staging directory is deleted on pull
@@ -334,11 +322,10 @@ Behavior worth knowing:
   shell history doesn't have them), the pull prints one line right
   after the confirmations, before the first byte moves:
   `to continue this pull later: llm-preserver pull <repo-id> <path>
-  --include '<pattern>' --model <creator>/<model>`. It is the exact
+  --include '<pattern>'`. It is the exact
   direct command that reproduces this pull — absolute archive path
   (works without `LLM_PRESERVER_ARCHIVE` and from any directory),
   shell-quoted patterns, and the grouping you just confirmed replayed
-  as `--model` so the continue lands in the same model directory.
   `--hf-logging` rides along when the pull ran with it — the
   stalled-transfer scenario the hint serves is the one that flag
   exists for (`--verbose` does not; the hint replays the pull's
@@ -348,7 +335,7 @@ Behavior worth knowing:
   as the final line — directly above your next shell prompt — and
   exits 130 (128 + SIGINT); that interrupt-time print happens on
   *every* pull, including one whose shape you typed yourself (where
-  it usefully carries the resolved `--model` your history entry may
+  it usefully carries the resolved selection your history entry may
   lack). Only the transfer-start print is skipped when you typed
   `--include`/`--whole-repo` yourself: that command is already in
   your history. The hint spells the command `llm-preserver …` — paste
@@ -384,7 +371,7 @@ downloading or writing anything:
 
 ```bash
 uv run llm-preserver pull unsloth/Qwen3.6-27B-MTP-GGUF ~/models \
-    --include '*Q8_0*' --model Qwen/Qwen3.6-27B --plan
+    --include '*Q8_0*' --plan
 # plan: pull from unsloth/Qwen3.6-27B-MTP-GGUF into …/models/Qwen/Qwen3.6-27B
 #      28.9 GiB  Qwen3.6-27B-Q8_0.gguf
 #       12 KiB   README.md  — doc, rides along
@@ -407,7 +394,7 @@ without it. Details:
 - Asks no confirmation prompts. Questions a real pull would ask
   (grouping, "selection covers every weight?") are resolved to the
   answer that lets planning continue and printed as `would ask:`
-  lines — scripted for real, those still need `--model` / a narrower
+  lines — scripted for real, those still need a narrower
   `--include`.
 - Exit codes are gateable: 0 when the pull would proceed; 3 (local
   environment) after the report when the disk preflight would refuse.
@@ -436,8 +423,8 @@ applies.
 ```bash
 # archive the original Qwen3.6-27B tree (~54GB of safetensors shards):
 uv run llm-preserver pull Qwen/Qwen3.6-27B --whole-repo ~/models
-# → confirms the grouping (an original repo has no base_model, so the
-#   repo id itself is offered as the canonical model directory)
+# → lands at models/Qwen/Qwen3.6-27B/ — the repo id, verbatim, with
+#   nothing to confirm about the destination (ADR 0003)
 # → refuses up front if the tree will not fit on the archive volume
 # → confirms once with what will actually download:
 #   "pull 14 of 14 files (50.3 GiB to download) from Qwen/Qwen3.6-27B?"
@@ -458,13 +445,13 @@ Snapshot behavior:
 - **Re-running a completed snapshot downloads nothing.** It reports
   "nothing to pull: every selected file is already archived" and
   exits 0 — no size prompt, no downloads. The grouping question is
-  skipped too when the home is the repo id or `--model`; a home
+  skipped when the plan has no work; a home
   proposed from the declared base model still confirms first (see the
   selective-pull section).
 - **One source repo per format subdirectory.** A second same-format
   snapshot from a *different* source repo is refused (two verbatim
   trees cannot share one directory honestly) — archive it under a
-  different `--model` home, or pull selected files instead. Re-running
+  different repo, or pull selected files instead. Re-running
   a snapshot of the same repo, and mixing selective + `--whole-repo`
   of the same repo, stay fine.
 - **Disk preflight.** File sizes come from the same metadata call, so
@@ -543,13 +530,12 @@ type `q`. Three stages, every step a numbered pick:
    `1 = pick files` (quant repos — choose your quant from the
    listing) or `2 = whole-repo snapshot` (originals/masters — the
    tree is the artifact, spec 0004 semantics). Then the exact `pull`
-   flow: file listing (mode 1 only), advisories, the normal grouping
-   confirmation (pull proposes the canonical home — the declared
-   base for a quant, the repo's own id for an original or fine-tune
-   — and you answer y/n), then the size confirmation. No `--model` flag needed, hub
-   metadata never names an archive directory without your yes, and
-   the grouping-mismatch warning stays silent because there is no
-   override to mismatch. Once the confirmations pass, the pull prints
+   flow: file listing (mode 1 only), advisories, then the size
+   confirmation. There is no grouping question — the repo row you
+   picked *is* the directory (ADR 0003), so hub metadata cannot name
+   an archive directory at all, which is the spec 0006 invariant now
+   held structurally rather than by a prompt. Once the confirmation
+   passes, the pull prints
    the **resume-command hint** — the direct `llm-preserver pull …`
    line that reproduces this exact pull without re-driving the
    navigation (see the pull section). Only the `discover` invocation
@@ -653,7 +639,7 @@ suffices; each match line carries the repo's hub facts (downloads ·
 last-modified · gated — the same facts search rows show) so you can
 pick by provenance. Facts, never a ranking. The tool
 never pulls — paste the command yourself (append the archive path if
-`$LLM_PRESERVER_ARCHIVE` isn't set, and add `--model` grouping if you
+`$LLM_PRESERVER_ARCHIVE` isn't set, and add `--base-model` lineage if you
 want to direct the home).
 
 Boundaries worth knowing: match mode takes no positional arguments,
@@ -715,11 +701,16 @@ provenance and hashes, pinned commits, license, source repos.
 
 ## verify — audit the archive against its records
 
+> **Flag rename (ADR 0003).** Scoping is `--repo OWNER/REPO`, matching
+> what a model directory now is. `--model` is still accepted so an
+> existing cron line keeps working; it prints a one-line note naming
+> `--repo`. Passing both is exit 2.
+
 ```bash
 uv run llm-preserver verify ~/models          # full audit: re-hash everything
 uv run llm-preserver verify                   # same, archive from $LLM_PRESERVER_ARCHIVE
 uv run llm-preserver verify --quick           # existence + size only, seconds not hours
-uv run llm-preserver verify --model Qwen/Qwen3.6-27B   # one model, not the whole shelf
+uv run llm-preserver verify --repo Qwen/Qwen3.6-27B    # one repo, not the whole shelf
 uv run llm-preserver verify --staging         # only: any abandoned downloads? (instant, no hashing)
 ```
 
@@ -755,6 +746,16 @@ categories:
 - **invalid** — everything is present, but at least one file's size or
   hash disagrees with the record (expected and actual are shown), or a
   file could not be read. Bitrot, tampering, or a failing disk.
+- **unmigrated** (layout, *appended* to the fixity verdict) — the
+  directory holds another repo's files, so path, `hub_id`, and
+  `source_repo` do not all agree (ADR 0003). It reads as
+  `valid, unmigrated` rather than replacing the fixity word, because
+  "did the bytes check out" and "is this in the right place" are
+  different questions and one must not erase the other. Nothing is
+  damaged; the line names the offending repo and `migrate` as the fix.
+  Exit 1 — a scheduled verify goes red until the layout is converted —
+  but **drift outranks it**: a model that is both drifted and
+  unmigrated still exits 5, with both words on its line.
 - **unhashed** (per-file, informational) — the record carries no
   SHA256 for the file (e.g. an unverified cache import); existence and
   size are still checked.
@@ -782,7 +783,7 @@ cd ~/models/models/Qwen/Qwen3.6-27B && sha256sum -c manifest-sha256.txt
 
 ### Abandoned downloads (`--staging`)
 
-A pull stages into `.staging/<creator>/<model>/`, and only after every
+A pull stages into `.staging/<owner>/<repo>/`, and only after every
 file has moved into `models/` and the record is written does it delete
 that directory. An interrupted pull — Ctrl-C, a crash, a dropped link —
 therefore leaves partial bytes in `.staging/` and writes no record.
@@ -793,16 +794,16 @@ download is otherwise invisible: an archive-wide `verify` can report
 staging (spec 0012).
 
 Detecting a leftover is just the presence of a non-empty
-`.staging/<creator>/<model>/` directory — no record, no `models/` walk,
+`.staging/<owner>/<repo>/` directory — no record, no `models/` walk,
 no hashing. So finding them never needs a hash run:
 
 ```bash
 uv run llm-preserver verify --staging                       # list abandoned downloads, then stop
-uv run llm-preserver verify --staging --model Qwen/Qwen3.6-27B   # scope to one
+uv run llm-preserver verify --staging --repo Qwen/Qwen3.6-27B    # scope to one
 ```
 
 `--staging` skips the recorded-file audit entirely and prints one line
-per leftover — `<creator>/<model>  4.5 KiB, 2 partial files`, sorted by
+per leftover — `<owner>/<repo>  4.5 KiB, 2 partial files`, sorted by
 id — or `no abandoned downloads in .staging/` when clean. It is
 near-instant regardless of archive size, writes nothing (not even the
 manifest sidecar a full run refreshes), and always exits 0: a leftover
@@ -813,9 +814,9 @@ bookkeeping and the in-progress `.incomplete` blob — because the point
 is to surface every incidental byte the record-based audit can't see and
 let you decide; it does not try to separate downloaded payload from hf's
 client-side scratch. `--quick` is a no-op alongside `--staging` (the scan
-never hashes anyway). Under `--staging` the `--model` id namespace is
+never hashes anyway). Under `--staging` the `--repo` id namespace is
 the staging tree, not `models/` — a first-ever interrupted pull has no
-model directory at all — so an unknown `--model` lists the ids present
+model directory at all — so an unknown `--repo` lists the ids present
 in `.staging/`.
 
 A plain `verify` (full or `--quick`) never *fails* on a leftover, but it
@@ -823,13 +824,13 @@ does not stay silent either: when `.staging/` holds abandoned downloads
 it prints a one-line footer —
 `note: 2 abandoned downloads in .staging/ — run 'verify --staging'` —
 after the audit summary, with the exit code unchanged (the footer
-prints even when the audit itself exits 5 for drift). With `--model`
+prints even when the audit itself exits 5 for drift). With `--repo`
 set, the footer counts only that model's leftover.
 
 Resolving a leftover uses commands that already exist, and the scan
 prints the id both need: resume the original
-`pull <creator>/<model> …` (staging is reused, so completed shards are
-not re-fetched), or discard it with `remove <creator>/<model>` (which
+`pull <owner>/<repo> …` (staging is reused, so completed shards are
+not re-fetched), or discard it with `remove <owner>/<repo>` (which
 clears a staging-only leftover even when no `models/` directory exists).
 One caveat: a pull running *right now* also has content in `.staging/`,
 and the scan cannot tell a live transfer from a forgotten one — run
@@ -840,9 +841,9 @@ parsing:
 
 | Code | Meaning |
 | --- | --- |
-| 0 | clean — every checked model valid or complete; unhashed/unrecorded findings, abandoned-download (`.staging/`) notes, and manifest-refresh warnings are informational and do not change the code. An empty archive also exits 0, saying so explicitly. `--staging` always exits 0 (or 1/2 for a bad path/`--model`) |
-| 1 | archive/usage — path is not an archive; malformed `--model` syntax |
-| 2 | user input — `--model` names no archived model (the error lists the archive's model ids so a typo self-corrects). The CLI framework's own usage errors — a missing path with no `LLM_PRESERVER_ARCHIVE` set, an unknown flag — also exit 2, so treat 2 as "fix the invocation", not specifically "unknown model" |
+| 0 | clean — every checked model valid or complete; unhashed/unrecorded findings, abandoned-download (`.staging/`) notes, and manifest-refresh warnings are informational and do not change the code. An empty archive also exits 0, saying so explicitly. `--staging` always exits 0 (or 1/2 for a bad path/`--repo`) |
+| 1 | archive/usage — path is not an archive; malformed `--repo` syntax; a directory whose layout is `unmigrated` (ADR 0003) |
+| 2 | user input — `--repo` names no archived model (the error lists the archive's model ids so a typo self-corrects). The CLI framework's own usage errors — a missing path with no `LLM_PRESERVER_ARCHIVE` set, an unknown flag — also exit 2, so treat 2 as "fix the invocation", not specifically "unknown model" |
 | 5 | integrity — drift found: any model incomplete, invalid, missing its record, or with an unreadable record or payload file |
 | 130 | interrupted — Ctrl-C; the in-progress model's sidecar is untouched |
 
@@ -851,6 +852,69 @@ roughly 2.5 hours per terabyte over gigabit to a NAS, much faster on
 local storage. `--quick` catches deletion and truncation (not bitrot)
 in seconds and suits a pre-backup sanity pass; the full run is the
 quarterly fixity check.
+
+## migrate — convert an archive to one directory per source repo
+
+Archives created before ADR 0003 name each directory for the *original*
+model and file third-party quants underneath it. `migrate` converts
+such an archive to one directory per source repo. It is the only
+supported way to do that: a hand-moved directory leaves the record
+claiming an identity its path no longer matches, and the manifest
+sidecar hashes the record, so `verify` would call it invalid forever.
+
+**Nothing is re-downloaded and nothing is re-hashed.** Paths *inside*
+an artifact do not change, so every recorded digest stays true; the
+manifests are regenerated from the record. In place, the moves are
+renames, so a large archive converts in minutes rather than the hours a
+copy would take.
+
+```bash
+# see exactly what would move, changing nothing:
+uv run llm-preserver migrate ~/models --plan
+
+# rehearse on one model, into a throwaway copy the original never feels:
+uv run llm-preserver migrate ~/models --to /tmp/mig-test --repo zai-org/GLM-4.7-Flash
+
+# convert for real (preview, then a y/n):
+uv run llm-preserver migrate ~/models
+```
+
+- `--plan` — print the conversion and exit. Names every directory, its
+  target, the bytes that move, each empty directory that will be
+  removed, and any collision that would block the run.
+- `--repo OWNER/REPO` — convert (or copy) only this directory;
+  repeatable. Naming a directory the archive does not hold is exit 2,
+  never a silent no-op.
+- `--to ROOT` — write a converted **copy** at `ROOT` and leave the
+  source untouched. The reversible mode; combine with `--repo` to
+  rehearse on one model. Bytes are copied, never hardlinked.
+- `--view-dest PATH` — a runtime-view destination to name in the
+  refresh hint; repeatable. The path is composed into printed text and
+  **never opened** — migrate does not touch a view tree, it only tells
+  you what to re-run.
+- `--yes` — skip the confirmation, never the disclosure. A
+  non-interactive run *without* it refuses (exit 2) rather than act on
+  a piped answer.
+
+**Safety properties worth knowing.** The run refuses as a whole — never
+half-converts — on a collision, an unreadable record, an artifact with
+no recorded `source_repo`, or a recorded path that resolves outside its
+directory. It is idempotent and resumable: the plan is derived from
+disk, so an interrupted run is finished by running it again, and a
+converted archive reports nothing to do. The only deletion it performs
+is `os.rmdir` on a directory the move emptied — which fails rather than
+recursing if anything remains, and is named in the preview first. No
+payload file is ever unlinked; bytes leave a directory by moving out of
+it.
+
+**Afterwards**: runtime views point at the old paths, so re-run `views`
+against each destination. Migration cannot discover view trees it was
+not told about — the marker points dest → archive, not the reverse.
+
+**A v1 archive must convert before it accepts new content.** `pull` and
+`remove` refuse with exit 2, naming `migrate` and the count. `status`,
+`show`, `verify`, and `views` keep working throughout, so the archive
+stays inspectable and runnable while you decide.
 
 ## remove — delete a model, or some of its files, from the archive
 
@@ -871,16 +935,16 @@ staging sibling.
 
 Two granularities:
 
-- **Whole model** — `remove <creator>/<model>` deletes the model
+- **Whole model** — `remove <owner>/<repo>` deletes the model
   directory (record, rendered markdown, manifest, all payload) and the
-  model's `.staging/<creator>/<model>` leftovers if any. A model that
+  model's `.staging/<owner>/<repo>` leftovers if any. A model that
   exists *only* as staging leftovers (an interrupted pull that never
   completed, invisible to `status`) is removable the same way — remove
   reports there is no archived model and offers to clear the staging
   directory. A model whose record is missing or unreadable is still
   removable: the preview falls back to a filesystem-derived file count,
   so degraded metadata never leaves a model stuck.
-- **Pattern-scoped** — `remove <creator>/<model> --include '<pattern>'`
+- **Pattern-scoped** — `remove <owner>/<repo> --include '<pattern>'`
   deletes only the matching payload files, drops their entries from the
   record (an emptied artifact and its now-empty format directory go
   too), and regenerates `MODEL-RECORD.md` and `manifest-sha256.txt`, so
@@ -942,7 +1006,7 @@ Exit codes match the rest of the tool:
 | Code | Domain | Cause |
 | --- | --- | --- |
 | 0 | success | model or files removed; also a declined confirmation ("nothing removed") |
-| 1 | archive/usage | path is not an archive; malformed `<creator>/<model>`; a symlinked model directory (refused, never followed); pattern removal against a model with no readable record |
+| 1 | archive/usage | path is not an archive; malformed `<owner>/<repo>`; a symlinked model directory (refused, never followed); pattern removal against a model with no readable record |
 | 2 | user input | unknown model (the archive's model ids are listed so a typo self-corrects); a pattern matching nothing; any non-interactive run (no terminal on stdin) without `--yes` |
 | 130 | interrupted | Ctrl-C during deletion — paste the re-run command (printed as the last line) to finish |
 
@@ -1058,7 +1122,7 @@ What `--help` can't carry:
   no longer archived; manifests and blobs Ollama itself created in the
   view store are never touched.
 - **Names are minted deterministically** from the archive layout —
-  `<creator>/<model>:<tag>` lowercased, the tag from the GGUF filename
+  `<owner>/<repo>:<tag>` lowercased, the tag from the GGUF filename
   — no ranking or judgment, same stance as `discover`.
 - **Blob names come from recorded digests, not from re-hashing.** The
   seeded store asserts the SHA256s the records hold; run

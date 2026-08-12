@@ -16,11 +16,11 @@ the code and ADR win — update this file.
 
 ## The big picture
 
-One archive root, marked by `archive.json`. One directory per logical
-model under `models/<creator>/<model>/`, holding *every* archived
-format of that model plus its own metadata. Metadata travels with the
-model: a partially copied archive (one model directory rsynced
-elsewhere) carries its own record.
+One archive root, marked by `archive.json`. **One directory per source
+repo** under `models/<owner>/<repo>/`, mirroring the Hugging Face repo
+id verbatim (ADR 0003) and holding that repo's files plus its own
+metadata. Metadata travels with the model: a partially copied archive
+(one model directory rsynced elsewhere) carries its own record.
 
 ```mermaid
 graph TD
@@ -29,7 +29,7 @@ graph TD
     ROOT --> RUNTIMES["runtimes/<br/>preserved installers/builds<br/><i>(future specs)</i>"]
     ROOT --> MANIFESTS["manifests/<br/>derived archive-wide aggregates,<br/>regenerable, never authoritative<br/><i>(future specs)</i>"]
 
-    MODELS --> CREATOR["&lt;creator&gt;/<br/>hub namespace: Qwen, mistralai, ..."]
+    MODELS --> CREATOR["&lt;owner&gt;/<br/>repo owner: Qwen, unsloth, ..."]
     CREATOR --> MODEL["&lt;model&gt;/<br/>one logical model"]
 
     MODEL --> RECORD["model-record.json<br/><b>source of truth</b>"]
@@ -50,7 +50,7 @@ formats archived):
 <archive-root>/
   archive.json                      # root marker: {"tool": "llm-preserver", "schema_version": 1}
   models/
-    <creator>/                      # original model's hub namespace
+    <owner>/                        # the source repo's hub namespace
       <model>/                      # one dir per logical model
         model-record.json           # source of truth for ALL formats below
         MODEL-RECORD.md             # generated from the JSON; never parsed back
@@ -62,14 +62,20 @@ formats archived):
   manifests/                        # (planned) regenerable archive-wide aggregates
 ```
 
-Two identity rules worth internalizing (ADR 0001):
+Two identity rules worth internalizing (ADR 0001, amended by ADR 0003):
 
-- **The directory answers "what model is this"; the record answers
-  "where did each file come from."** `<creator>/<model>` is always the
-  *original* model's hub id, even when an artifact was pulled from a
-  third-party repo (e.g. a `bartowski/...-GGUF` quant files under the
-  original creator; the quant repo's URL lives in that artifact's
-  `source_repo`).
+- **The directory names the repo its bytes came from.**
+  `<owner>/<repo>` is the source repo's hub id, verbatim — a
+  `bartowski/...-GGUF` quant lives at `models/bartowski/...-GGUF/`, not
+  under the model it converts. So the path, the record's `hub_id`, and
+  every artifact's `source_repo` all agree; `verify` reports a
+  directory that breaks that three-way invariant as `unmigrated`.
+  *Lineage* — which model a quant derives from — is a recorded field
+  (`base_model`, with `base_model_source` naming who claimed it), not a
+  directory nesting. `status` groups by it and `show` reads it both
+  ways. Before ADR 0003 the directory was named for the *original*
+  model with third-party artifacts filed underneath; `migrate` converts
+  such an archive.
 - **Role is metadata, not layout.** Embedding and reranker models are
   ordinary model directories with `roles: ["embedding"]` etc. in the
   record — there are no role-based top-level directories.
@@ -202,8 +208,10 @@ Semantics that don't fit in a box:
 }
 ```
 
-Note how the third-party quant repo appears in `source_repo` while the
-directory (and `hub_id`) belong to the original creator.
+Note how `source_repo` agrees with `hub_id` and with the directory
+path: one repo's bytes, one directory (ADR 0003). A record where they
+disagree is a pre-migration archive, which `verify` flags and `migrate`
+converts.
 
 ## Two version numbers, two behaviors
 
@@ -212,8 +220,8 @@ differently to each:
 
 | Version | Lives in | Constant | On a *newer* value |
 | --- | --- | --- | --- |
-| Archive schema | `archive.json` → `schema_version` | `archive.SCHEMA_VERSION = 1` | **Refuse.** Every command — including read-only `status`/`show` — errors and tells the user to upgrade. |
-| Record schema | `model-record.json` → `record_schema_version` | `records.RECORD_SCHEMA_VERSION = 2` | **Flag, don't refuse.** `status` shows it in the completeness column; `show` warns on stderr but still renders. Read-only inspection stays useful. |
+| Archive schema | `archive.json` → `schema_version` | `archive.SCHEMA_VERSION = 2` | **Refuse.** Every command — including read-only `status`/`show` — errors and tells the user to upgrade. |
+| Record schema | `model-record.json` → `record_schema_version` | `records.RECORD_SCHEMA_VERSION = 3` | **Flag, don't refuse.** `status` shows it in the completeness column; `show` warns on stderr but still renders. Read-only inspection stays useful. |
 
 Schema v2 (spec 0003) widened v1: per-file `provenance` and
 `revision`, the `hashed-locally` provenance state, and optional-empty
@@ -261,7 +269,7 @@ sequenceDiagram
 The same convention extends to pull (specs 0003/0004): payload files
 first, record last, so the record only ever describes files that exist.
 A pull that is interrupted before the record is written therefore leaves
-partial bytes in `.staging/<creator>/<model>/` and no record at all —
+partial bytes in `.staging/<owner>/<repo>/` and no record at all —
 regenerable debris that the record-anchored audit cannot see, since it
 has nothing recorded to check. `verify --staging` surfaces exactly that
 leftover with a hash-free `.staging/` scan (spec 0012); it is cleared by
@@ -293,7 +301,7 @@ archive.
 flowchart TD
     CMD["status / show &lt;path&gt;"] --> GATE{"archive.json exists,<br/>valid, schema_version ≤ 1?"}
     GATE -- no --> ERR["error, exit 1<br/>(newer schema → 'upgrade llm-preserver')"]
-    GATE -- yes --> WALK["walk models/&lt;creator&gt;/&lt;model&gt;/<br/>records only — payload files<br/>never stat-ed or hashed"]
+    GATE -- yes --> WALK["walk models/&lt;owner&gt;/&lt;repo&gt;/<br/>records only — payload files<br/>never stat-ed or hashed"]
 
     WALK --> HASREC{"model-record.json<br/>present?"}
     HASREC -- no --> S1["summary: <b>no record</b>"]
@@ -314,7 +322,7 @@ flowchart TD
 Defensive reads, because an archive may not be one the user authored
 (a copied NAS share): metadata files are size-capped (1 MB), symlinked
 markers/records/model-directories are refused, and `show`'s
-`<creator>/<model>` argument is validated against a strict pattern
+`<owner>/<repo>` argument is validated against a strict pattern
 before any path is constructed.
 
 ## How the layers stack

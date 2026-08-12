@@ -72,7 +72,7 @@ class Advisory:
 
     ``severity`` separates "you might also want this" (``advisory`` —
     missing companions) from "check this before proceeding"
-    (``warning`` — likely human error, e.g. a grouping mismatch).
+    (``warning`` — likely human error).
     Warnings sort first and render with a distinct prefix.
     """
 
@@ -158,35 +158,6 @@ def _shard_set_advisories(
     return advisories
 
 
-def _grouping_mismatch_warning(
-    repo_id: str, base_model: str | None, model_override: str | None
-) -> list[Advisory]:
-    """The human-error row: an explicit ``--model`` metadata disagrees with.
-
-    The explicit ``--model`` stays verbatim (spec 0003) — but when the
-    repo's own metadata contradicts it, the odds are a copy-paste slip
-    filing one model under another's directory (live footgun,
-    2026-07-12). Silent when ``--model`` equals the declared base (the
-    correct quant grouping) or the repo id (the sanctioned
-    derived-model/self grouping).
-    """
-    if not (
-        model_override and base_model and model_override != base_model and model_override != repo_id
-    ):
-        return []
-    return [
-        Advisory(
-            kind="grouping mismatch",
-            message=(
-                f"this repo declares base model {base_model}, but --model files it "
-                f"under {model_override} — verify the target model directory "
-                "(the explicit --model is honored)"
-            ),
-            severity="warning",
-        )
-    ]
-
-
 def _cross_repo_advisories(
     repo_id: str,
     base_model: str | None,
@@ -242,12 +213,11 @@ def advisories_for(
     base_model: str | None,
     adapter_base: str | None,
     archived_repos: Set[str],
-    model_override: str | None = None,
 ) -> list[Advisory]:
     """Evaluate every advisory row against a pull's selection.
 
     Pure and deterministic: same inputs, same advisories, in a fixed
-    order — warnings (grouping mismatch) first, then same-repo
+    order — warnings first, then same-repo
     companions in tree order, then incomplete shard sets, then
     cross-repo dependency rows.
 
@@ -261,8 +231,6 @@ def advisories_for(
             repo's ``adapter_config.json``, or None when absent.
         archived_repos: Hub repo ids already archived anywhere (from
             ``archived_hub_repos``).
-        model_override: The explicit ``--model`` value, or None when
-            the grouping was inferred/confirmed from metadata.
 
     Returns:
         The advisories that apply; empty when nothing is missing.
@@ -270,7 +238,6 @@ def advisories_for(
     selected_paths = {repo_file.path for repo_file in selected}
     archived_names = _record_basenames(record)
     return [
-        *_grouping_mismatch_warning(repo_id, base_model, model_override),
         *_companion_advisories(tree, selected_paths, archived_names),
         *_shard_set_advisories(tree, selected_paths, archived_names),
         *_cross_repo_advisories(repo_id, base_model, adapter_base, archived_repos),
