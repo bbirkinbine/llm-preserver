@@ -802,18 +802,49 @@ parallelize only with partitioned file ownership.
   and `verify` calls the record invalid forever; and `pull_advisory.py`
   is already 304 lines, over the cap, which pass 3's shared
   archive-walk extraction happens to fix.
-- **Spec 0018 (pull file listing window) drafted 2026-08-12, awaiting
-  human review.** Live-use trigger: `discover 'kimi k3'` →
-  `unsloth/Kimi-K3-GGUF` → `1 = pick files` printed 171 file rows into
-  a 24-line terminal. Spec 0015 windowed `discover`'s two stages and
-  named this listing out of scope; the handoff to the pull flow
-  (`cli/pull_exec/prompts.py::prompt_for_selection`) still echoes every
-  file in a bare loop. Design settled at the checkpoint: a directory
-  roll-up as the default frame (one line per top-level directory with
-  count and total size, root files individually), the complete listing
-  one `f` away and windowed with `m`/`b`, TTY-only so piped output is
-  unchanged. Type-to-filter and a match-preview loop were declined and
-  stay in TODO.md.
+- **Session 23 (2026-08-12): spec 0018 pull file listing window
+  shipped, PR #31.** Live trigger: `discover 'kimi k3'` →
+  `unsloth/Kimi-K3-GGUF` → `1 = pick files` printed **171 file rows
+  into a 24-line terminal**, one stage after discover's own windowed
+  frames — spec 0015 had fixed that stage and named this listing out
+  of scope in its own non-goals. Windowing alone would have been the
+  wrong fix: this stage prompts for a *glob*, and what decides the
+  glob is which quant directories exist, not the 166 shard names, so
+  paging it costs nine keypresses to learn what a roll-up says in one
+  frame. Shape: overflow on a TTY opens on a **directory roll-up**
+  (171 rows → 14), every file one `f` away, `m`/`b` paging, `s` back
+  to the roll-up keeping your place; piped runs and repos that fit are
+  byte-identical to before, which is what kept every existing pull
+  test valid unchanged. Carried by two neutral refactors —
+  `cli/discover_cmd/window.py` → `cli/window.py` with `is_interactive`
+  public (the pull flow needs the *verdict*, not a size derived from
+  it: `resolve_window_size` answers a 20-line window for a pipe, right
+  for discover and wrong here), and a neutral `text_window.py` owning
+  the one physical-line rule (`wrapped_height` + new `fit_by_cost`,
+  `fit_rows` as its adapter). **The plan round earned its keep before
+  a line was written**: the spec claimed it would reuse `fit_rows` and
+  `row_line_cost`, and neither is callable from here — `fit_rows`
+  reads a relation off a `NumberedRow`, `row_line_cost` renders
+  `  {n}. {repo_id}` — so "reuse" had to become "extract". **The
+  review round found the headline criterion failing in a width band
+  nobody looked at**: the frame was sized against `footer_line(1, …)`,
+  the *narrowest* first index, so at 42-43 columns the real footer
+  wrapped and frames rendered 25 physical rows on a 24-row screen —
+  found and measured identically by both reviewers, and invisible to
+  the test written to pin that very criterion because it was hardwired
+  to `COLUMNS = 80`. **Six further load-bearing guards survived
+  deletion with all 46 tests green** (the `b` history stack, the
+  `and back` / `and more` / `and offer_rollup` gates, the prompt's
+  chrome charge, key matching on the expanded frame) — the spec 0017
+  lesson repeating, all now mutation-proved by a 141-case geometry
+  sweep over widths 30-120 and heights 14-60. Durable rules learned:
+  **charge chrome at its widest *form*, not merely its widest line** —
+  a footer whose numbers grow as you page is a different width later
+  than at frame one; and **a frame-sizing test pinned to one terminal
+  width cannot fail**, so sweep the geometry. 1287 tests. Declined and
+  queued: type-to-filter, a match-preview loop. Found and deliberately
+  left: EOF at this prompt exits 1 rather than 2 (pre-existing, in
+  TODO).
 - **Next spec (0019): pick from TODO.md** — smoke test, spec 0002's
   later adapter phases (LM Studio / llama.cpp / vLLM), or the remaining
   TUI nice-to-haves (arrow-key highlight, type-to-filter, match

@@ -130,6 +130,29 @@ queue entry did **not** make the spec and stay open here:
 
 ## Shipped
 
+- 0018 pull file listing window (PR #31): the interactive file listing
+  pages instead of walling. Live trigger — `discover 'kimi k3'` →
+  `1 = pick files` printed 171 rows into a 24-line terminal, one stage
+  after discover's own windowed frames, which spec 0015 had fixed while
+  naming this listing out of scope. Windowing alone was the wrong
+  answer: the stage prompts for a *glob*, and what decides the glob is
+  which quant directories exist, so an overflowing listing opens on a
+  directory roll-up (171 rows → 14) with every file one `f` away, paged
+  `m`/`b`, `s` back to the roll-up keeping your place. Piped runs and
+  repos that fit are byte-identical to before. Groups sit in hub order
+  at their first member's slot, counts and sizes are exact sums, no
+  kind note is inferred for a directory, and an unreported size makes
+  the header say `at least` — the abandoned spec that previously held
+  this number died of grouping that suppressed facts, and none of that
+  recurs. Carried by two neutral refactors: `cli/window.py` (moved up a
+  package, `is_interactive` public) and `text_window.py`, which now
+  owns the single physical-line rule with `fit_rows` as its adapter.
+  Review round found the headline criterion failing at 42-43 columns —
+  the frame was sized against `footer_line(1, …)`, the narrowest first
+  index, so the real footer wrapped and frames hit 25 rows on a 24-row
+  screen; the test could not catch it because it was hardwired to 80
+  columns. 1287 tests.
+
 - 0017 per-repo model directories (PR #27): `models/<owner>/<repo>`
   mirrors the hub repo id verbatim, replacing ADR 0001's
   canonical-model grouping — so a pull's destination is a pure function

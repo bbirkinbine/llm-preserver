@@ -1,6 +1,6 @@
 # 0018 — Pull File Listing Window
 
-**Status:** draft
+**Status:** shipped (PR #31)
 **Last updated:** 2026-08-12
 **Depends on:** 0015
 
