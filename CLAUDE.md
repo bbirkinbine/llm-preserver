@@ -350,7 +350,7 @@ parallelize only with partitioned file ownership.
   drives it; agents do not `rm` inside an archive. Tests use tmp dirs,
   never a real archive.
 
-## Open work / current state (updated 2026-08-11, session 22)
+## Open work / current state (updated 2026-08-11, end of session 22)
 
 - **Sessions 19–21 left no trace on `main`.** Their work (spec 0016
   implementation, an abandoned spec 0018, and a first draft of spec
@@ -406,10 +406,24 @@ parallelize only with partitioned file ownership.
   `not archived` header; `--model` becomes `--repo` on `verify`
   with the old name as an alias (`remove`'s id is a positional, so it
   has no flag to rename — `/test-first` caught that); empty owner dirs go by
-  `os.rmdir`, never `rmtree`. **The live conversion ran: 11 directories,
-  682.6 GiB, verified 33/33. Six defects came from live use and six
-  more from the full review round; all auto-fixes are applied and the
-  executor findings are open. Nothing is committed.**
+  `os.rmdir`, never `rmtree`. **Merged as PR #27**, CI green. Thirteen
+  defects surfaced: **seven from live use** (nested directory removals;
+  EPERM moving payload whose ADR 0001 lock returns as the BSD immutable
+  flag over SMB, and the same bug pre-existing in `remove`, which
+  deletes the record first; a record understating its own schema after
+  a merge; `--role`/`--base-model` silently discarded on a no-op pull;
+  a `discover` frame overrun; and verify rewriting a stale manifest in
+  silence), **six from the review round** (a manifest committing to
+  bytes `save_record` then changed; a resumed migration double-recording;
+  a rename dropping record fields; `status` listing a model twice in a
+  lineage chain; an unusable card `base_model` crashing a pull after the
+  payload landed; criterion 24's marker flip never implemented). The
+  reviewers' shared diagnosis is the durable lesson: `migrate` kept
+  meeting problems the *planner* could already see, after payload had
+  moved — those checks now live in `migrate/guards.py`. Two CI-only
+  failures taught the platform rule now in
+  `.claude/rules/python-code.md`: mypy checks against the platform it
+  runs on, and `skipif(chflags)` tests never run on Linux CI at all.
 
 - **Session 18 (2026-08-06, medium-tier, PR #25): spec 0015 discover
   paging windows + stable pick numbers shipped.** Live-use trigger:

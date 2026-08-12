@@ -20,26 +20,7 @@ Check items off as they ship; update when priorities shift.
   live question ("I have a Q4 — what else do I need?") against today's
   tool.
 
-- [x] **0017 per-repo model directories** — shipped 2026-08-11. All six
-  passes, gate green (1051 tests), and the live conversion run on the
-  real archive: 11 directories, 682.6 GiB, verified 33/33 complete with
-  zero unmigrated, zero empty directories, and no payload lost or
-  double-counted. ADR 0003 accepted by Brian. Three defects were found
-  by live use that the review round and 90 pass-2 tests missed — nested
-  directory removals, EPERM on `uchg`-locked payload over SMB, and
-  silence during the run. Not yet committed or opened as a PR.
-  One directory per source repo, replacing
-  ADR 0001's canonical-model grouping, plus the `migrate` command that
-  converts an existing archive in place or into a copy at a new root.
-  Runs as six checkpointed passes (see the spec's `## Sketch` →
-  landing order); migration lands *before* the pull simplification so
-  the escape hatch exists first. Scope includes view repair after the
-  move and a full end-to-end CLI pass on a migrated archive (criteria
-  18-20) — `discover` and every read-side command need no code change,
-  but all get exercised. Measured scope on the live shelf: 11
-  of 25 directories affected — 3 pure renames (138.0 GiB), 8 splits
-  (544.5 GiB of foreign payload). Blocks nothing, blocked by nothing;
-  note the `record_schema_version` 3 collision with 0016.
+
 
 ## Hardening (independent of any spec)
 
@@ -117,6 +98,26 @@ queue entry did **not** make the spec and stay open here:
   practice, drop the heuristic entirely.
 
 ## Shipped
+
+- 0017 per-repo model directories (PR #27): `models/<owner>/<repo>`
+  mirrors the hub repo id verbatim, replacing ADR 0001's
+  canonical-model grouping — so a pull's destination is a pure function
+  of the id you type, with no inference, no grouping prompt and no
+  metadata call. Lineage moved into the record (`base_model` plus who
+  claimed it) where `status` groups by it, `show` reads it both ways
+  and `MODEL-RECORD.md` says it in prose. `migrate` converts an archive
+  in place or into a scoped `--to` copy, re-downloading and re-hashing
+  nothing because paths *inside* an artifact do not change; `verify`
+  reports a breach as `unmigrated` appended to the fixity word, drift
+  still outranking layout in the exit code. Converted the live archive:
+  11 directories, 682.6 GiB, in seconds — verified 33/33 complete, no
+  payload lost or double-counted, zero empty directories, every
+  manifest correct, and criterion 18 closed by serving bge-m3 through a
+  regenerated view store. Thirteen defects surfaced: seven from live
+  use (nested removals, EPERM on `uchg` payload in `migrate` and again
+  in `remove`, a record understating its schema, metadata flags dropped
+  on a no-op pull, a `discover` frame overrun, and a silent manifest
+  rewrite), six from the review round. 1086 tests.
 
 - 0015 discover paging windows + stable pick numbers (PR #25): both
   listings now render one terminal-sized window instead of reprinting
