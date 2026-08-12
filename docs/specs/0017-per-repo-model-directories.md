@@ -503,11 +503,16 @@ where noted.
   making it optional would recreate the two-optional-positionals shape
   spec 0009 found unparseable. `remove` changed vocabulary only. Found
   by `/test-first`, corrected in the criterion.
-- **Criterion 18 is answered, empirically.** Re-running `views` after a
-  migration does repair the tree: blob names are content digests, so a
-  stale link keeps its name and `_place_blob_link` re-points it on
-  finding `readlink() != target`. `tests/test_views_after_migrate.py`
-  pins it — the question the spec refused to answer by reading.
+- **Criterion 18 is closed on real hardware** (2026-08-11), not only in
+  `tmp_path`. `views --seed-store` against the converted archive built
+  56 blob links with **zero dangling**, every target resolving into the
+  new `<owner>/<repo>` layout; Ollama 0.32.6 listed the models and
+  `ollama run gpustack/bge-m3-gguf:q2_k` returned real embeddings —
+  loaded and served through a symlink into the archive, no payload
+  copied. The mechanism is what the tests predicted: blob names are
+  content digests, so a stale link keeps its name and
+  `_place_blob_link` re-points it on finding `readlink() != target`.
+  `tests/test_views_after_migrate.py` pins it.
 - **`migrate` moves files, never subtrees**, per the plan round's
   catch: one `gguf/` directory can legally hold two publishers' files
   from selective pulls.
