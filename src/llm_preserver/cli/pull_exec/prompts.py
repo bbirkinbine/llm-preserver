@@ -198,13 +198,17 @@ def _windowed_selection(
     header = summary_header(repo_id, info.files)
     rollup = rollup_lines(group_files(info.files))
     total = len(flat)
-    # Documentation of adjudication 4, not a live condition: a repo
-    # with no directories has roll-up lines identical to its flat
-    # lines, and the roll-up frame charges strictly more chrome, so
-    # `fits` below already answers False for it. Both reviewers
-    # confirmed deleting this term changes nothing, so do not expect a
-    # test to protect it — it is here to name the case.
-    has_directories = any("/" in entry.path for entry in info.files)
+    # The roll-up is worth a frame only when it actually collapses
+    # something. This was written as `any("/" in path)` — provably dead
+    # then, because directories were the only thing that collapsed and
+    # a repo without them produced roll-up lines identical to its flat
+    # lines. Adding shard-set grouping made it a live condition that
+    # said the wrong thing: a flat repo of 96 shards collapses to 14
+    # lines and still had no directory, so the frame it needed most was
+    # withheld (live use, 2026-08-12). Comparing the two listings asks
+    # the question directly and cannot go stale the next time a group
+    # kind is added.
+    collapses = len(rollup) < len(flat)
     groups = group_files(info.files)
     # The roll-up's example names one of the repo's own directories:
     # its whole purpose is to put those names on screen, and typing one
@@ -213,7 +217,7 @@ def _windowed_selection(
     rollup_budget = resolve_window_size(
         sys.stdout, _chrome(width, header, ROLLUP_KEYS, prompt=rollup_prompt)
     )
-    offer_rollup = has_directories and fits(rollup, rollup_budget, width)
+    offer_rollup = collapses and fits(rollup, rollup_budget, width)
 
     costs = [wrapped_height(line, width) for line in flat]
     widest_keys = window_keys(more=True, back=True, summary=offer_rollup)

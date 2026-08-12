@@ -241,10 +241,11 @@ Behavior worth knowing:
   0018). A repo whose listing fits your terminal prints exactly as it
   always has: every file, one row each, size then path, then the
   pattern prompt. A repo whose listing would overrun the screen opens
-  on a **directory roll-up** instead — one line per top-level directory
-  with its file count and total size, root files listed individually,
-  because the fact that decides your pattern is which quant directories
-  exist, not the 166 shard names beneath them:
+  on a **roll-up** instead — one line per top-level directory and one
+  per sharded weight set, each with its file count and total size,
+  everything else listed individually, because the fact that decides
+  your pattern is which groups exist, not the 166 shard names inside
+  them:
 
   ```text
   files in unsloth/Kimi-K3-GGUF (171 files, 6.9 TiB):
@@ -257,6 +258,28 @@ Behavior worth knowing:
   f = list every file (paged), q = quit
   files to pull (comma-separated patterns, e.g. *Q4_K_M* or *.gguf,*mmproj*):
   ```
+
+  A full-weights snapshot has no directories at all — it is ~96 files
+  of `model-NNNNN-of-NNNNNN.safetensors` at the root — so a shard set
+  rolls up the same way a directory does, and its line names the set as
+  a pattern you can paste (`model-*.safetensors`):
+
+  ```text
+  files in Uniboshi/Kimi-K3-Abliterated-V1 (113 files, 1.4 TiB):
+       1.1 KiB  README.md
+       7.1 KiB  config.json
+       ...
+       1.4 TiB  model-*.safetensors       96 files
+      57.0 MiB  model.safetensors.index.json
+       2.7 MiB  tiktoken.model
+  f = list every file (paged), q = quit
+  files to pull (comma-separated patterns, e.g. model-*.safetensors or *.gguf,*mmproj*):
+  ```
+
+  Directory is the outer rule, so shards inside `UD-Q4_K_XL/` stay
+  under the directory; a set needs more than one member to earn a line.
+  The same convention drives the incomplete-shard-set advisory, so the
+  listing and that warning can never disagree about what a set is.
 
   The roll-up summarizes and never replaces: `f` lists every file, one
   screen at a time, with `m` for the next page, `b` for the previous,

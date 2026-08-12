@@ -215,7 +215,7 @@ def test_the_example_pattern_names_a_directory_from_this_repo():
 
     groups = group_files([repo_file("README.md"), repo_file("UD-Q4_K_XL/a.gguf")])
 
-    assert example_pattern(groups) == "UD-Q4_K_XL"
+    assert example_pattern(groups) == "*UD-Q4_K_XL*"
     assert "*UD-Q4_K_XL*" in pattern_prompt(example_pattern(groups))
 
 
@@ -235,4 +235,4 @@ def test_a_directory_name_carrying_glob_syntax_is_not_offered_as_an_example():
 
     groups = group_files([repo_file("UD-Q4[recompute]/a.gguf"), repo_file("plain/b.gguf")])
 
-    assert example_pattern(groups) == "plain"
+    assert example_pattern(groups) == "*plain*"

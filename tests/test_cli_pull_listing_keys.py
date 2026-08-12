@@ -33,9 +33,13 @@ The fallbacks are adjudication 4's "one fallback, not two": the frame
 chain is flat-fits → roll-up-fits → paged listing with ``s`` withheld.
 Both ways of reaching the third rung are tested, because the two
 conditions are separate terms in one boolean and a test of only the
-first leaves the second free to be deleted — a repo with **no
-directories** (``has_directories``) and a repo whose **roll-up
-overflows in its own right** (``fits(rollup, ...)``).
+first leaves the second free to be deleted — a repo whose roll-up
+**says nothing shorter** (``collapses``) and one whose roll-up
+**overflows in its own right** (``fits(rollup, ...)``). The first term
+used to read `any("/" in path)`; live use found that shard-set
+grouping made a flat 96-shard snapshot collapse to 14 lines while
+still owning no directory, so the frame it most needed was withheld.
+That case is pinned in ``test_pull_listing_shards.py``.
 """
 
 import io

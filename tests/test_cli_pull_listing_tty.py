@@ -8,24 +8,21 @@ tests for which frame a repo opens on:
 
 - a listing that fits prints exactly as it does today — flat, no key
   line, one prompt (so ``q`` there is a pattern, adjudication 5);
-- an overflowing listing on a TTY opens on the directory roll-up, with
-  every file one ``f`` away.
+- an overflowing listing on a TTY opens on the roll-up, with every file
+  one ``f`` away.
 
-The rest of the contract lives in sibling modules that import this
-harness (the ``test_cli_discover_paging`` → ``test_cli_discover_flow``
-idiom): ``…_paging.py`` (``f``/``m``/``b``/``s``, footer grammar,
-completeness), ``…_keys.py`` (keys versus patterns, the two fallbacks,
-and the two non-TTY streams — a pipe and a broken one), and
-``…_geometry.py`` (the one-screen criterion swept across terminal
-sizes). Four modules rather than one because each must stay under the
-300-line cap in ``.claude/rules/python-code.md``.
+Sibling modules import this harness (the
+``test_cli_discover_paging`` → ``test_cli_discover_flow`` idiom):
+``…_paging.py`` (``f``/``m``/``b``/``s``, footers), ``…_keys.py``
+(keys versus patterns, the fallbacks, non-TTY streams),
+``…_geometry.py`` (the one-screen sweep), and
+``test_pull_listing_shards.py`` (the flat-snapshot shape). Several
+modules rather than one, to stay under the 300-line cap.
 
 **The terminal is simulated at the resolver seam**, never by faking
 ``isatty``: ``CliRunner`` and pytest's capture both swap ``sys.stdout``
 after any patch of it, so a faked TTY measures the piped path by
-accident (the idiom is
-``tests/test_cli_discover_tty_frames.py:44``). That makes two
-requirements of the implementation, both deliberate:
+accident (``tests/test_cli_discover_tty_frames.py:44``). So
 ``prompt_for_selection`` reads ``sys.stdout`` *at call time* and asks
 ``is_interactive`` / ``resolve_window_size`` / ``resolve_window_width``
 — imported into ``pull_exec.prompts`` — for the verdict and the budget.
@@ -123,12 +120,14 @@ def kimi_repo() -> RepoInfo:
 
 
 def flat_root_repo() -> RepoInfo:
-    """171 files, no subdirectory anywhere — the roll-up has nothing to say."""
+    """171 root files that group into nothing — the roll-up has no say.
+
+    Distinct names on purpose: the obvious fixture is a shard set, and
+    that is exactly what *does* collapse now. A repo earns the roll-up
+    when the roll-up is shorter, not when it owns a directory.
+    """
     return info_for(
-        [
-            (f"{MODEL}-UD-Q4_K_XL-{index:05d}-of-{TOTAL_FILES:05d}.gguf", 19851335840)
-            for index in range(1, TOTAL_FILES + 1)
-        ]
+        [(f"{MODEL}-variant-{index:03d}.gguf", 19851335840) for index in range(1, TOTAL_FILES + 1)]
     )
 
 

@@ -316,6 +316,44 @@ documented third rung, not a failure, but it means a 40-column pane
 gets no roll-up. Raised and not taken, since the spec's own `## Notes`
 treats 80 columns as narrow.
 
+## Adjudications (live-use round, 2026-08-12)
+
+Brian walked a real `discover` session. It found what the fixtures
+structurally could not.
+
+- **A repo with no directories got no roll-up, and that is the repo
+  that needed it most.** `Uniboshi/Kimi-K3-Abliterated-V1` is 113 files
+  with *zero* directories — a full-weights snapshot is 96 files of
+  `model-NNNNN-of-NNNNNN.safetensors` at the root. The roll-up was
+  designed against quant repos, which lay quants out as directories, so
+  `has_directories` was False and the human paged 96 identical rows.
+  Resolution: a sharded weight set at the root rolls up like a
+  directory. Directory stays the outer rule (shards inside
+  `UD-Q4_K_XL/` stay under it), and a set needs more than one member.
+  113 files become 20 lines.
+- **The gate on that frame was asking the wrong question.**
+  `offer_rollup` read `any("/" in path)`. Both reviewers and this spec
+  called it provably dead — true while directories were the only thing
+  that collapsed. Shard grouping made it live *and wrong*: the flat
+  snapshot collapsed to 20 lines and still owned no directory, so the
+  frame was withheld anyway. It now asks whether the roll-up is shorter
+  than the flat listing, which is the question that was always meant
+  and cannot go stale when a third group kind is added. **The lesson is
+  the dead condition, not the missing feature**: a term that is dead
+  today is a term nobody re-reads when the surrounding rule changes.
+- **The shard convention is not this spec's to own.** It moved to
+  `shard_sets.py`, shared with spec 0005's incomplete-set advisory, so
+  the listing and the warning cannot disagree about what a set is. That
+  extraction also dropped `pull_advisory.py` back under the 300-line
+  cap.
+
+The same session surfaced a **pre-existing spec 0005 defect**, fixed on
+its own branch: `_SHARD_RE` required `\d{5}` for the shard total, and
+that repo publishes `-of-000096`, so the incomplete-shard-set advisory
+silently did not fire. Measured, 9 of 96 shards selected: 0 advisories
+before, 1 after. Unrelated to this spec beyond having been walked past.
+This branch depends on that fix — the roll-up reuses the same regex.
+
 ## Sketch
 
 - **`cli/discover_cmd/window.py` moves to `cli/window.py`.** It already

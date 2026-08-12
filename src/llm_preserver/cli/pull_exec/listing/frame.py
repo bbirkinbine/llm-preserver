@@ -63,43 +63,49 @@ _GLOB_METACHARACTERS = "*?[]"
 
 
 def example_pattern(groups: Sequence[ListingGroup]) -> str | None:
-    """A directory from this repo, usable verbatim as an example pattern.
+    """A pattern from this repo's own roll-up, ready to type.
 
-    The roll-up's whole point is to put directory names in front of the
+    The roll-up's whole point is to put group names in front of the
     human, and the most natural response is to type one — which matches
-    nothing, because patterns are matched against the full repo path
-    and need wildcards. Naming a real directory in the prompt teaches
-    the idiom with a name already on screen (review round, 2026-08-12).
+    nothing for a directory, because patterns are matched against the
+    full repo path and need wildcards. Showing a real one in the prompt
+    teaches the idiom with a name already on screen (review round,
+    2026-08-12).
+
+    A shard-set group is already a glob (``model-*.safetensors``), so
+    it is offered verbatim; a directory is wrapped in ``*``.
 
     Args:
         groups: The roll-up's groups, in hub order.
 
     Returns:
-        The first directory name safe to wrap in ``*``, or None when
-        there is none — in which case the generic example stands.
+        A ready-to-paste pattern, or None when no group yields one — in
+        which case the generic example stands.
     """
     for group in groups:
+        if group.is_shard_set:
+            return clean_text(group.name, single_line=True)
         if not group.is_directory:
             continue
         name = clean_text(group.name, single_line=True)
         if name and not any(character in name for character in _GLOB_METACHARACTERS):
-            return name
+            return f"*{name}*"
     return None
 
 
 def pattern_prompt(example: str | None = None) -> str:
-    """The pattern prompt, optionally naming a directory from this repo.
+    """The pattern prompt, optionally showing one from this repo.
 
     Args:
-        example: A directory name to show wrapped in ``*``, or None for
-            the generic example.
+        example: A ready-to-type pattern, or None for the generic
+            example.
 
     Returns:
         The prompt text, without click's trailing ``": "``.
     """
     # The leading * matters: patterns match the full repo path, so bare
     # "Q4_K_M*" matches nothing (live mispull, 2026-07-12).
-    lead = "*Q4_K_M*" if example is None else f"*{example}*"
+    lead = example or "*Q4_K_M*"
     return f"files to pull (comma-separated patterns, e.g. {lead} or *.gguf,*mmproj*)"
 
 
