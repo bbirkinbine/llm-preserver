@@ -666,6 +666,60 @@ rendering as pull's confirmations and remove's previews), completeness.
 The fast answer to "what is on the shelf." Exact byte counts live in
 `show`.
 
+### Lineage grouping
+
+Rows are grouped by declared lineage (ADR 0003). A model whose record
+names a `base_model` is indented one level under that base:
+
+```
+model                         formats      roles      size      completeness
+zai-org/GLM-4.7-Flash         hf-snapshot  (no role)  58.2 GiB  ok
+  unsloth/GLM-4.7-Flash-GGUF  gguf         (no role)  16.4 GiB  ok
+```
+
+The old layout said this with the directory tree; one directory per
+source repo says it here instead. The claim comes from the record and
+nothing else — `status` walks `models/*/*` to see which directories
+exist, but reads no payload file and makes no network call — so it is
+only as good as its `base_model_source` (`show` names that origin: the
+model card, your `--base-model`, or a migration's reading of the old
+directory nesting).
+
+**A base the archive does not hold still gets a row**, parenthesized,
+with a dash in the formats, roles, and size cells:
+
+```
+model                            formats  roles      size      completeness
+(Qwen/Qwen3-Coder-Next)          -        -          -         not archived
+  unsloth/Qwen3-Coder-Next-GGUF  gguf     (no role)  46.6 GiB  ok
+```
+
+`not archived` is not a completeness verdict — there is no record to
+assess. The row reports one fact: something on the shelf declares this
+id as its base, and the archive has no directory for it. Such a row
+never appears alone, since it exists only because a derivative
+references it.
+
+The tool states the fact and never recommends. Whether a given gap is
+worth closing — and the one case where a missing base is a hard
+runtime dependency rather than provenance — is covered in
+[`what-to-archive.md`](what-to-archive.md).
+
+**Indentation is one level, never deeper.** Only a base that declares
+no base of its own adopts, so in a chain of three the middle model
+indents under the first and the third returns to the left margin.
+Longer chains exist across records — each record stores one hop, and
+those hops connect — but the renderer stops at one level rather than
+nesting them.
+
+A row at the left margin therefore does not prove that model derives
+from nothing. It means the model declares no base at all, or that the
+base it declares is itself a derivative. A declared base the archive
+does not hold does *not* produce a margin row — it produces the
+`not archived` header above, with the derivative indented under it.
+`show` is the way to read a single model's declared base without the
+grouping in the way.
+
 ### The completeness column
 
 The last column reports the health of the model's *record*, and it is

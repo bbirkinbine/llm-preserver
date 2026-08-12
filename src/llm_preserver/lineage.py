@@ -12,9 +12,10 @@ turns a flat inventory into the ordered, indented view ``status``
 prints, including a header for a base the archive does *not* hold —
 which is a fact worth seeing, not a gap to hide.
 
-One level of indentation, deliberately: a derivative of a derivative is
-rendered under its own declared base, never nested two deep. No
-recursion means no cycle to detect and no depth to bound.
+One level of indentation, deliberately: only a base that declares no
+base of its own adopts, so a derivative of a derivative heads its own
+group at the left margin rather than nesting two deep. No recursion
+means no cycle to detect and no depth to bound.
 """
 
 from dataclasses import dataclass
@@ -44,13 +45,18 @@ def group_by_lineage(summaries: list[ModelSummary]) -> list[LineageRow]:
     """Order the shelf so derivatives sit under the base they declare.
 
     Every model appears **exactly once**. A model is indented under its
-    declared base when that base is itself rendered as a header;
-    otherwise it becomes a header in its own right. That keeps the
-    promise of one indent level without either duplicating a model that
-    is both a base and a derivative, or — the worse failure — dropping a
-    grandchild whose parent got demoted to a child. Both were live bugs
-    (review, 2026-08-11), and the second is why this is not simply "skip
-    claimed models".
+    declared base when that base declares no base of its own (or when
+    the archive does not hold the base at all, which gets a placeholder
+    header); otherwise it becomes a header in its own right. So a
+    grandchild sits at the left margin even when its own parent is
+    printed as a header — one indent level, and the relationship the
+    margin row loses is the one the record still states.
+
+    That keeps the promise of one indent level without either
+    duplicating a model that is both a base and a derivative, or — the
+    worse failure — dropping a grandchild whose parent got demoted to a
+    child. Both were live bugs (review, 2026-08-11), and the second is
+    why this is not simply "skip claimed models".
 
     Args:
         summaries: Inventory rows, in any order.
@@ -66,14 +72,20 @@ def group_by_lineage(summaries: list[ModelSummary]) -> list[LineageRow]:
         if summary.base_model and summary.base_model != summary.model_id
     }
 
-    # A model is a child only if its base is present *and* that base is
-    # itself a header. Resolved by walking up: a base that is itself a
-    # child cannot adopt, so its own derivatives head their own groups.
+    # A base that is itself a derivative cannot adopt, so its own
+    # derivatives head their own groups. Read that off ``declared``
+    # rather than off what the loop below has promoted so far: the
+    # earlier version asked whether the base was already in ``headers``,
+    # which made the answer depend on the id sort order instead of on
+    # the records — see
+    # ``test_grouping_does_not_depend_on_how_the_ids_sort`` for the live
+    # case that exposed it.
+    adopters = {model_id for model_id in by_id if model_id not in declared}
     headers: set[str] = set()
     children: dict[str, list[str]] = {}
     for model_id in sorted(by_id):
         base = declared.get(model_id)
-        if base is not None and (base not in by_id or base in headers):
+        if base is not None and (base not in by_id or base in adopters):
             children.setdefault(base, []).append(model_id)
         else:
             headers.add(model_id)
