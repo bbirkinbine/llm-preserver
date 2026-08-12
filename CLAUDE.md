@@ -185,12 +185,19 @@ standing consent to resolve `[ask-user]` findings too.
   number at creation, not at merge, so the next-spec pointers
   (TODO.md's "Next spec" header, the CLAUDE.md open-work line)
   update on the same branch (Brian, 2026-07-13).
-- **Close-out rides the feature PR** (Brian, 2026-07-13). The
-  status-to-shipped flip, the TODO.md Shipped entry, and the
-  CLAUDE.md session notes go on the feature branch as its last
-  commit once the PR is open (the PR number exists from that point;
-  "shipped" in a merged PR is self-fulfilling). Do not spawn a
-  separate close-out chore PR just for these.
+- **Close-out rides the feature PR — this is mechanically enforced**
+  (Brian, 2026-07-13; made a hard gate 2026-08-11 after spec 0017
+  broke it). The status-to-shipped flip, the TODO.md **`## Shipped`**
+  entry, and the CLAUDE.md session notes go on the feature branch as
+  its last commit once the PR is open (the PR number exists from that
+  point; "shipped" in a merged PR is self-fulfilling). **Never open a
+  follow-up PR for close-out bookkeeping** — spec 0017 did, and wasted
+  a review cycle on text that belonged in the PR that was already open.
+  `/review-check` now runs `.claude/hooks/closeout-check.sh`, which
+  refuses on a `spec-NNNN-` branch while any of those are missing, or
+  while `docs/cli.md` is untouched by a diff that changed
+  `src/llm_preserver/cli/`. The written rule alone was not enough: it
+  existed, said exactly this, and was still skipped.
 - **Verify.** Run `/review-check` (ruff lint, ruff format, mypy,
   pytest), then `/review` on the diff; `/review-adversarial` as well on
   meaningful features when installed. Add `/security` and/or
@@ -308,6 +315,14 @@ Defense in depth, soft to hard — each is one layer, none is a guarantee:
   status list stays current without a manual step. It only ever rewrites
   its own generated block; the spec `**Status:**` lines remain the source
   of truth.
+- **Close-out gate** (`closeout-check.sh`, run by `/review-check`)
+  refuses to call a `spec-NNNN-` branch ready while the spec still says
+  `draft`, TODO has no `## Shipped` entry, `CLAUDE.md` has no session
+  note, or a CLI diff left `docs/cli.md` untouched. Added after spec
+  0017 opened and merged a PR with all of that outstanding, then needed
+  a second PR to fix it — the standing rule was already written and was
+  skipped anyway, which is the argument for a check rather than louder
+  prose.
 - **PreCompact** injects a reminder to preserve the active spec path,
   branch, and modified-file list through compaction.
 - **Stop** (`gate-on-stop.sh`, strict-hooks only) blocks ending a turn
@@ -350,7 +365,7 @@ parallelize only with partitioned file ownership.
   drives it; agents do not `rm` inside an archive. Tests use tmp dirs,
   never a real archive.
 
-## Open work / current state (updated 2026-08-11, session 22)
+## Open work / current state (updated 2026-08-11, end of session 22)
 
 - **Sessions 19–21 left no trace on `main`.** Their work (spec 0016
   implementation, an abandoned spec 0018, and a first draft of spec
@@ -406,10 +421,24 @@ parallelize only with partitioned file ownership.
   `not archived` header; `--model` becomes `--repo` on `verify`
   with the old name as an alias (`remove`'s id is a positional, so it
   has no flag to rename — `/test-first` caught that); empty owner dirs go by
-  `os.rmdir`, never `rmtree`. **The live conversion ran: 11 directories,
-  682.6 GiB, verified 33/33. Six defects came from live use and six
-  more from the full review round; all auto-fixes are applied and the
-  executor findings are open. Nothing is committed.**
+  `os.rmdir`, never `rmtree`. **Merged as PR #27**, CI green. Thirteen
+  defects surfaced: **seven from live use** (nested directory removals;
+  EPERM moving payload whose ADR 0001 lock returns as the BSD immutable
+  flag over SMB, and the same bug pre-existing in `remove`, which
+  deletes the record first; a record understating its own schema after
+  a merge; `--role`/`--base-model` silently discarded on a no-op pull;
+  a `discover` frame overrun; and verify rewriting a stale manifest in
+  silence), **six from the review round** (a manifest committing to
+  bytes `save_record` then changed; a resumed migration double-recording;
+  a rename dropping record fields; `status` listing a model twice in a
+  lineage chain; an unusable card `base_model` crashing a pull after the
+  payload landed; criterion 24's marker flip never implemented). The
+  reviewers' shared diagnosis is the durable lesson: `migrate` kept
+  meeting problems the *planner* could already see, after payload had
+  moved — those checks now live in `migrate/guards.py`. Two CI-only
+  failures taught the platform rule now in
+  `.claude/rules/python-code.md`: mypy checks against the platform it
+  runs on, and `skipif(chflags)` tests never run on Linux CI at all.
 
 - **Session 18 (2026-08-06, medium-tier, PR #25): spec 0015 discover
   paging windows + stable pick numbers shipped.** Live-use trigger:
