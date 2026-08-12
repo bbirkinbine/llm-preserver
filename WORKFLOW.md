@@ -84,8 +84,11 @@ is already obvious.
      `/review-check` can't assert. Most projects ship no LLM surface and
      skip this entirely; install the full/advanced docs for the detailed
      decision rule.
-9. **Commit, then open the PR.** You write the commit message. In
-   GitHub-backed mode, the PR body says `Closes #<issue>` so merging
+9. **Commit, then open the PR and take it to green.** You write the
+   commit message. The agent creates the PR (`gh pr create --fill`),
+   watches CI to completion, and hands back a merge-ready URL — the
+   handoff point is green, not "opened". The merge itself is yours.
+   In GitHub-backed mode, the PR body says `Closes #<issue>` so merging
    closes the issue; local-only mode omits the closing keyword.
 
 ## The planning artifacts, broad to narrow

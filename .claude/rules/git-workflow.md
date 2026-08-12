@@ -47,8 +47,23 @@ direct ask. Workflow: make the change, show `git status` and
 
 ## Pull requests
 
-Open with `gh pr create --fill --web`. In GitHub-backed mode, the PR body
-must contain a closing keyword line — `Closes #<issue-number>` — so the
-merge auto-closes the issue. Closing keywords work in the PR body, not in
-feature-branch commit messages. In local-only mode, omit the closing
-keyword. Run `/review` before opening the PR.
+Run `/review` before opening the PR, then open it with
+`gh pr create --fill` — **create the PR outright, not `--web`**, which
+only opens a prefilled form the human then has to submit by hand
+(Brian, 2026-08-12). Then take it to a merge-ready state without being
+asked:
+
+1. `gh pr checks <N> --watch` — wait for CI to finish rather than
+   handing over a PR whose result is unknown.
+2. Confirm the PR reports `mergeable: MERGEABLE` and
+   `mergeStateStatus: CLEAN`.
+3. Hand back the URL with the check results.
+
+**The merge is the human's — never merge yourself.** If CI fails, fix
+it on the same branch and re-watch; the handoff point is green, not
+"opened".
+
+In GitHub-backed mode, the PR body must contain a closing keyword
+line — `Closes #<issue-number>` — so the merge auto-closes the issue.
+Closing keywords work in the PR body, not in feature-branch commit
+messages. In local-only mode, omit the closing keyword.
