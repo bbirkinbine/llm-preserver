@@ -45,6 +45,24 @@ paths:
   and printing `result.output` and `result.stderr` separately before
   changing any product code.
 
+## Platform-conditional APIs
+
+- **Reach a platform-only API through `getattr`, never a direct
+  attribute reference.** `mypy` type-checks against the platform it
+  runs on, so `os.chflags(...)` and `st.st_flags` pass locally on macOS
+  and fail CI on Linux with `Module has no attribute`. Bind once at
+  module scope (`_chflags = getattr(os, "chflags", None)`) and let every
+  caller degrade to a no-op where the mechanism is absent. Bitten by
+  spec 0017's BSD file-flag handling — the local gate was green and the
+  PR's first CI run was red.
+- Reproduce CI's view before pushing: `uv run mypy --platform linux src/`.
+  Cheaper than a round trip through Actions.
+- Note the related coverage gap: tests guarded by
+  `skipif(not hasattr(os, "chflags"))` do not run on Linux CI at all, so
+  a platform-only code path can be type-clean and completely unexercised
+  there. Say so in the test module rather than letting a green CI imply
+  coverage it does not have.
+
 ## External-reference provenance (implement phase)
 
 Any value or claim whose correctness depends on matching an external

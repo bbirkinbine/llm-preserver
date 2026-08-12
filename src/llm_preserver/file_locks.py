@@ -20,10 +20,22 @@ record and then failed on its first weight.
 
 import os
 import stat
+from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 
 _IMMUTABLE = stat.UF_IMMUTABLE | getattr(stat, "SF_IMMUTABLE", 0)
+
+# Resolved through getattr, not referenced directly: BSD file flags do
+# not exist on Linux, and mypy type-checks against the platform it runs
+# on — so a bare ``os.chflags`` passes locally on macOS and fails CI.
+# Every caller degrades to a no-op where the mechanism is absent.
+_chflags: Callable[[Path, int], None] | None = getattr(os, "chflags", None)
+
+
+def _current_flags(path: Path) -> int:
+    """The file's BSD flags, or 0 on a platform that has none."""
+    return int(getattr(path.stat(), "st_flags", 0))
 
 
 def immutable_flags(path: Path) -> int:
@@ -32,9 +44,9 @@ def immutable_flags(path: Path) -> int:
     Linux has no ``st_flags``; the whole mechanism is a BSD/macOS one,
     so this is 0 there and every caller becomes a no-op.
     """
-    if not hasattr(os, "chflags"):
+    if _chflags is None:
         return 0
-    return getattr(path.stat(), "st_flags", 0) & _IMMUTABLE
+    return _current_flags(path) & _IMMUTABLE
 
 
 def clear_immutable(path: Path) -> int:
@@ -50,8 +62,8 @@ def clear_immutable(path: Path) -> int:
             modify the archive's payload at all.
     """
     locked = immutable_flags(path)
-    if locked:
-        os.chflags(path, path.stat().st_flags & ~locked)
+    if locked and _chflags is not None:
+        _chflags(path, _current_flags(path) & ~locked)
     return locked
 
 
@@ -62,10 +74,10 @@ def restore_immutable(path: Path, locked: int) -> None:
     move, and on the rollback path after a failure. Neither is a place
     to raise a second exception over a flag.
     """
-    if not locked or not hasattr(os, "chflags"):
+    if not locked or _chflags is None:
         return
     with suppress(OSError):
-        os.chflags(path, path.stat().st_flags | locked)
+        _chflags(path, _current_flags(path) | locked)
 
 
 def unlink_locked(path: Path) -> None:
