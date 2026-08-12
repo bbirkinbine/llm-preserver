@@ -38,20 +38,37 @@ def test_a_recorded_file_missing_from_disk_refuses_the_run(tmp_path: Path) -> No
     assert Q4_REL in str(excinfo.value)
 
 
-def test_a_case_only_difference_refuses_rather_than_renaming_onto_itself(
-    tmp_path: Path,
-) -> None:
-    # On a case-insensitive filesystem the target *is* the source, so
-    # every move is a no-op and the source-record cleanup then deletes
-    # the only copy of the hashes, license and provenance — while
-    # exiting 0 reporting success.
+def case_insensitive(tmp_path: Path) -> bool:
+    """Whether this filesystem folds case — macOS/Windows do, ext4 does not."""
+    probe = tmp_path / "CaseProbe"
+    probe.mkdir()
+    return (tmp_path / "caseprobe").exists()
+
+
+def test_a_case_only_difference_is_handled_for_this_filesystem(tmp_path: Path) -> None:
+    """Two spellings of one repo id mean different things per platform,
+    and both answers are correct.
+
+    Where case folds (macOS APFS, the author's own platform) the target
+    *is* the source: every move is a rename onto itself and the
+    source-record cleanup then deletes the only copy of the hashes,
+    license and provenance — while exiting 0 reporting success. That
+    must be refused.
+
+    Where case does not fold (Linux ext4, and CI) they are genuinely
+    two directories and the migration is ordinary. Asserting the
+    refusal there would fail for the right reason, which is why this
+    test asks the filesystem rather than assuming."""
     root = init_archive_dir(tmp_path)
     build_directory(root, "unsloth/Tiny-Chat-GGUF", [("gguf", FOREIGN, {Q4_REL: Q4})])
 
-    with pytest.raises(MigrateError) as excinfo:
-        plan_migration(root)
-
-    assert "case" in str(excinfo.value).lower()
+    if case_insensitive(tmp_path):
+        with pytest.raises(MigrateError) as excinfo:
+            plan_migration(root)
+        assert "case" in str(excinfo.value).lower()
+    else:
+        # A normal split-out: the target is a directory of its own.
+        assert len(plan_migration(root).units) == 1
 
 
 def test_two_artifacts_claiming_one_path_refuse_the_run(tmp_path: Path) -> None:
