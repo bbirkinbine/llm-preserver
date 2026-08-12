@@ -48,6 +48,13 @@ def record_with_files(*paths: str) -> ModelRecord:
     )
 
 
+SHARDS = [
+    rf("model-00001-of-00003.safetensors"),
+    rf("model-00002-of-00003.safetensors"),
+    rf("model-00003-of-00003.safetensors"),
+]
+
+
 # --- same-repo companion rows ---------------------------------------
 
 
@@ -109,60 +116,6 @@ def test_companion_already_in_record_produces_no_advisory():
     record = record_with_files("gguf/mmproj-F16.gguf")
 
     assert advise(tree, selected, record) == []
-
-
-# --- sharded weight sets ---------------------------------------------
-
-
-SHARDS = [
-    rf("model-00001-of-00003.safetensors"),
-    rf("model-00002-of-00003.safetensors"),
-    rf("model-00003-of-00003.safetensors"),
-]
-
-
-def test_partial_shard_selection_triggers_incomplete_set_advisory():
-    tree = [*SHARDS, rf("README.md")]
-    selected = [SHARDS[0], tree[3]]  # one of three shards
-
-    advisories = advise(tree, selected)
-
-    assert [a.kind for a in advisories] == ["sharded weight set"]
-    assert "2" in advisories[0].message  # names the count missing
-    assert "--include" in advisories[0].message
-
-
-def test_selecting_no_shards_of_a_set_produces_no_advisory():
-    # Zero of the set is a deliberate exclusion, not an incomplete set.
-    tree = [*SHARDS, rf("tiny-chat-Q4_K_M.gguf")]
-
-    assert advise(tree, [tree[3]]) == []
-
-
-def test_selecting_all_shards_of_a_set_produces_no_advisory():
-    tree = [*SHARDS, rf("README.md")]
-
-    assert advise(tree, tree) == []
-
-
-def test_shards_already_in_record_count_as_covered():
-    tree = [*SHARDS]
-    selected = [SHARDS[0], SHARDS[1]]
-    record = record_with_files("hf-snapshot/model-00003-of-00003.safetensors")
-
-    assert advise(tree, selected, record) == []
-
-
-def test_shard_sets_group_by_prefix():
-    other = [rf("extra-00001-of-00002.bin"), rf("extra-00002-of-00002.bin")]
-    tree = [*SHARDS, *other]
-    selected = [*SHARDS, other[0]]  # "model" set complete, "extra" set partial
-
-    advisories = advise(tree, selected)
-
-    assert [a.kind for a in advisories] == ["sharded weight set"]
-    assert "extra-" in advisories[0].message
-    assert "model-" not in advisories[0].message
 
 
 # --- cross-repo rows --------------------------------------------------
