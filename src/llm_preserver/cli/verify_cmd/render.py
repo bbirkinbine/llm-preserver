@@ -54,6 +54,11 @@ def _echo_result(result: ModelVerifyResult) -> None:
         typer.echo(
             clean_text(f"  unrecorded (on disk, not in record): {rel_path}", single_line=True)
         )
+    if result.manifest_regenerated:
+        typer.echo(
+            "  manifest regenerated: the sidecar on disk did not match this record, "
+            "so 'sha256sum -c' would have failed until now"
+        )
     if result.manifest_error is not None:
         # A warning, not drift: the payload verdict above stands; only
         # the sidecar refresh failed (e.g. a read-only-mounted archive).

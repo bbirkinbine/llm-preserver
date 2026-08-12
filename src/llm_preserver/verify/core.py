@@ -10,7 +10,7 @@ from llm_preserver.archive import iter_model_dirs, require_archive
 from llm_preserver.layout import layout_state
 from llm_preserver.model_scan import unrecorded_files
 from llm_preserver.pull_record import write_manifest
-from llm_preserver.records import RECORD_FILENAME, load_record
+from llm_preserver.records import MANIFEST_FILENAME, RECORD_FILENAME, load_record
 from llm_preserver.verify.files import _check_recorded_files
 from llm_preserver.verify.models import (
     ModelVerifyResult,
@@ -71,7 +71,13 @@ def _verify_model(
             disk_record_sha256 = hashlib.sha256(
                 (model_dir / RECORD_FILENAME).read_bytes()
             ).hexdigest()
+            manifest_path = model_dir / MANIFEST_FILENAME
+            before = manifest_path.read_bytes() if manifest_path.is_file() else b""
             write_manifest(model_dir, record, record_sha256=disk_record_sha256)
+            # Say so when it changed. Regenerating derived output is
+            # routine; doing it silently hides that the offline
+            # `sha256sum -c` check would have failed until this run.
+            result.manifest_regenerated = manifest_path.read_bytes() != before
         except OSError as exc:
             result.manifest_error = str(exc)
     return result

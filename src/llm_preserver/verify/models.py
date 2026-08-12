@@ -77,6 +77,12 @@ class ModelVerifyResult:
             size verified only) — never counted valid, never a mismatch.
         unrecorded: On-disk files no record lists (informational;
             tool-owned generated files are exempt).
+        manifest_regenerated: True when the sidecar on disk disagreed
+            with the one derived from the record, so this run replaced
+            it. Informational, never drift: the sidecar is regenerable
+            output. But it means ``sha256sum -c`` — the offline check
+            ADR 0001's durability claim rests on — would have failed
+            until now, which the human is owed (raised 2026-08-11).
         manifest_error: Why the sidecar refresh failed, or None. A
             warning, not drift — a read-only-mounted archive is a
             legitimate preservation posture and its payloads still
@@ -90,6 +96,7 @@ class ModelVerifyResult:
     problems: list[FileProblem] = field(default_factory=list)
     unhashed: list[str] = field(default_factory=list)
     unrecorded: list[str] = field(default_factory=list)
+    manifest_regenerated: bool = False
     manifest_error: str | None = None
 
 
