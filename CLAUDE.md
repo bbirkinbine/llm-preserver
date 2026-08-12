@@ -185,12 +185,19 @@ standing consent to resolve `[ask-user]` findings too.
   number at creation, not at merge, so the next-spec pointers
   (TODO.md's "Next spec" header, the CLAUDE.md open-work line)
   update on the same branch (Brian, 2026-07-13).
-- **Close-out rides the feature PR** (Brian, 2026-07-13). The
-  status-to-shipped flip, the TODO.md Shipped entry, and the
-  CLAUDE.md session notes go on the feature branch as its last
-  commit once the PR is open (the PR number exists from that point;
-  "shipped" in a merged PR is self-fulfilling). Do not spawn a
-  separate close-out chore PR just for these.
+- **Close-out rides the feature PR — this is mechanically enforced**
+  (Brian, 2026-07-13; made a hard gate 2026-08-11 after spec 0017
+  broke it). The status-to-shipped flip, the TODO.md **`## Shipped`**
+  entry, and the CLAUDE.md session notes go on the feature branch as
+  its last commit once the PR is open (the PR number exists from that
+  point; "shipped" in a merged PR is self-fulfilling). **Never open a
+  follow-up PR for close-out bookkeeping** — spec 0017 did, and wasted
+  a review cycle on text that belonged in the PR that was already open.
+  `/review-check` now runs `.claude/hooks/closeout-check.sh`, which
+  refuses on a `spec-NNNN-` branch while any of those are missing, or
+  while `docs/cli.md` is untouched by a diff that changed
+  `src/llm_preserver/cli/`. The written rule alone was not enough: it
+  existed, said exactly this, and was still skipped.
 - **Verify.** Run `/review-check` (ruff lint, ruff format, mypy,
   pytest), then `/review` on the diff; `/review-adversarial` as well on
   meaningful features when installed. Add `/security` and/or
@@ -308,6 +315,14 @@ Defense in depth, soft to hard — each is one layer, none is a guarantee:
   status list stays current without a manual step. It only ever rewrites
   its own generated block; the spec `**Status:**` lines remain the source
   of truth.
+- **Close-out gate** (`closeout-check.sh`, run by `/review-check`)
+  refuses to call a `spec-NNNN-` branch ready while the spec still says
+  `draft`, TODO has no `## Shipped` entry, `CLAUDE.md` has no session
+  note, or a CLI diff left `docs/cli.md` untouched. Added after spec
+  0017 opened and merged a PR with all of that outstanding, then needed
+  a second PR to fix it — the standing rule was already written and was
+  skipped anyway, which is the argument for a check rather than louder
+  prose.
 - **PreCompact** injects a reminder to preserve the active spec path,
   branch, and modified-file list through compaction.
 - **Stop** (`gate-on-stop.sh`, strict-hooks only) blocks ending a turn

@@ -14,6 +14,13 @@ Run the steps in order and report results:
    so the gate is reproducible from a fresh clone)
 3. `uv run mypy src/` — type check
 4. `uv run pytest -x --tb=short` — tests (fail-fast, short tracebacks)
+5. `./.claude/hooks/closeout-check.sh` — close-out bookkeeping. Silent
+   on any branch that is not `spec-NNNN-<slug>`; on a spec branch it
+   refuses while the spec still says `draft`, TODO has no `## Shipped`
+   entry for it, `CLAUDE.md` carries no session note, or `docs/cli.md`
+   is untouched while `src/llm_preserver/cli/` changed. These belong on
+   the feature branch **before** the PR opens — spec 0017 cost a second
+   PR for pure bookkeeping because they did not.
 
 If any step fails:
 
