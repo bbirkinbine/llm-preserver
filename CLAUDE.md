@@ -802,16 +802,27 @@ parallelize only with partitioned file ownership.
   and `verify` calls the record invalid forever; and `pull_advisory.py`
   is already 304 lines, over the cap, which pass 3's shared
   archive-walk extraction happens to fix.
-- **Next spec (0018): pick from TODO.md** — smoke test, spec 0002's
-  later adapter phases (LM Studio / llama.cpp / vLLM), or the
-  interactive-listing TUI (whose `discover` half spec 0015 took; what
-  remains is `pull`'s file listing plus arrow-key/type-to-filter).
-  Also queued from live use: goal-definitive archiving (capability
-  report in `status`), file-kind dictionary, live-hub canary (0000
-  roadmap).
+- **Spec 0018 (pull file listing window) drafted 2026-08-12, awaiting
+  human review.** Live-use trigger: `discover 'kimi k3'` →
+  `unsloth/Kimi-K3-GGUF` → `1 = pick files` printed 171 file rows into
+  a 24-line terminal. Spec 0015 windowed `discover`'s two stages and
+  named this listing out of scope; the handoff to the pull flow
+  (`cli/pull_exec/prompts.py::prompt_for_selection`) still echoes every
+  file in a bare loop. Design settled at the checkpoint: a directory
+  roll-up as the default frame (one line per top-level directory with
+  count and total size, root files individually), the complete listing
+  one `f` away and windowed with `m`/`b`, TTY-only so piped output is
+  unchanged. Type-to-filter and a match-preview loop were declined and
+  stay in TODO.md.
+- **Next spec (0019): pick from TODO.md** — smoke test, spec 0002's
+  later adapter phases (LM Studio / llama.cpp / vLLM), or the remaining
+  TUI nice-to-haves (arrow-key highlight, type-to-filter, match
+  preview). Also queued from live use: goal-definitive archiving
+  (capability report in `status`), file-kind dictionary, live-hub
+  canary (0000 roadmap).
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
   in progress — phase 1 shipped (PR #20), later adapters open;
-  0005–0014 shipped; `0016` draft; `0017` shipped (this session).
+  0005–0014 shipped; `0016` draft; `0017` shipped; `0018` draft.
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

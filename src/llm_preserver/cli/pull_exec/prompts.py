@@ -2,17 +2,52 @@
 
 Prompt classification keys on the strings ``pull_model`` composes —
 the tool owns both sides of that seam.
+
+Spec 0018 turned the file listing into two frames. It used to echo
+every file in the repo, which put 171 rows into a 24-line terminal on
+the live run that triggered the spec — one stage after ``discover``'s
+own windowed frames, and unrecoverable under ``screen``'s default
+scrollback. Now an overflowing listing opens on a directory roll-up and
+keeps every file one ``f`` away, paged with ``m``/``b``.
+
+Three rules hold the shape together:
+
+- **A pipe prints everything, flat.** A pipe has no scroll problem; it
+  has a file. So the interactivity verdict is taken *before* any budget
+  is asked for — ``resolve_window_size`` would answer with the fixed
+  non-TTY window, which is right for discover and wrong here.
+- **A listing that fits is untouched.** No roll-up, no keys, no
+  footer — the frame that shipped. The roll-up answers a wall, so it
+  appears only when there is one.
+- **Offered keys only.** A character that is not offered is part of a
+  pattern, so the key line is also the disambiguation. Keys match the
+  raw stripped input *before* the comma split: ``f`` is the key, ``f,``
+  is the pattern list ``["f"]``.
 """
 
-import fnmatch
-from pathlib import PurePosixPath
+import sys
 
 import typer
 
+from llm_preserver.cli.pull_exec.listing import (
+    ROLLUP_KEYS,
+    fits,
+    flat_header,
+    flat_lines,
+    footer_line,
+    group_files,
+    rollup_lines,
+    summary_header,
+    window_keys,
+)
+from llm_preserver.cli.window import is_interactive, resolve_window_size, resolve_window_width
 from llm_preserver.hub import PullUserError, RepoInfo
-from llm_preserver.pull_advisory import COMPANION_RULES
-from llm_preserver.pull_preflight import human_size
 from llm_preserver.render import clean_text
+from llm_preserver.text_window import fit_by_cost, wrapped_height
+
+# The leading * matters: patterns match the full repo path, so bare
+# "Q4_K_M*" matches nothing (live mispull, 2026-07-12).
+PATTERN_PROMPT = "files to pull (comma-separated patterns, e.g. *Q4_K_M* or *.gguf,*mmproj*)"
 
 
 def confirm_or_stop(prompt: str, assume_yes: bool) -> bool:
@@ -45,41 +80,151 @@ def confirm_or_stop(prompt: str, assume_yes: bool) -> bool:
         raise PullUserError(f"confirmation needed but stdin is not interactive: {hint}") from None
 
 
-def _kind_note(path: str) -> str:
-    """Annotate a recognized companion kind (the advisory rules table).
+def _ask() -> str:
+    """Ask for patterns, returning the raw answer for key matching."""
+    return str(typer.prompt(PATTERN_PROMPT, default="", show_default=False))
 
-    The same curated data the advisories use, shown where the human
-    is actually reading filenames (live-use ask, 2026-07-13: "what is
-    imatrix again?").
+
+def _patterns(raw: str) -> list[str]:
+    """Split an answer into the include patterns the pull will use."""
+    return [pattern.strip() for pattern in raw.split(",") if pattern.strip()]
+
+
+def _chrome(width: int | None, *texts: str) -> int:
+    """Physical lines a frame spends on everything that is not a row.
+
+    The prompt is charged too — click renders it as ``{text}: `` and it
+    is 76 characters, so a narrow terminal pays two lines for it. Each
+    caller passes the *widest* form its chrome can take, following
+    ``tree_chrome_lines``: a frame must never be sized against a
+    shorter shape than the one it prints.
     """
-    name = PurePosixPath(path).name
-    for pattern, kind in COMPANION_RULES:
-        if fnmatch.fnmatchcase(name, pattern):
-            return f"  — {kind}"
-    return ""
+    return sum(wrapped_height(text, width) for text in texts) + wrapped_height(
+        f"{PATTERN_PROMPT}: ", width
+    )
+
+
+def _echo_all(lines: list[str]) -> None:
+    """Print a frame's lines in order."""
+    for line in lines:
+        typer.echo(line)
 
 
 def prompt_for_selection(info: RepoInfo, repo_id: str) -> list[str]:
-    """List the repo's files with sizes and prompt for include patterns.
+    """List the repo's files and prompt for include patterns.
 
     Takes the already-fetched metadata — one metadata call per pull
     (spec 0003), shared with ``pull_model`` via its ``repo_info`` seam.
+    Nothing here reaches the network, so paging is free in both
+    directions.
+
+    Args:
+        info: The repo metadata whose ``files`` are being chosen from.
+        repo_id: The hub id, for the header. Hub-supplied text, same
+            trust class as the file paths, so it is scrubbed like them.
+
+    Returns:
+        The include patterns the human typed, stripped and split on
+        commas; empty when they answered with nothing.
+
+    Raises:
+        PullUserError: The human answered ``q`` at a frame offering it.
     """
-    # repo_id can arrive from hub metadata via discover — same trust
-    # class as the file paths below.
-    typer.echo(f"files in {clean_text(repo_id, single_line=True)}:")
-    for repo_file in info.files:
-        # Human sizes, matching the plan report: the listing is where a
-        # quant gets weighed against VRAM (live-use 2026-07-12 — a raw
-        # 19851335840 carries no fit signal).
-        size = "?" if repo_file.size is None else human_size(repo_file.size)
-        line = f"  {size:>10}  {repo_file.path}{_kind_note(repo_file.path)}"
-        typer.echo(clean_text(line, single_line=True))
-    raw = typer.prompt(
-        # The leading * matters: patterns match the full repo path, so
-        # bare "Q4_K_M*" matches nothing (live mispull, 2026-07-12).
-        "files to pull (comma-separated patterns, e.g. *Q4_K_M* or *.gguf,*mmproj*)",
-        default="",
-        show_default=False,
+    stream = sys.stdout
+    flat = flat_lines(info.files)
+    # A pipe gets the whole listing, unwindowed and unchanged.
+    if not is_interactive(stream):
+        typer.echo(flat_header(repo_id))
+        _echo_all(flat)
+        return _patterns(_ask())
+
+    width = resolve_window_width(stream)
+    if fits(flat, resolve_window_size(stream, _chrome(width, flat_header(repo_id))), width):
+        typer.echo(flat_header(repo_id))
+        _echo_all(flat)
+        return _patterns(_ask())
+
+    return _windowed_selection(info, repo_id, flat, width)
+
+
+def _windowed_selection(
+    info: RepoInfo, repo_id: str, flat: list[str], width: int | None
+) -> list[str]:
+    """Drive the roll-up and expanded frames until a pattern is typed.
+
+    The frame chain is the plan-round adjudication: the flat listing has
+    already failed to fit, so offer the roll-up when it has directories
+    to summarize *and* itself fits; otherwise open straight onto the
+    paged listing, where ``s`` is not offered because there is nothing
+    to go back to. One rule covers both gaps — a repo of root files with
+    no directories, and a roll-up too tall for the screen.
+    """
+    header = summary_header(repo_id, info.files)
+    rollup = rollup_lines(group_files(info.files))
+    total = len(flat)
+    # Documentation of adjudication 4, not a live condition: a repo
+    # with no directories has roll-up lines identical to its flat
+    # lines, and the roll-up frame charges strictly more chrome, so
+    # `fits` below already answers False for it. Both reviewers
+    # confirmed deleting this term changes nothing, so do not expect a
+    # test to protect it — it is here to name the case.
+    has_directories = any("/" in entry.path for entry in info.files)
+    rollup_budget = resolve_window_size(sys.stdout, _chrome(width, header, ROLLUP_KEYS))
+    offer_rollup = has_directories and fits(rollup, rollup_budget, width)
+
+    costs = [wrapped_height(line, width) for line in flat]
+    widest_keys = window_keys(more=True, back=True, summary=offer_rollup)
+    # Both indices at their largest: `first` grows as you page, so
+    # charging the chrome for `showing 1-…` under-sizes every later
+    # frame by the digits it gained. Measured at 42 columns on the
+    # spec's own repo: `showing 1-171 of 171 — more (m) · back (b)` is
+    # 42 characters and `showing 100-105 of 171 …` is 44, so the frame
+    # printed 25 physical rows against a 24-row screen — the headline
+    # criterion, failing in the width band nobody looked at (review
+    # round, 2026-08-12, found independently by both reviewers).
+    widest_footer = footer_line(total, total, total, more=True, back=True)
+    window_budget = resolve_window_size(
+        sys.stdout, _chrome(width, header, widest_footer, widest_keys)
     )
-    return [pattern.strip() for pattern in raw.split(",") if pattern.strip()]
+
+    showing_rollup = offer_rollup
+    start = 0
+    history: list[int] = []
+    while True:
+        if showing_rollup:
+            typer.echo(header)
+            _echo_all(rollup)
+            typer.echo(ROLLUP_KEYS)
+            answer = _ask()
+            key = answer.strip()
+            if key == "q":
+                raise PullUserError("nothing pulled: quit at the file listing")
+            if key == "f":
+                # Keep the offset: the spec calls the two frames a
+                # toggle, and a toggle that dumps you back at page one
+                # costs eight keypresses to undo (review round).
+                showing_rollup = False
+                continue
+            return _patterns(answer)
+
+        end = fit_by_cost(costs, start, window_budget)
+        more, back = end < total, bool(history)
+        typer.echo(header)
+        _echo_all(flat[start:end])
+        typer.echo(footer_line(start + 1, end, total, more=more, back=back))
+        typer.echo(window_keys(more=more, back=back, summary=offer_rollup))
+        answer = _ask()
+        key = answer.strip()
+        if key == "q":
+            raise PullUserError("nothing pulled: quit at the file listing")
+        if key == "m" and more:
+            history.append(start)
+            start = end
+            continue
+        if key == "b" and back:
+            start = history.pop()
+            continue
+        if key == "s" and offer_rollup:
+            showing_rollup = True
+            continue
+        return _patterns(answer)

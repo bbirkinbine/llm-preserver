@@ -237,6 +237,48 @@ Options:
 
 Behavior worth knowing:
 
+- **The interactive file listing pages instead of walling** (spec
+  0018). A repo whose listing fits your terminal prints exactly as it
+  always has: every file, one row each, size then path, then the
+  pattern prompt. A repo whose listing would overrun the screen opens
+  on a **directory roll-up** instead — one line per top-level directory
+  with its file count and total size, root files listed individually,
+  because the fact that decides your pattern is which quant directories
+  exist, not the 166 shard names beneath them:
+
+  ```text
+  files in unsloth/Kimi-K3-GGUF (171 files, 6.9 TiB):
+      25.5 KiB  .gitattributes
+      43.5 KiB  README.md
+     630.0 GiB  UD-IQ1_M/                 15 files
+     ...
+       1.4 TiB  UD-Q4_K_XL/               32 files
+     862.4 MiB  mmproj-BF16.gguf  — vision projector
+  f = list every file (paged), q = quit
+  files to pull (comma-separated patterns, e.g. *Q4_K_M* or *.gguf,*mmproj*):
+  ```
+
+  The roll-up summarizes and never replaces: `f` lists every file, one
+  screen at a time, with `m` for the next page, `b` for the previous,
+  and `s` back to the roll-up. Nothing is fetched in either direction —
+  the whole file list arrived with the metadata call the pull already
+  made — so paging is free and the footer's total (`showing 21-40 of
+  171`) is a true count, not a running tally. Groups appear in hub
+  order, at the position of their first file; nothing is sorted or
+  ranked. You can type a pattern at any frame, including page four,
+  without paging back.
+
+  Two consequences worth knowing. **Keys are only keys where they are
+  offered** — on a listing that fits there is no key line, so a bare
+  `q` there is a pattern matching a file named `q`, while on an
+  overflowing listing it quits (exit 2). And keys match the whole
+  answer before the comma split, so `f` is the key but `f,` and
+  `f, *.gguf` are pattern lists. Since patterns match the full repo
+  path and want a leading `*`, a real pattern never collides.
+
+  **Piped and redirected runs are unaffected**: no roll-up, no window,
+  no key line — the full flat listing, byte for byte as before. A pipe
+  has no scroll problem; it has a file.
 - **Every pull states its size before moving bytes.** Whatever the
   mode — `--include`, interactive, `--whole-repo` — the pull runs a
   disk preflight (refusing with exit 3 when the archive volume is
@@ -531,7 +573,11 @@ type `q`. Three stages, every step a numbered pick:
    listing) or `2 = whole-repo snapshot` (originals/masters — the
    tree is the artifact, spec 0004 semantics). Then the exact `pull`
    flow: file listing (mode 1 only), advisories, then the size
-   confirmation. There is no grouping question — the repo row you
+   confirmation. The file listing pages the same way these frames do —
+   a big quant repo opens on a directory roll-up with `f` to list every
+   file, so the handoff out of `discover` no longer drops a 171-row
+   wall on a terminal that cannot scroll back (spec 0018; see the pull
+   section). There is no grouping question — the repo row you
    picked *is* the directory (ADR 0003), so hub metadata cannot name
    an archive directory at all, which is the spec 0006 invariant now
    held structurally rather than by a prompt. Once the confirmation

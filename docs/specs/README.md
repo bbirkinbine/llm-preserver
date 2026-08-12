@@ -31,6 +31,7 @@ line; the source of truth is the spec file, this is a rendered cache. Run
 <!-- Generated block — do not edit by hand; the specs-status hook overwrites it. Source of truth is each spec's **Status:** field. -->
 - [0000 — llm-preserver (product spec)](0000-product.md)  (evergreen)
 - [0016 — Artifact Classification And Lineage](0016-artifact-classification-and-lineage.md)  (draft)
+- [0018 — Pull File Listing Window](0018-pull-file-listing-window.md)  (draft) — depends on 0015 (blocked)
 - ~~[0001 — Archive init and model-record manifest](0001-archive-init-and-manifest.md)~~  (shipped)
 - ~~[0003 — Selective Pull](0003-selective-pull.md)~~  (shipped)
 - ~~[0004 — Full Snapshot](0004-full-snapshot.md)~~  (shipped)

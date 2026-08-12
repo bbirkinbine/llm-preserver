@@ -1,8 +1,13 @@
-"""How much of the terminal one discover frame may fill (spec 0015).
+"""How much of the terminal one listing frame may fill (spec 0015).
 
 Sizing a frame to the terminal is what keeps a listing readable on a
 console with little or no scrollback — the failure this spec exists to
 fix was a 169-line frame whose top could not be scrolled back to.
+
+Written for ``discover`` and moved up a package by spec 0018, which
+needed the same sizing for ``pull``'s interactive file listing. Nothing
+here was ever discover-specific: it is an ``isatty`` gate and two
+``shutil.get_terminal_size`` reads.
 
 Two numbers come from here. The **height** is a budget in *lines*, not
 rows: ``fit_rows`` spends it on listing rows and on the section labels
@@ -36,8 +41,21 @@ NON_TTY_WINDOW_ROWS = 20
 MIN_WINDOW_ROWS = 5
 
 
-def _interactive(stream: TextIO | None) -> bool:
+def is_interactive(stream: TextIO | None) -> bool:
     """Whether ``stream`` is a terminal, treating a broken one as not.
+
+    Public because callers need the verdict itself, not only a window
+    size derived from it. ``pull``'s file listing prints in full on a
+    pipe rather than in a fixed-size window (spec 0018), so it branches
+    here *before* asking for a budget — ``resolve_window_size`` would
+    answer ``NON_TTY_WINDOW_ROWS``, which is the right answer for
+    discover and the wrong one there.
+
+    Args:
+        stream: The stream a frame would be printed to.
+
+    Returns:
+        True only for a usable terminal.
 
     CPython sets ``sys.stdout`` to None when fd 1 is invalid at startup
     (``llm-preserver discover q /archive >&-``, some launcher
@@ -69,7 +87,7 @@ def resolve_window_size(stream: TextIO | None, chrome_lines: int) -> int:
         stream is not a usable terminal, otherwise the terminal height
         less the chrome, never below ``MIN_WINDOW_ROWS``.
     """
-    if not _interactive(stream):
+    if not is_interactive(stream):
         return NON_TTY_WINDOW_ROWS
     return max(MIN_WINDOW_ROWS, shutil.get_terminal_size().lines - chrome_lines)
 
@@ -85,6 +103,6 @@ def resolve_window_width(stream: TextIO | None) -> int | None:
         which means "do not wrap-adjust", keeping piped output at a
         flat one line per row and therefore byte-identical.
     """
-    if not _interactive(stream):
+    if not is_interactive(stream):
         return None
     return shutil.get_terminal_size().columns

@@ -18,7 +18,7 @@ from collections.abc import Callable
 import typer
 
 from llm_preserver.cli.discover_cmd.prompts import begin_frame, prompt_pick
-from llm_preserver.cli.discover_cmd.window import resolve_window_size, resolve_window_width
+from llm_preserver.cli.window import resolve_window_size, resolve_window_width
 from llm_preserver.discover import DiscoveryPage, Option, build_parent_chain
 from llm_preserver.discover_paging import (
     NumberedRow,

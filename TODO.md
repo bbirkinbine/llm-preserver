@@ -24,6 +24,34 @@ Check items off as they ship; update when priorities shift.
 
 ## Hardening (independent of any spec)
 
+- [ ] **`specs-status.sh` does not strike through a `shipped (PR #N)`
+  spec** — found alongside the `(blocked)` bug fixed on spec 0018's
+  branch, 2026-08-12. The strikethrough `case` at
+  `.claude/hooks/specs-status.sh:114` matches the bare string
+  `shipped`, so 0013, 0014, and 0015 render live in the dashboard
+  while 0001 and 0017 render struck through — the difference is only
+  whether the spec recorded its PR number. Same one-line shape as the
+  `(blocked)` fix (`shipped | shipped\ *`). Left off 0018's branch
+  deliberately: that branch caused the `(blocked)` falsehood and fixed
+  it, but this one is pre-existing and would restyle four unrelated
+  dashboard rows in a listing diff.
+
+- [ ] **EOF at the interactive file-listing prompt exits 1, not 2** —
+  found by spec 0018's plan round, 2026-08-12, pre-existing.
+  `prompt_for_selection` calls `typer.prompt` with no
+  `except typer.Abort`, and `run_pull`'s try block catches only
+  `KeyboardInterrupt` / `ArchiveError` / `PullError`. So a
+  non-interactive pull that reaches this prompt dies with click's
+  standalone `Aborted!` on stderr and exit 1 — exactly the
+  "undocumented exit 1" that `confirm_or_stop`'s own docstring
+  (`cli/pull_exec/prompts.py:24-26`) says scripted pulls must never
+  hit. Every other confirmation on this flow maps to `PullUserError`
+  and exit 2. Fix is one `except typer.Abort` naming the bypass
+  (`--include` or `--whole-repo`), plus a row in `docs/cli.md`'s exit
+  table. Deliberately **not** taken on spec 0018's branch: it is a
+  behavior change to a shipped path and deserves its own test and
+  changelog line rather than riding a listing change.
+
 - [x] **`remove` could not delete locked payload on an SMB archive** —
   fixed 2026-08-11. `remove/execute.py` unlinked with a plain
   `Path.unlink()` and no file-flag handling; ADR 0001's payload lock
@@ -55,7 +83,7 @@ Check items off as they ship; update when priorities shift.
   every test used a single relation, where one label hides inside the
   reserve. Belongs on its own branch, not spec 0017's.
 
-## Next spec (0018) — pick one
+## Next spec (0019) — pick one
 
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
   PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over
@@ -79,10 +107,13 @@ Check items off as they ship; update when priorities shift.
   see its entry below for scope): after 0006's live testing, the
   numbered-pick UX is workable but the scroll pain is real. Spec
   0015 took the `discover` half of this (windowed frames, `b` to
-  step back, numbers that never renumber) with no new dependency;
-  what remains for a TUI is `pull`'s file listing plus the
+  step back, numbers that never renumber) with no new dependency,
+  and spec 0018 takes `pull`'s file listing (directory roll-up plus
+  a paged full listing behind `f`). What remains for a TUI is the
   nice-to-haves a plain-print flow cannot do — arrow-key highlight,
-  type-to-filter.
+  type-to-filter — plus the match-preview loop declined at 0018's
+  design checkpoint (show what a typed pattern matched, and let the
+  human accept or edit it before the plan runs).
 Artifact classification and lineage moved out of this list on
 2026-08-06 — it is now spec 0016, above. Two ideas from the original
 queue entry did **not** make the spec and stay open here:
