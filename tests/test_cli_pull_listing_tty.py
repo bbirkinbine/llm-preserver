@@ -189,20 +189,31 @@ def scripted(*answers):
     return answer
 
 
-def walk_all(final: str = "*.gguf"):
+def walk_all(final: str = "*.gguf", after: list[str] | None = None):
     """Leave the roll-up, then press ``m`` to the end of the listing.
 
     Keyed off what the frame actually offers rather than off a fixed
     script, so the same driver walks a repo that opens on the roll-up
     and one that opens straight onto the paged listing.
+
+    Args:
+        final: What to answer once the last window is showing.
+        after: Further answers, for a ``final`` that re-prompts rather
+            than ending the stage — an unoffered reserved key, say.
     """
+    queue = list(after or [])
+    spent = []
 
     def answer(frames):
         if MORE in frames[-1]:
             return "m"
         if ROLLUP_KEYS in frames[-1]:
             return "f"
-        return final
+        if not spent:
+            spent.append(final)
+            return final
+        assert queue, f"the loop prompted {len(frames)} times past the end"
+        return queue.pop(0)
 
     return answer
 

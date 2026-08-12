@@ -268,13 +268,27 @@ Behavior worth knowing:
   ranked. You can type a pattern at any frame, including page four,
   without paging back.
 
-  Two consequences worth knowing. **Keys are only keys where they are
-  offered** — on a listing that fits there is no key line, so a bare
-  `q` there is a pattern matching a file named `q`, while on an
+  A directory whose total is a floor — because the hub reports no size
+  for one of its files — is marked with a trailing `+` (`369.8 GiB+`),
+  and the header says `at least`. That is the number you weigh against
+  free disk, so it says when it is understating.
+
+  Two consequences of the key line worth knowing. **Keys are only keys
+  where a key line is showing** — a listing that fits prints none, so a
+  bare `q` there is a pattern matching a file named `q`, while on an
   overflowing listing it quits (exit 2). And keys match the whole
   answer before the comma split, so `f` is the key but `f,` and
   `f, *.gguf` are pattern lists. Since patterns match the full repo
   path and want a leading `*`, a real pattern never collides.
+
+  Inside a windowed listing all five of `f m b s q` are keys whether or
+  not the frame currently acts on them: pressing one that does nothing
+  here re-prompts with a line saying why, rather than being read as a
+  glob. `m` on the last page answers `no further pages — b, s, q, or
+  type a pattern` and asks again. The roll-up's prompt also names one
+  of the repo's own directories in its example (`*UD-Q4_K_XL*`), since
+  typing a directory name without wildcards matches nothing — patterns
+  are matched against the full repo path.
 
   **Piped and redirected runs are unaffected**: no roll-up, no window,
   no key line — the full flat listing, byte for byte as before. A pipe

@@ -164,3 +164,75 @@ def test_a_control_character_in_a_path_never_reaches_a_rendered_line():
         assert "\n" not in line and "\r" not in line
     # Scrubbed, never dropped: the human still sees there is a file here.
     assert any("evil" in line for line in rendered)
+
+
+# --- a partial sum says so ----------------------------------------------
+
+
+def test_a_directory_missing_one_hub_size_marks_its_total_as_a_floor():
+    """The number a human weighs against free disk must not lie.
+
+    A directory whose members are *all* sizeless renders "?", but one
+    the hub reports 20 of 21 sizes for used to render a bare sum,
+    typographically identical to an exact one. The header's "at least"
+    warns globally; the line is what gets read (review round,
+    2026-08-12).
+    """
+    groups = group_files(
+        [
+            repo_file("known/a.gguf", 1024),
+            repo_file("known/b.gguf", 1024),
+            repo_file("partial/a.gguf", 2048),
+            repo_file("partial/b.gguf", None),
+        ]
+    )
+    known, partial = rollup_lines(groups)
+
+    assert known.split()[0] == "2.0"
+    assert "+" not in known
+    assert "2.0 KiB+" in partial
+    # The names still line up: the flag spends one of the two gutter
+    # spaces rather than shifting the column.
+    assert known.index("known/") == partial.index("partial/")
+
+
+def test_a_directory_with_no_sizes_at_all_still_renders_a_question_mark():
+    groups = group_files([repo_file("dark/a.gguf", None), repo_file("dark/b.gguf", None)])
+
+    line = rollup_lines(groups)[0]
+
+    assert "?" in line
+    assert "+" not in line
+
+
+# --- the prompt teaches the pattern idiom -------------------------------
+
+
+def test_the_example_pattern_names_a_directory_from_this_repo():
+    """The roll-up's purpose is to show directory names, and the natural
+    response is to type one — which matches nothing without wildcards."""
+    from llm_preserver.cli.pull_exec.listing import example_pattern, pattern_prompt
+
+    groups = group_files([repo_file("README.md"), repo_file("UD-Q4_K_XL/a.gguf")])
+
+    assert example_pattern(groups) == "UD-Q4_K_XL"
+    assert "*UD-Q4_K_XL*" in pattern_prompt(example_pattern(groups))
+
+
+def test_a_repo_with_no_directories_keeps_the_generic_example():
+    from llm_preserver.cli.pull_exec.listing import example_pattern, pattern_prompt
+
+    groups = group_files([repo_file("a.gguf"), repo_file("b.gguf")])
+
+    assert example_pattern(groups) is None
+    assert "*Q4_K_M*" in pattern_prompt(None)
+
+
+def test_a_directory_name_carrying_glob_syntax_is_not_offered_as_an_example():
+    """`*UD-Q4[x]*` is a character class, not a literal: teaching it
+    would hand the human a pattern that matches nothing."""
+    from llm_preserver.cli.pull_exec.listing import example_pattern
+
+    groups = group_files([repo_file("UD-Q4[recompute]/a.gguf"), repo_file("plain/b.gguf")])
+
+    assert example_pattern(groups) == "plain"

@@ -261,6 +261,61 @@ exactly as it is and queued in TODO.md; unifying it is a behavior
 change to a shipped path and belongs in its own fix, where it can be
 tested and documented on its own terms.
 
+## Adjudications (review round, 2026-08-12)
+
+Two reviewers ran independently. One defect and four product calls came
+back; the defect was fixed on the branch, the four went to Brian.
+
+- **The frame was sized against a footer that is not the widest.**
+  `footer_line(1, total, total, …)` charges the *narrowest* first
+  index, and `first` grows as you page. At 42-43 columns the real
+  footer wrapped where the charged one did not, and frames rendered 25
+  physical rows on a 24-row screen — the headline criterion, failing.
+  Both reviewers measured it independently. **The test written to pin
+  that criterion could not fail**, because it was hardwired to
+  `COLUMNS = 80`; it now sweeps widths 30-120 and heights 14-60, and
+  under the reverted fix it fails at exactly 42 and 43. Adjudication 3
+  is restated to say *widest form*, not merely widest line.
+- **A reserved key that does nothing here re-prompts** (Brian, from
+  three options). `m` on the last page — after seventeen frames had
+  advertised `m = more` — used to fall through as the glob `["m"]`,
+  and the resulting no-match error measured 16,796 characters, 210
+  physical rows: a bigger wall than the listing this spec removes.
+  Inside a windowed listing the five reserved characters are always
+  keys; the frame is not reprinted, matching discover's `prompt_pick`.
+  Adjudication 5 narrows to its outer claim — *a listing that fits
+  shows no key line, so every keystroke there is a pattern* — which is
+  unchanged.
+- **The no-match error samples and counts** rather than naming every
+  file (Brian). Ten paths then `and N more of M`, the shape spec 0013's
+  live-use adjudication set on the no-GGUF roll-up. This touches
+  `selection.py`, which this spec's non-goals put out of scope, and was
+  taken here anyway because the roll-up is what makes the error easy to
+  reach.
+- **The roll-up's prompt names one of the repo's own directories**
+  (Brian). The frame's purpose is to put directory names on screen and
+  the natural response is to type one, which matches nothing without
+  wildcards. A name carrying fnmatch syntax is skipped rather than
+  taught as a pattern that would not work.
+- **A partially-known directory total is marked `+`** (Brian). A
+  directory whose members are all sizeless rendered `?`, but one the
+  hub reports 20 of 21 sizes for rendered a bare sum indistinguishable
+  from an exact one — contradicting this spec's own rule for the header
+  and `ListingGroup.total_size`'s own docstring. The flag spends one of
+  the two gutter spaces, so the name column stays aligned.
+
+Also fixed: a long directory name ran flush into its own file count
+(the pad is now computed per listing, floored at 26); a one-file
+directory read `1 files`; three public functions were missing their
+`Args`/`Returns`; and `specs-status.sh` called a `shipped (PR #N)`
+dependency unshipped, which had this spec rendering `(blocked)` on 0015.
+
+Left deliberately: below 48 columns the roll-up's directory lines wrap,
+so `offer_rollup` goes False and the listing degrades to paging — the
+documented third rung, not a failure, but it means a 40-column pane
+gets no roll-up. Raised and not taken, since the spec's own `## Notes`
+treats 80 columns as narrow.
+
 ## Sketch
 
 - **`cli/discover_cmd/window.py` moves to `cli/window.py`.** It already

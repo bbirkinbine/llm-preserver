@@ -133,6 +133,47 @@ def test_zero_matching_include_patterns_hard_stop(archive, fake_hub_factory):
     assert list((archive / "models").iterdir()) == []
 
 
+def test_a_zero_match_error_samples_the_file_list_instead_of_printing_it():
+    """A no-match error must not answer a typo with a wall.
+
+    Spec 0018 made this error easy to reach — the roll-up puts
+    directory names on screen and typing one un-globbed matches
+    nothing — and the untruncated form measured 16,796 characters,
+    210 physical rows on a 24-row terminal. Same shape as spec 0013's
+    live-use adjudication on the no-GGUF roll-up: sample, then count.
+    """
+    from llm_preserver.selection import _MAX_LISTED_PATHS, require_nondoc_selection
+
+    files = [
+        hub.RepoFile(path=f"UD-Q4_K_XL/shard-{n:05d}.gguf", size=1, sha256=None) for n in range(171)
+    ]
+    docs = [hub.RepoFile(path="README.md", size=1, sha256=None)]
+
+    with pytest.raises(hub.PullUserError) as excinfo:
+        require_nondoc_selection(docs, files + docs, "unsloth/Kimi-K3-GGUF", ["UD-Q4_K_XL"])
+
+    message = str(excinfo.value)
+    named = [line for line in message.split(", ") if ".gguf" in line]
+    assert len(named) == _MAX_LISTED_PATHS
+    assert "and 161 more of 171" in message
+    # The whole point: the error stays readable on one screen.
+    assert len(message) < 800
+
+
+def test_a_short_repo_names_every_file_with_no_count():
+    # Truncation must not add noise where there was no wall.
+    from llm_preserver.selection import require_nondoc_selection
+
+    files = [hub.RepoFile(path=f"shard-{n}.gguf", size=1, sha256=None) for n in range(3)]
+
+    with pytest.raises(hub.PullUserError) as excinfo:
+        require_nondoc_selection([], files, "acme/tiny", ["*NOPE*"])
+
+    message = str(excinfo.value)
+    assert "more of" not in message
+    assert all(f"shard-{n}.gguf" in message for n in range(3))
+
+
 def test_empty_include_list_hard_stops(archive, fake_hub_factory):
     client = make_client(fake_hub_factory)
 

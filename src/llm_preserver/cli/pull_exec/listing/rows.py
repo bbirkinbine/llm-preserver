@@ -175,9 +175,18 @@ def rollup_lines(groups: Sequence[ListingGroup]) -> list[str]:
             size = None if group.has_unknown_size else group.total_size
             lines.append(_file_line(group.name, size))
             continue
+        partial = group.has_unknown_size and bool(group.total_size)
         size = None if group.has_unknown_size and not group.total_size else group.total_size
         count = f"{group.file_count} file" + ("" if group.file_count == 1 else "s")
-        lines.append(f"  {_size_column(size)}  {names[group.name]:<{pad}}{count}")
+        # A directory whose members are *all* sizeless renders "?", but
+        # one the hub reports 20 of 21 sizes for was rendering a bare
+        # sum indistinguishable from an exact one — and that number is
+        # what a human weighs against free disk. The "+" is the line's
+        # version of the header's "at least" (review round, 2026-08-12).
+        # It costs the two-space gutter one character, so the size
+        # column stays aligned with the root-file rows beside it.
+        flag = "+" if partial else " "
+        lines.append(f"  {_size_column(size)}{flag} {names[group.name]:<{pad}}{count}")
     return lines
 
 
@@ -229,59 +238,3 @@ def fits(lines: Sequence[str], budget: int, width: int | None) -> bool:
         True when the whole listing fits and no window is needed.
     """
     return sum(wrapped_height(line, width) for line in lines) <= budget
-
-
-def footer_line(first: int, last: int, total: int, *, more: bool, back: bool) -> str:
-    """Say which rows are on screen, out of how many exist, and what works.
-
-    Unlike discover's footer, ``total`` here is a true total: the whole
-    file list arrived in the single metadata call the pull already made
-    (spec 0003), so nothing is being discovered as the human pages.
-
-    Args:
-        first: 1-based index of the window's first row.
-        last: 1-based index of its last row, inclusive.
-        total: Files in the repo.
-        more: Whether rows remain after this window.
-        back: Whether an earlier window exists.
-
-    Returns:
-        The footer line. Callers sizing a frame must charge the
-        *widest* form this can take — both indices at their largest —
-        since ``first`` grows as the human pages.
-    """
-    text = f"showing {first}-{last} of {total}"
-    if more:
-        text += " — more (m)"
-    if back:
-        text += " · back (b)"
-    return text
-
-
-ROLLUP_KEYS = "f = list every file (paged), q = quit"
-
-
-def window_keys(*, more: bool, back: bool, summary: bool) -> str:
-    """Key hints for an expanded window — offered keys only, quit last.
-
-    Offering a key that does nothing is worse than not offering it: the
-    same characters are patterns when they are not keys, so the hint
-    line is also the disambiguation (spec 0018, adjudication 5).
-
-    Args:
-        more: Whether rows remain after this window.
-        back: Whether an earlier window exists.
-        summary: Whether a roll-up frame exists to return to.
-
-    Returns:
-        The comma-separated hint line.
-    """
-    parts = []
-    if more:
-        parts.append("m = more")
-    if back:
-        parts.append("b = back a page")
-    if summary:
-        parts.append("s = summary")
-    parts.append("q = quit")
-    return ", ".join(parts)

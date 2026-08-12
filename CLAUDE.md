@@ -841,10 +841,23 @@ parallelize only with partitioned file ownership.
   **charge chrome at its widest *form*, not merely its widest line** —
   a footer whose numbers grow as you page is a different width later
   than at frame one; and **a frame-sizing test pinned to one terminal
-  width cannot fail**, so sweep the geometry. 1287 tests. Declined and
-  queued: type-to-filter, a match-preview loop. Found and deliberately
-  left: EOF at this prompt exits 1 rather than 2 (pre-existing, in
-  TODO).
+  width cannot fail**, so sweep the geometry. **Four product calls went
+  to Brian and all four changed the product**, each an instance of the
+  same rule — *a frame that teaches something must not punish the human
+  for acting on it*: a reserved key that does nothing on this frame now
+  re-prompts instead of falling through as a glob (`m` on the last page
+  cost a 210-row no-match error, a bigger wall than the one removed);
+  that no-match error now samples ten paths and counts the rest (spec
+  0013's shape, and it meant reaching into `selection.py`, which this
+  spec's non-goals excluded — taken anyway because the roll-up is what
+  makes the error reachable); the roll-up's prompt names one of the
+  repo's own directories, since the frame puts those names on screen
+  and typing one un-globbed matches nothing; and a directory total that
+  is a floor is marked `+`. 1297 tests. Declined and queued:
+  type-to-filter, a match-preview loop. Found and deliberately left:
+  EOF at this prompt exits 1 rather than 2 (pre-existing, in TODO), and
+  below 48 columns the roll-up is withheld so a narrow pane degrades to
+  paging.
 - **Next spec (0019): pick from TODO.md** — smoke test, spec 0002's
   later adapter phases (LM Studio / llama.cpp / vLLM), or the remaining
   TUI nice-to-haves (arrow-key highlight, type-to-filter, match

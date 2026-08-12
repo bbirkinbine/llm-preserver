@@ -26,18 +26,24 @@ Three rules hold the shape together:
 """
 
 import sys
+from collections.abc import Sequence
 
 import typer
 
 from llm_preserver.cli.pull_exec.listing import (
+    RESERVED_KEYS,
     ROLLUP_KEYS,
+    example_pattern,
     fits,
     flat_header,
     flat_lines,
     footer_line,
     group_files,
+    offered_keys,
+    pattern_prompt,
     rollup_lines,
     summary_header,
+    unavailable_note,
     window_keys,
 )
 from llm_preserver.cli.window import is_interactive, resolve_window_size, resolve_window_width
@@ -80,9 +86,9 @@ def confirm_or_stop(prompt: str, assume_yes: bool) -> bool:
         raise PullUserError(f"confirmation needed but stdin is not interactive: {hint}") from None
 
 
-def _ask() -> str:
+def _ask(prompt: str = PATTERN_PROMPT) -> str:
     """Ask for patterns, returning the raw answer for key matching."""
-    return str(typer.prompt(PATTERN_PROMPT, default="", show_default=False))
+    return str(typer.prompt(prompt, default="", show_default=False))
 
 
 def _patterns(raw: str) -> list[str]:
@@ -90,18 +96,48 @@ def _patterns(raw: str) -> list[str]:
     return [pattern.strip() for pattern in raw.split(",") if pattern.strip()]
 
 
-def _chrome(width: int | None, *texts: str) -> int:
+def _answer_frame(prompt: str, *, on_rollup: bool, active: Sequence[str]) -> str:
+    """Ask until the answer is a pattern or a key this frame acts on.
+
+    A reserved key that does nothing here re-prompts with one line
+    saying why, rather than falling through as a pattern. It used to
+    fall through, and ``m`` on the last page — after seventeen frames
+    had advertised ``m = more`` — matched nothing and printed a 210-row
+    "available files" wall on a 24-row terminal, a bigger wall than the
+    one this spec removed (review round, 2026-08-12).
+
+    The frame is not reprinted, matching discover's ``prompt_pick``:
+    the key line is one line above, and reprinting would cost a screen
+    to say one sentence.
+
+    Args:
+        prompt: The pattern prompt for this frame.
+        on_rollup: Whether the roll-up frame is showing, which decides
+            how an inactive key is explained.
+        active: The keys this frame acts on, in display order.
+
+    Returns:
+        The raw answer, for the caller to match keys and split.
+    """
+    while True:
+        answer = _ask(prompt)
+        key = answer.strip()
+        if key not in RESERVED_KEYS or key in active:
+            return answer
+        typer.echo(unavailable_note(key, on_rollup=on_rollup, offered=active))
+
+
+def _chrome(width: int | None, *texts: str, prompt: str = PATTERN_PROMPT) -> int:
     """Physical lines a frame spends on everything that is not a row.
 
     The prompt is charged too — click renders it as ``{text}: `` and it
-    is 76 characters, so a narrow terminal pays two lines for it. Each
-    caller passes the *widest* form its chrome can take, following
-    ``tree_chrome_lines``: a frame must never be sized against a
-    shorter shape than the one it prints.
+    is 76 characters, so a narrow terminal pays two lines for it, and a
+    frame naming one of the repo's own directories in its example pays
+    for the longer text. Each caller passes the *widest* form its
+    chrome can take, following ``tree_chrome_lines``: a frame must
+    never be sized against a shorter shape than the one it prints.
     """
-    return sum(wrapped_height(text, width) for text in texts) + wrapped_height(
-        f"{PATTERN_PROMPT}: ", width
-    )
+    return sum(wrapped_height(text, width) for text in texts) + wrapped_height(f"{prompt}: ", width)
 
 
 def _echo_all(lines: list[str]) -> None:
@@ -169,7 +205,14 @@ def _windowed_selection(
     # confirmed deleting this term changes nothing, so do not expect a
     # test to protect it — it is here to name the case.
     has_directories = any("/" in entry.path for entry in info.files)
-    rollup_budget = resolve_window_size(sys.stdout, _chrome(width, header, ROLLUP_KEYS))
+    groups = group_files(info.files)
+    # The roll-up's example names one of the repo's own directories:
+    # its whole purpose is to put those names on screen, and typing one
+    # un-globbed matches nothing.
+    rollup_prompt = pattern_prompt(example_pattern(groups))
+    rollup_budget = resolve_window_size(
+        sys.stdout, _chrome(width, header, ROLLUP_KEYS, prompt=rollup_prompt)
+    )
     offer_rollup = has_directories and fits(rollup, rollup_budget, width)
 
     costs = [wrapped_height(line, width) for line in flat]
@@ -195,7 +238,7 @@ def _windowed_selection(
             typer.echo(header)
             _echo_all(rollup)
             typer.echo(ROLLUP_KEYS)
-            answer = _ask()
+            answer = _answer_frame(rollup_prompt, on_rollup=True, active=["f", "q"])
             key = answer.strip()
             if key == "q":
                 raise PullUserError("nothing pulled: quit at the file listing")
@@ -209,11 +252,12 @@ def _windowed_selection(
 
         end = fit_by_cost(costs, start, window_budget)
         more, back = end < total, bool(history)
+        active = offered_keys(more=more, back=back, summary=offer_rollup)
         typer.echo(header)
         _echo_all(flat[start:end])
         typer.echo(footer_line(start + 1, end, total, more=more, back=back))
         typer.echo(window_keys(more=more, back=back, summary=offer_rollup))
-        answer = _ask()
+        answer = _answer_frame(PATTERN_PROMPT, on_rollup=False, active=active)
         key = answer.strip()
         if key == "q":
             raise PullUserError("nothing pulled: quit at the file listing")

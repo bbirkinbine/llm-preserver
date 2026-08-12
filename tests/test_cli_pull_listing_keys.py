@@ -4,23 +4,30 @@ Continues ``test_cli_pull_listing_tty.py``, whose harness these tests
 import.
 
 The prompt does double duty: it takes a glob pattern list, and it takes
-single-character keys. Adjudication 5 settles the ambiguity with
-**offered keys only** — a bare single character is a key exactly when
-the frame on screen advertised it, and everything else is a pattern
-list. So each key needs two tests, not one: it works where it is
-offered, and it is *ordinary text* where it is not. The second half is
-what the review round found missing, and it is the half that fails when
-a guard is deleted:
+single-character keys. Adjudication 5 settles the outer ambiguity with
+**offered keys only** — a listing that fits shows no key line at all,
+so every keystroke there is a pattern. *Inside* a windowed listing the
+five reserved characters are always keys, and pressing one the frame
+does not currently act on re-prompts with a one-line reason rather than
+falling through as a glob (Brian's call, 2026-08-12, after the review
+round measured what the fall-through cost). So each key needs two
+tests: it works where it is offered, and it *re-prompts* where it is
+not. The second half is the half that fails when a guard is deleted:
 
 - ``b`` on the first expanded window has no history to pop. Without
   ``and back`` the implementation raises ``IndexError: pop from empty
-  list``; the contract is the pattern list ``["b"]``.
+  list``.
 - ``m`` on the last window has nothing to advance to. Without
   ``and more`` it renders an empty frame footed ``showing 172-171 of
-  171`` and loops; the contract is ``["m"]``.
+  171`` and loops. Before the re-prompt it returned the glob ``["m"]``,
+  whose no-match error measured 210 physical rows on a 24-row
+  terminal — a bigger wall than the listing this spec removes.
 - ``s`` on a repo with no roll-up has nothing to return to. Without
   ``and offer_rollup`` it prints the unwindowed roll-up wall this spec
-  exists to prevent; the contract is ``["s"]``.
+  exists to prevent.
+
+The escape hatch is the comma: keys match the raw stripped answer
+*before* the split, so ``f,`` is the pattern list ``["f"]``.
 
 The fallbacks are adjudication 4's "one fallback, not two": the frame
 chain is flat-fits → roll-up-fits → paged listing with ``s`` withheld.
@@ -100,34 +107,55 @@ def test_q_on_an_overflowing_listing_aborts_the_pull_the_exit_2_way(monkeypatch,
 # --- keys that are not offered are ordinary text ------------------------
 
 
-def test_b_on_the_first_expanded_window_is_a_pattern_not_a_key(monkeypatch, capsys):
-    # There is no earlier window, so "b" is not in the key line and the
-    # loop must read it as a glob rather than popping an empty history.
-    patterns, prompter = run_listing(monkeypatch, capsys, kimi_repo(), scripted("f", "b"))
+def test_b_on_the_first_expanded_window_re_prompts_and_says_why(monkeypatch, capsys):
+    # There is no earlier window, so "b" is not in the key line. It must
+    # re-prompt rather than pop an empty history (IndexError) or fall
+    # through as the glob "b" (which matches nothing, and the no-match
+    # error names the repo's files).
+    patterns, prompter = run_listing(monkeypatch, capsys, kimi_repo(), scripted("f", "b", "*.gguf"))
 
-    assert patterns == ["b"]
-    assert prompter.calls == 2
+    assert patterns == ["*.gguf"]
+    assert prompter.calls == 3
     assert "b = back a page" not in prompter.frames[1]
+    assert "this is the first page — m, s, q, or type a pattern" in prompter.frames[2]
+    # The frame is not reprinted: the note is one line, the key line is
+    # directly above it.
+    assert prompter.frames[2].count("showing ") == 0
 
 
-def test_m_on_the_last_window_is_a_pattern_not_a_key(monkeypatch, capsys):
-    # walk_all pages to the end, where the footer has withdrawn "m", and
-    # then types it: nothing remains to advance to, so it is a glob.
-    patterns, prompter = run_listing(monkeypatch, capsys, kimi_repo(), walk_all(final="m"))
+def test_m_on_the_last_window_re_prompts_instead_of_walling(monkeypatch, capsys):
+    # Seventeen frames advertised "m = more"; on the last one it is
+    # withdrawn. Pressing it anyway used to return the glob ["m"], whose
+    # no-match error measured 210 physical rows on a 24-row terminal —
+    # a bigger wall than the listing this spec exists to remove.
+    patterns, prompter = run_listing(
+        monkeypatch, capsys, kimi_repo(), walk_all(final="m", after=["*.gguf"])
+    )
 
-    assert patterns == ["m"]
-    last = FOOTER_RE.search(prompter.frames[-1])
-    assert (last.group(2), last.group(3)) == (str(TOTAL_FILES), str(TOTAL_FILES))
+    assert patterns == ["*.gguf"]
+    assert "no further pages — b, s, q, or type a pattern" in prompter.frames[-1]
+    footer = FOOTER_RE.search(prompter.frames[-2])
+    assert (footer.group(2), footer.group(3)) == (str(TOTAL_FILES), str(TOTAL_FILES))
 
 
-def test_s_without_a_rollup_to_return_to_is_a_pattern_not_a_key(monkeypatch, capsys):
+def test_s_without_a_rollup_to_return_to_re_prompts(monkeypatch, capsys):
     # A repo with no directories never had a roll-up frame; pressing "s"
     # must not conjure one, which on this repo is the 171-row wall.
-    patterns, prompter = run_listing(monkeypatch, capsys, flat_root_repo(), scripted("s"))
+    patterns, prompter = run_listing(monkeypatch, capsys, flat_root_repo(), scripted("s", "*.gguf"))
 
-    assert patterns == ["s"]
-    assert prompter.calls == 1
+    assert patterns == ["*.gguf"]
+    assert prompter.calls == 2
     assert "s = summary" not in prompter.frames[0]
+    assert "no summary for this repo" in prompter.frames[1]
+
+
+def test_a_reserved_key_that_does_nothing_on_the_rollup_re_prompts(monkeypatch, capsys):
+    # m/b/s mean nothing before the listing is expanded.
+    patterns, prompter = run_listing(monkeypatch, capsys, kimi_repo(), scripted("m", "*.gguf"))
+
+    assert patterns == ["*.gguf"]
+    assert prompter.calls == 2
+    assert "press f to list the files first — f, q, or type a pattern" in prompter.frames[1]
 
 
 # --- the comma escape hatch ---------------------------------------------
@@ -245,3 +273,22 @@ def test_a_degraded_stdout_prints_the_flat_listing_instead_of_raising(monkeypatc
     monkeypatch.undo()
     assert patterns == ["*.gguf"]
     assert printed == "\n".join([flat_header(REPO_ID), *flat_lines(info.files)]) + "\n"
+
+
+def test_the_rollup_prompt_names_a_directory_the_frame_just_showed(monkeypatch, capsys):
+    """The roll-up puts directory names on screen; the prompt shows one
+    of them wrapped in the wildcards a pattern needs. Typing the bare
+    name matches nothing, and the no-match error is the wall this
+    listing work exists to remove."""
+    _, prompter = run_listing(monkeypatch, capsys, kimi_repo(), scripted("*.gguf"))
+
+    assert "*UD-IQ1_M*" in prompter.texts[0]
+    assert "*Q4_K_M*" not in prompter.texts[0]
+
+
+def test_the_expanded_frames_keep_the_generic_example(monkeypatch, capsys):
+    # The directory names are no longer summarised there, so a repo
+    # directory would be an example of something not on screen.
+    _, prompter = run_listing(monkeypatch, capsys, kimi_repo(), scripted("f", "*.gguf"))
+
+    assert "*Q4_K_M*" in prompter.texts[1]
