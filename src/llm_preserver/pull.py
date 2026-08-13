@@ -11,7 +11,6 @@ hard stop, never a silent overwrite (see ``pull_plan``).
 """
 
 import logging
-import shutil
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import cast, get_args
@@ -32,6 +31,7 @@ from llm_preserver.pull_record import update_record, write_manifest
 from llm_preserver.pull_transfer import download_and_archive
 from llm_preserver.records import FileEntry, Role, save_record
 from llm_preserver.render import clean_text
+from llm_preserver.staging_cleanup import discard_staging_leaf
 
 logger = logging.getLogger(__name__)
 
@@ -270,10 +270,6 @@ def pull_model(
         )
         write_manifest(prep.model_dir, record)
         save_record(record, prep.model_dir)
-        if prep.plan.to_download:
-            # Staging now holds only the client's .cache/huggingface
-            # bookkeeping, which must never reach the archive; drop it.
-            shutil.rmtree(prep.staging_dir)
     except PullError:
         raise
     except OSError as exc:
@@ -281,5 +277,12 @@ def pull_model(
             f"local filesystem failure during pull: {exc}; "
             "check disk space and permissions, then retry"
         ) from exc
+    if prep.plan.to_download:
+        # The pull has already succeeded here — payload archived,
+        # hashed, recorded. Staging now holds only the client's
+        # .cache/huggingface bookkeeping, which must never reach the
+        # archive; dropping it runs *outside* the try because a cleanup
+        # that cannot finish is not a failed pull (spec 0019).
+        discard_staging_leaf(prep.staging_dir)
     logger.info("pulled %d file(s) from %s into %s", len(new_entries), repo_id, prep.model_dir)
     return prep.model_dir

@@ -396,6 +396,24 @@ Behavior worth knowing:
   to finish the pull, delete that model's staging directory by hand —
   nothing under `.staging/` is referenced by the archive, so removing
   it only costs the resume head start.
+- **When the cleanup itself cannot finish.** Deleting that staging
+  directory is the pull's last act, and it happens *after* the payload
+  is archived, hashed, and recorded — so it cannot fail the pull. If
+  the delete is refused (a network share that renames a still-open
+  file rather than unlinking it will answer `ENOTEMPTY`), the pull
+  still **exits 0** and prints one warning naming the leftover path
+  and saying the archive is complete. What remains is the transfer
+  client's own bookkeeping, typically a few KiB.
+  **Nothing clears it for you.** Delete that directory by hand when
+  convenient; re-pulling the repo will not do it, and `remove` would
+  take the archived model with it. Until it is gone, `verify --staging`
+  counts it like any other leftover (spec 0012 counts the whole leaf on
+  purpose), so a fully archived model keeps appearing in that report —
+  a tiny byte total next to a file count near the repo's is the tell.
+  An automatic clear was designed and cut: the transfer client creates
+  its `.cache/` scaffolding *before* the first network request, so a
+  running pull's staging directory is indistinguishable from dead
+  leftovers, and clearing it kills that pull.
 - **The resume-command hint.** When the pull's shape came from the
   interactive file listing (patterns you typed at the prompt, so your
   shell history doesn't have them), the pull prints one line right
@@ -950,8 +968,13 @@ directory — including huggingface's own `.cache/huggingface/`
 bookkeeping and the in-progress `.incomplete` blob — because the point
 is to surface every incidental byte the record-based audit can't see and
 let you decide; it does not try to separate downloaded payload from hf's
-client-side scratch. `--quick` is a no-op alongside `--staging` (the scan
-never hashes anyway). Under `--staging` the `--repo` id namespace is
+client-side scratch. One leftover is *not* an interrupted acquisition:
+a successful pull whose final staging cleanup was refused leaves a few
+KiB of pure client bookkeeping behind, and it is counted here like any
+other (see `pull` → "When the cleanup itself cannot finish"). A tiny
+byte total with a file count near the repo's is the tell, and clearing
+it is a manual `rm` — nothing in the tool removes it. `--quick` is a
+no-op alongside `--staging` (the scan never hashes anyway). Under `--staging` the `--repo` id namespace is
 the staging tree, not `models/` — a first-ever interrupted pull has no
 model directory at all — so an unknown `--repo` lists the ids present
 in `.staging/`.

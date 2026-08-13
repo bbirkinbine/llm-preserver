@@ -48,6 +48,7 @@ line; the source of truth is the spec file, this is a rendered cache. Run
 - [0014 — Skip Prompt Already Archived](0014-skip-prompt-already-archived.md)  (shipped (PR #23))
 - [0015 — Discover paging windows and stable pick numbers](0015-discover-paging-windows.md)  (shipped (PR #25)) — depends on 0006
 - [0018 — Pull File Listing Window](0018-pull-file-listing-window.md)  (shipped (PR #31)) — depends on 0015
+- [0019 — Pull Staging Cleanup](0019-pull-staging-cleanup.md)  (shipped (PR #33))
 <!-- specs-status:end -->
 
 ## Numbering

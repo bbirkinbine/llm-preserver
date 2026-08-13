@@ -858,7 +858,63 @@ parallelize only with partitioned file ownership.
   EOF at this prompt exits 1 rather than 2 (pre-existing, in TODO), and
   below 48 columns the roll-up is withheld so a narrow pane degrades to
   paging.
-- **Next spec (0019): pick from TODO.md** — smoke test, spec 0002's
+- **Session 24 (2026-08-12/13, PR #33): spec 0019 pull staging
+  cleanup.** Live trigger: `verify --staging` reported
+  `Qwen/Qwen3-Coder-Next  2.4 KiB,
+  42 partial files` for a model that was fully archived — Brian's
+  question was "is this orphaned staging from my code changes?" It was
+  not. Zero payload bytes: 21 zero-byte `.lock` files and 21 ~124-byte
+  `.metadata` sidecars, hf's own bookkeeping. The real defect was one
+  the report only pointed at: `shutil.rmtree(prep.staging_dir)` sat
+  **inside** the same `try` whose `except OSError` raises
+  `PullEnvError` (exit 3), and ran *after* `write_manifest` and
+  `save_record` — so a cleanup that could not finish reported failure
+  over a complete, hashed, recorded 160 GiB pull. **The cause was
+  confirmed from evidence, never inferred**, and that is the reusable
+  part: the installed CLI is an *editable* install of this tree
+  (`llm_preserver.pth`), so the code that ran is the code on disk;
+  `MODEL-RECORD.md` at 04:58 proved execution reached the `if`; 40
+  shards proved `to_download` was non-empty. Then the host's unified
+  log supplied the mechanism — `DarkWake from Deep Idle` at 04:42,
+  two SMB reconnects, and `Could not reopen durable handle for
+  model-00026-of-00040.safetensors.lock`, **the exact file the residue
+  starts at**. A scratch-dir repro on the live share closed it: plain
+  `rmtree` 10/10 clean, `rmtree` with one open fd → `ENOTEMPTY` (macOS
+  smbfs renames a still-open file rather than unlinking, so the parent
+  `rmdir` sees a non-empty dir). Brian's own guess (network failure)
+  and the fd hypothesis were the same event. Fix: cleanup moves
+  outside the try — one WARNING naming leaf + errno and saying the
+  archive is *complete*, exit 0. New `staging_cleanup.py` is where
+  *pull* deletes inside `.staging/`; `model_scan.py` stays read-only.
+  **The review round cut half the spec, and that is the durable
+  lesson.** The draft had the 0014 no-op path clear a leaf holding
+  only `.cache/` bookkeeping, making residue self-healing. The
+  adversarial reviewer reproduced the kill: **huggingface_hub writes
+  its `.cache/huggingface/` scaffolding before its first network
+  call**, so a *running* pull's leaf is byte-indistinguishable from
+  dead residue, and a second terminal's re-pull deleted the live leaf
+  and killed the first pull with the very exit 3 the spec removes —
+  a harm `main` does not have, invited by the tool's own warning text
+  ("a later pull will clear it"). Compounding: a hub repo can ship its
+  own `.cache/` dir (the tool archives `gguf/.cache/params.json`); the
+  `.incomplete` guard is largely vestigial in hf 1.24.0 (partials
+  unlink in a `finally`, no resume); and recovery needed the hub, so
+  an offline re-pull could not clear an already-archived repo. **A
+  convenience that introduces a new delete must clear a much higher
+  bar than the bug it rides with** — the exit-code fix was unbreakable,
+  every finding lived in the guard, and deleting the guard deleted the
+  findings. Cutting it also removed the only two external-authority
+  constants, so nothing shipped depends on hf's local-dir layout.
+  Residue now waits for a human, and the warning and docs say so.
+  1327 tests. Hard-won: `pull.py` at 294 lines, so the next change
+  there should split it; `Path.rglob` silently swallows per-directory
+  `OSError`, so an unreadable subtree reads as *empty*, not as an
+  error — any future "is this safe to delete?" walk must use
+  `os.walk(onerror=...)`. Queued: `verify --staging --clean`, and a
+  pre-existing bug both reviewers found — a successful `--include`
+  pull deletes another subset's parked staged bytes, identical on
+  `main`, left out to keep this diff one idea.
+- **Next spec (0020): pick from TODO.md** — smoke test, spec 0002's
   later adapter phases (LM Studio / llama.cpp / vLLM), or the remaining
   TUI nice-to-haves (arrow-key highlight, type-to-filter, match
   preview). Also queued from live use: goal-definitive archiving
@@ -866,7 +922,8 @@ parallelize only with partitioned file ownership.
   canary (0000 roadmap).
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
   in progress — phase 1 shipped (PR #20), later adapters open;
-  0005–0014 shipped; `0016` draft; `0017` shipped; `0018` draft.
+  0005–0014 shipped; `0016` draft; `0017` shipped; `0018` shipped;
+  `0019` shipped.
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

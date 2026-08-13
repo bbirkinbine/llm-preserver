@@ -275,6 +275,18 @@ has nothing recorded to check. `verify --staging` surfaces exactly that
 leftover with a hash-free `.staging/` scan (spec 0012); it is cleared by
 resuming the pull or by `remove`.
 
+Deleting staging is the one step that falls *outside* this ordering
+guarantee, and deliberately so (spec 0019). It runs after the record —
+the last thing the convention protects — so by the time it executes the
+pull has already succeeded in every sense the archive records. Letting
+it raise would report a failure over a complete, hashed, recorded model,
+which is why a refused cleanup warns and exits 0 instead. The cost is
+that a leaf of pure client bookkeeping can outlive the pull that made
+it, and stays until a human removes it — an automatic clear was
+designed and cut, because the transfer client lays down its `.cache/`
+scaffolding before the first network request, making a live pull's
+staging leaf indistinguishable from dead leftovers.
+
 **Removal inverts the convention** (spec 0010), because deletion is the
 mirror of writing. `remove` of a whole model deletes the record
 *first*, then the payload: a crash then leaves an unrecorded directory
