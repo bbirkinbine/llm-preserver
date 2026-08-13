@@ -3,9 +3,9 @@ name = "llm-preserver"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
-    "huggingface-hub>=1.24.0",
+    "huggingface-hub>=1.27.0",
     "pydantic>=2.13.4",
-    "typer>=0.27.0",
+    "typer>=0.27.1",
 ]
 
 [project.scripts]
@@ -19,7 +19,7 @@ build-backend = "uv_build"
 dev = [
   "pytest>=8",
   "pytest-asyncio",
-  "ruff>=0.15.22",
+  "ruff>=0.16.2",
   "mypy>=2.3.0",
   "pre-commit",
   # Optional verification depth — cheap when an agent does the labor.
