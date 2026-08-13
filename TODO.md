@@ -83,7 +83,7 @@ Check items off as they ship; update when priorities shift.
   every test used a single relation, where one label hides inside the
   reserve. Belongs on its own branch, not spec 0017's.
 
-## Next spec (0019) — pick one
+## Next spec (0020) — pick one
 
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
   PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over
@@ -129,6 +129,50 @@ queue entry did **not** make the spec and stay open here:
   practice, drop the heuristic entirely.
 
 ## Shipped
+
+- 0019 pull staging cleanup: a pull that archived every byte could
+  still report failure. The staging delete sat *inside* the same `try`
+  whose `except OSError` raises `PullEnvError` (exit 3), and it runs
+  after `write_manifest` and `save_record` — so a cleanup that could
+  not finish inverted the tool's central promise, telling the human
+  their pull failed when the bytes, hashes, record, and manifest all
+  landed. Live trigger: a 160 GiB `Qwen/Qwen3-Coder-Next` snapshot ran
+  23:32→04:58, archived all 40 shards, then left 42 files (2.4 KiB of
+  pure `.lock`/`.metadata` bookkeeping) in `.staging/`. Root cause
+  confirmed from the host's kernel log, not inferred: a `DarkWake from
+  Deep Idle` at 04:42 dropped the SMB session twice, and the reconnect
+  could not reopen the **durable handle on
+  `model-00026-of-00040.safetensors.lock`** — the exact file the
+  residue starts at. macOS smbfs renames a still-open file to a hidden
+  placeholder instead of unlinking it, so the parent `rmdir` answers
+  `ENOTEMPTY`; reproduced 10/10 clean vs. failing-with-one-open-fd on
+  the live share. Fix: cleanup moves outside the try (warn once naming
+  the leaf and errno, saying the archive is *complete*, exit 0).
+  Emptied creator dirs go by `Path.rmdir` (never `rmtree`), so a
+  sibling model's staging is structurally safe, and only a pull that
+  actually downloaded something deletes a leaf — both mutation-proved.
+  **The drafted second half was cut at review**: the spec 0014 no-op
+  path was going to clear a leaf holding nothing but `.cache/`
+  bookkeeping, making residue self-healing. The adversarial round
+  killed it with a reproduction — huggingface_hub writes its
+  `.cache/huggingface/` scaffolding *before* its first network call,
+  so a **running** pull's leaf is indistinguishable from dead residue,
+  and a second pull in another terminal deleted the live leaf and
+  killed the first pull with the very exit 3 this spec removes. Three
+  findings compounded it: a hub repo can ship its own `.cache/`
+  directory (the tool archives `gguf/.cache/params.json`); the
+  `.incomplete` protection is largely vestigial in huggingface_hub
+  1.24.0, which unlinks partials in a `finally` and never resumes; and
+  the recovery needed the hub, so an offline re-pull could not clear a
+  repo that is by definition already archived. Residue now stays until
+  a human deletes it, and the warning and docs say so instead of
+  promising a self-heal. Cutting the guard also removed the only two
+  external-authority constants, so nothing shipped depends on hf's
+  local-dir layout. `verify --staging` deliberately unchanged — spec
+  0012's whole-leaf counting exists so a mid-download `.incomplete`
+  cannot hide. New `staging_cleanup.py` is where *pull* deletes inside
+  `.staging/` (`remove` keeps its own path); `model_scan.py` stays
+  read-only. 1327 tests.
 
 - 0018 pull file listing window (PR #31): the interactive file listing
   pages instead of walling. Live trigger — `discover 'kimi k3'` →
@@ -317,6 +361,46 @@ queue entry did **not** make the spec and stay open here:
 
 ## Smaller items (from live use)
 
+- [ ] **`verify --staging --clean`** (queued from spec 0019,
+  2026-08-13): 0019 leaves cleanup residue on disk until a human
+  deletes it, so `verify --staging` keeps listing a fully archived
+  model. The automatic clear was designed and cut — see the 0019
+  Shipped entry — because an implicit delete cannot tell a running
+  pull's staging leaf from dead residue. An explicit, human-present
+  verb can: the human is there, and it can refuse anything that is not
+  provably disposable. Two decisions to make first, neither of them
+  code: `verify` is read-only by design (specs 0009/0012), so this
+  would be its first write; and the refusal test must not repeat the
+  cut guard's mistakes — it needs pinned provenance for hf's layout
+  constants (`.claude/rules/python-code.md` → External-reference
+  provenance), a hermetic tripwire asserting against hf's own
+  `get_local_download_paths` rather than a hand-built fixture, refusal
+  on any unreadable subtree (`Path.rglob` swallows per-directory
+  `OSError`, so an unreadable subtree silently reads as empty), and
+  refusal on a symlinked creator dir (the spec 0010 escape).
+- [ ] **A successful `--include` pull deletes another subset's staged
+  bytes** (found by both reviewers on spec 0019, 2026-08-13;
+  **pre-existing**, identical on `main`, not a regression). The
+  successful-pull cleanup removes the whole staging leaf without
+  asking what is in it, so a completed `--include '*Q4_K_M*'` pull
+  discards a parked `*Q8_0*` download staged beside it — bytes
+  `already_staged_bytes` would otherwise have counted as a resume head
+  start. Reproduced both ways: `before: partial exists True |
+  completed staged file exists True` → after the Q4 pull, both False.
+  Deliberately left out of 0019, whose diff is one idea (a cleanup
+  must not fail the pull it cleans up after). The fix is a
+  disposability check on that path too, which is the same predicate
+  `--clean` needs — worth doing together.
+- [ ] **Hold off sleep for the duration of a long pull** (found while
+  diagnosing spec 0019, 2026-08-12): the live trigger was not a flaky
+  link but the host's own `DarkWake from Deep Idle` during a 5.5-hour
+  overnight transfer, which dropped the SMB session twice. The payload
+  survived only because the transfer client retried. A `caffeinate`
+  -style assertion held for the transfer would remove a whole class of
+  interrupted overnight pulls. It changes `pull`'s behavior and takes
+  a platform-conditional API (`.claude/rules/python-code.md` →
+  "Platform-conditional APIs" — reach it via `getattr`, and note Linux
+  CI will not exercise it), so it wants its own spec.
 - [ ] Pull planning errors should name the model directory (queued
   from the 0014 review round, 2026-07-31): with the plan computed
   before the grouping prompt, a changed-weight integrity stop can now
