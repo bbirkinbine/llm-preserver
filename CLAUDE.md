@@ -858,8 +858,9 @@ parallelize only with partitioned file ownership.
   EOF at this prompt exits 1 rather than 2 (pre-existing, in TODO), and
   below 48 columns the roll-up is withheld so a narrow pane degrades to
   paging.
-- **Session 24 (2026-08-12): spec 0019 pull staging cleanup.** Live
-  trigger: `verify --staging` reported `Qwen/Qwen3-Coder-Next  2.4 KiB,
+- **Session 24 (2026-08-12/13, PR #33): spec 0019 pull staging
+  cleanup.** Live trigger: `verify --staging` reported
+  `Qwen/Qwen3-Coder-Next  2.4 KiB,
   42 partial files` for a model that was fully archived — Brian's
   question was "is this orphaned staging from my code changes?" It was
   not. Zero payload bytes: 21 zero-byte `.lock` files and 21 ~124-byte
@@ -922,7 +923,7 @@ parallelize only with partitioned file ownership.
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
   in progress — phase 1 shipped (PR #20), later adapters open;
   0005–0014 shipped; `0016` draft; `0017` shipped; `0018` shipped;
-  `0019` shipping.
+  `0019` shipped.
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

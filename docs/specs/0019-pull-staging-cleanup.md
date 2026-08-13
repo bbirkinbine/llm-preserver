@@ -1,7 +1,7 @@
 # 0019 — Pull Staging Cleanup
 
-**Status:** shipping
-**Last updated:** 2026-08-12
+**Status:** shipped (PR #33)
+**Last updated:** 2026-08-13
 
 ## Goal
 

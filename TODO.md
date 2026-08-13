@@ -130,8 +130,8 @@ queue entry did **not** make the spec and stay open here:
 
 ## Shipped
 
-- 0019 pull staging cleanup: a pull that archived every byte could
-  still report failure. The staging delete sat *inside* the same `try`
+- 0019 pull staging cleanup (PR #33): a pull that archived every byte
+  could still report failure. The staging delete sat *inside* the `try`
   whose `except OSError` raises `PullEnvError` (exit 3), and it runs
   after `write_manifest` and `save_record` — so a cleanup that could
   not finish inverted the tool's central promise, telling the human
