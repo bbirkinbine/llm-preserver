@@ -210,7 +210,13 @@ Options:
   content changed: the superseded doc is unlocked, replaced with the
   newly downloaded and hashed version, re-locked, and the record and
   manifest are updated. Applies to doc paths only — a changed
-  *weight* is always a hard stop, flag or no flag.
+  *weight* is always a hard stop, flag or no flag. You are not expected
+  to reach for this pre-emptively: the stop that needs it prints the
+  full command with the flag already in it (see "A changed
+  documentation file hands you the command that resolves it" below).
+  Note that replacing a model card discards the copy you archived —
+  if the card as of your pull date has provenance value, copy it out
+  first.
 - `--plan` — dry run: print what the pull would do, then exit without
   downloading or writing (see the dedicated section below).
 - `--yes` — auto-accept the size confirmation (the "pull N of M files
@@ -357,9 +363,45 @@ Behavior worth knowing:
   left — a new file, an unrecorded on-disk file to adopt, a
   `--refresh-docs` replacement — asks the usual questions. A file
   whose upstream content *changed* is a hard stop — the archive never
-  silently overwrites. For documentation files the stop names the way
-  out ("re-run with --refresh-docs to replace this documentation
-  file"); for weights there is no override.
+  silently overwrites. Every planning stop names the model directory
+  holding the conflicting record, not just the path relative to it, so
+  the file it refused to touch can be found without deriving where it
+  lives.
+- **A changed documentation file hands you the command that resolves
+  it** (spec 0020). The stop names the way out and then prints, on
+  stderr immediately below the error, the exact command that takes it —
+  repo id, absolute archive path, one `--include` per pattern, and
+  `--refresh-docs` appended:
+
+  ```text
+  error [integrity]: gguf/docs/unsloth--Qwen3.6-27B-MTP-GGUF/README.md
+  (in /archive/models/unsloth/Qwen3.6-27B-MTP-GGUF) is recorded with size
+  5651 but the hub reports size 5826 and publishes no hash to compare;
+  the archive is payload-immutable — re-run with --refresh-docs, which
+  replaces every documentation file whose upstream content changed, not
+  only this one
+  to replace every changed documentation file and finish this pull:
+  llm-preserver pull unsloth/Qwen3.6-27B-MTP-GGUF /archive --include '*Q8_0*' --refresh-docs
+  ```
+
+  This matters most when the pull was shaped inside `discover`, which
+  has no `--refresh-docs` flag of its own and leaves nothing in your
+  shell history to append one to. Unlike the resume hint below, the line
+  prints on *every* pull that hits the stop, including one you typed in
+  full — what history lacks there is the flag, not the shape. `--plan`
+  prints it too, without `--plan` in the composed command: the follow-up
+  you want is the real pull. A changed *weight* prints no command,
+  because there is no override for one. Exit code is 5 either way.
+
+  **The flag is plan-wide, and the error names only the first
+  conflict.** The stop raises on the first changed doc it plans, so it
+  cannot list the others without planning past its own refusal — but
+  `--refresh-docs` replaces *every* changed doc in the pull, which can
+  include the LICENSE as well as the model card. The wording says so
+  rather than implying a single file. Before pasting, read the
+  `replacing changed doc <path>` lines the re-run logs above its size
+  prompt: that is the full list, and the prompt is your last stop
+  (the composed command deliberately omits `--yes`).
 <!-- Stall math source: https://github.com/huggingface/xet-core
   (Apache-2.0), xet_runtime/src/config/groups/client.rs —
   read_timeout 300s, retry_max_attempts 5, retry_base_delay 3000ms;
@@ -414,7 +456,12 @@ Behavior worth knowing:
   its `.cache/` scaffolding *before* the first network request, so a
   running pull's staging directory is indistinguishable from dead
   leftovers, and clearing it kills that pull.
-- **The resume-command hint.** When the pull's shape came from the
+- **The resume-command hint.** A different line from the doc-refresh
+  recovery command above, with a different lead-in and a different
+  trigger: this one is owed to a *transfer* you may want to continue,
+  that one to a *stop* you need to clear. They cannot both appear on one
+  run — the doc stop fires during planning, before any transfer starts.
+  When the pull's shape came from the
   interactive file listing (patterns you typed at the prompt, so your
   shell history doesn't have them), the pull prints one line right
   after the confirmations, before the first byte moves:

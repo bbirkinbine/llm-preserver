@@ -232,10 +232,14 @@ def test_unrecorded_on_disk_file_with_different_content_still_refuses(archive, f
     target.parent.mkdir(parents=True)
     target.write_bytes(b"stray unrecorded bytes")
 
-    with pytest.raises(hub.PullIntegrityError):
+    with pytest.raises(hub.PullIntegrityError) as excinfo:
         do_pull(archive, make_client(fake_hub_factory))
 
     assert target.read_bytes() == b"stray unrecorded bytes"
+    # Absorbed into spec 0020: the reconcile stop names a
+    # model-dir-relative path, so it must name the directory too or the
+    # human cannot go look at the file it refused to overwrite.
+    assert str(model_dir(archive)) in str(excinfo.value)
 
 
 def test_the_size_prompt_names_the_repo_being_pulled(archive, fake_hub_factory):
