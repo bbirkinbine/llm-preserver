@@ -975,7 +975,7 @@ parallelize only with partitioned file ownership.
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
   in progress — phase 1 shipped (PR #20), later adapters open;
   0005–0014 shipped; `0016` draft; `0017` shipped; `0018` shipped;
-  `0019` shipped; `0020` shipping (flip to `shipped (PR #NN)` on merge).
+  `0019` shipped; `0020` shipped (PR #36).
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

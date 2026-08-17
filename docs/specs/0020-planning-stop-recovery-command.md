@@ -1,7 +1,7 @@
 # 0020 — Planning Stop Recovery Command
 
-**Status:** shipping
-**Last updated:** 2026-08-16
+**Status:** shipped (PR #36)
+**Last updated:** 2026-08-17
 
 ## Goal
 
