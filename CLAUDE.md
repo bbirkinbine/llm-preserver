@@ -914,7 +914,59 @@ parallelize only with partitioned file ownership.
   pre-existing bug both reviewers found — a successful `--include`
   pull deletes another subset's parked staged bytes, identical on
   `main`, left out to keep this diff one idea.
-- **Next spec (0020): pick from TODO.md** — smoke test, spec 0002's
+- **Session 25 (2026-08-16): spec 0020 planning-stop recovery
+  command.** Live trigger: a `discover 'deepseek v4 flash'` walk —
+  search, tree, `0` to pull, `1 = pick files`, patterns
+  `*dspark*,*UD-Q4*,*UD-Q8*` — ended on "re-run with `--refresh-docs`"
+  and Brian's question was "re-run *what*?" `--refresh-docs` is a
+  `pull` flag; `discover` does not have it, shell history holds only
+  the `discover` invocation, and the pull's shape existed nowhere but
+  scrollback. **The cause was confirmed from the record, not
+  inferred**: `show` proved the repo was already archived on
+  2026-08-05 at commit 57326b9 (UD-Q4_K_XL ×5, UD-IQ1_M ×3), that
+  docs ride along on *every* pull regardless of `--include`
+  (`selection.py:106`, spec 0003), and that unsloth had edited the
+  README upstream (recorded 5651 bytes, hub now 5826). The record's
+  own `verified` vs `hashed-locally` split corroborated why size was
+  the only comparison available: README is a plain git file, so the
+  hub publishes no SHA256 for it. Nothing was broken — an upstream
+  edit caught by design, on a file the human never selected. The
+  defect was that the stop is a dead end: it raises inside
+  `prepare_pull`, and `compose_resume_hint` is wired to `pull_model`'s
+  `on_transfer_start` seam, one step later — so the one code path that
+  would have handed over a command never runs. Fix:
+  `PullDocRefreshError(PullIntegrityError)` as a typed carrier (the
+  `PullInvalidIdError`/spec 0013 precedent), `_compose_pull_command`
+  extracted so `compose_doc_refresh_hint` reuses the scrub-then-quote
+  path rather than copying it, and one `isinstance` branch in the
+  handler. **The carrier carries nothing but its type** — the flow
+  already holds the shape that reproduces the pull, and a
+  payload-carrying exception would be a second copy of it. `patterns`
+  moved above the `try` so the handler reads a provably bound name.
+  Absorbs the queued "planning errors should name the model directory"
+  item (queued from the 0014 review round). Deliberately unlike the
+  0007 hint, the line
+  prints on **every** pull that hits the stop, typed or interactive:
+  what history lacks here is the flag, not the shape. Settled before
+  planning: no `--refresh-docs` passthrough on `discover` (it would
+  have to be set before the human can know a conflict exists); the
+  every-weight decline deferred (its composed command would carry the
+  *rejected* selection). The test round's own call was the sharpest
+  one: **absence assertions were rewritten as differential runs**,
+  because "no recovery line appears" is green today and stays green
+  with the feature deleted — the exact vacuity spec 0017 was burned
+  by. 1343 tests. **The close-out gate itself was broken and the fix
+  rides this branch**: `closeout-check.sh` piped `awk` straight into
+  `grep -q`, which exits on its first match and closes the pipe —
+  `awk` dies of SIGPIPE and `set -o pipefail` reports 141, so the gate
+  refused a branch whose Shipped entry was present (exit 141, proved
+  directly). Its docs/cli.md check had the same shape and failed in
+  *both* directions, the worse one being a silently skipped check.
+  Both now capture into a variable and grep a here-string; the fix is
+  mutation-proved by deleting the Shipped entry and confirming the
+  gate still refuses. **Never pipe a producer into `grep -q` under
+  `pipefail`** — the pattern reads correct and fails by timing.
+- **Next spec (0021): pick from TODO.md** — smoke test, spec 0002's
   later adapter phases (LM Studio / llama.cpp / vLLM), or the remaining
   TUI nice-to-haves (arrow-key highlight, type-to-filter, match
   preview). Also queued from live use: goal-definitive archiving
@@ -923,7 +975,7 @@ parallelize only with partitioned file ownership.
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
   in progress — phase 1 shipped (PR #20), later adapters open;
   0005–0014 shipped; `0016` draft; `0017` shipped; `0018` shipped;
-  `0019` shipped.
+  `0019` shipped; `0020` shipping (flip to `shipped (PR #NN)` on merge).
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to
