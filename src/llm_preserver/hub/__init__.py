@@ -10,6 +10,7 @@ working.
 
 from .client import HubClient
 from .errors import (
+    PullDocRefreshError,
     PullEnvError,
     PullError,
     PullHubError,
@@ -23,6 +24,7 @@ from .types import HubClientProtocol, RepoFile, RepoInfo
 __all__ = [
     "HubClient",
     "HubClientProtocol",
+    "PullDocRefreshError",
     "PullEnvError",
     "PullError",
     "PullHubError",

@@ -66,6 +66,41 @@ def test_changed_doc_without_flag_hard_stops_naming_refresh_docs(archive, fake_h
     assert (model_dir(archive) / DOCS_REL / "README.md").read_bytes() == README_BYTES
 
 
+def test_the_doc_stop_raises_the_typed_carrier(archive, fake_hub_factory):
+    # Spec 0020: the CLI owes this stop a recovery command, and it
+    # dispatches on the exception TYPE — never by matching
+    # "--refresh-docs" in the message, which is the substring-satisfied
+    # guard spec 0017 had to fix. The carrier subclasses
+    # PullIntegrityError, so the fault domain (exit 5) does not move.
+    do_pull(archive, make_client(fake_hub_factory))
+    changed = make_client(
+        fake_hub_factory,
+        files=[(Q4_NAME, Q4_BYTES, True), ("README.md", b"# tiny-chat quantized, v2\n", False)],
+    )
+
+    with pytest.raises(hub.PullDocRefreshError) as excinfo:
+        do_pull(archive, changed)
+
+    assert isinstance(excinfo.value, hub.PullIntegrityError)
+
+
+def test_the_doc_stop_names_the_model_directory(archive, fake_hub_factory):
+    # Absorbed into spec 0020 from the 0014 review round: a planning
+    # error names a
+    # path relative to the model directory without naming the directory,
+    # so the human cannot go look at the file it is talking about.
+    do_pull(archive, make_client(fake_hub_factory))
+    changed = make_client(
+        fake_hub_factory,
+        files=[(Q4_NAME, Q4_BYTES, True), ("README.md", b"# tiny-chat quantized, v2\n", False)],
+    )
+
+    with pytest.raises(hub.PullIntegrityError) as excinfo:
+        do_pull(archive, changed)
+
+    assert str(model_dir(archive)) in str(excinfo.value)
+
+
 def test_refresh_docs_replaces_changed_doc_and_relocks(archive, fake_hub_factory):
     do_pull(archive, make_client(fake_hub_factory))
     new_readme = b"# tiny-chat quantized, v2\n"
@@ -98,4 +133,24 @@ def test_refresh_docs_never_replaces_changed_weights(archive, fake_hub_factory):
         do_pull(archive, changed, refresh_docs=True)
 
     assert "--refresh-docs" not in str(excinfo.value)
+    # Exact type, never isinstance: the doc carrier is a subclass, so an
+    # isinstance check would still pass if the weight branch started
+    # raising it — and the CLI would then offer --refresh-docs as the
+    # way out of a payload conflict (spec 0020).
+    assert type(excinfo.value) is hub.PullIntegrityError
     assert (model_dir(archive) / "gguf" / Q4_NAME).read_bytes() == Q4_BYTES
+
+
+def test_the_weight_stop_names_the_model_directory(archive, fake_hub_factory):
+    # Same criterion as the doc stop (spec 0020): the conflicting file's
+    # path is model-dir relative and means nothing on its own.
+    do_pull(archive, make_client(fake_hub_factory))
+    changed = make_client(
+        fake_hub_factory,
+        files=[(Q4_NAME, b"q4 weight bytes v2", True), ("README.md", README_BYTES, False)],
+    )
+
+    with pytest.raises(hub.PullIntegrityError) as excinfo:
+        do_pull(archive, changed)
+
+    assert str(model_dir(archive)) in str(excinfo.value)

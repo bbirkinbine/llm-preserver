@@ -23,6 +23,7 @@ from pathlib import Path
 
 from llm_preserver.hashing import sha256_of
 from llm_preserver.hub import (
+    PullDocRefreshError,
     PullEnvError,
     PullIntegrityError,
     RepoFile,
@@ -66,20 +67,41 @@ class PullPlan:
     adopted: list[FileEntry]
 
 
-def _immutability_stop(target_rel: str, detail: str, hub_path: str) -> PullIntegrityError:
-    """Build the payload-immutability hard stop, naming the way out for docs."""
+def _immutability_stop(
+    target_rel: str, detail: str, hub_path: str, model_dir: Path
+) -> PullIntegrityError:
+    """Build the payload-immutability hard stop, naming the way out for docs.
+
+    A doc conflict returns the ``PullDocRefreshError`` carrier so the CLI
+    can append the exact ``--refresh-docs`` command that resolves it
+    (spec 0020) — the same predicate picks the class and the wording, so
+    the two can never disagree. A changed *weight* stays a plain
+    ``PullIntegrityError``: there is no flag, and none is offered.
+    """
+    is_doc = is_doc_file(hub_path)
+    # The flag is plan-wide, not file-scoped: it replaces every changed
+    # doc in the pull, and this stop raises on the FIRST conflict, so the
+    # tool cannot name the others without planning past its own refusal.
+    # It can at least stop implying there is only one — a review round
+    # (2026-08-17) built a repo where README and LICENSE both changed and
+    # pasting the recovery command replaced the archived license text too.
     way_out = (
-        "re-run with --refresh-docs to replace this documentation file"
-        if is_doc_file(hub_path)
+        "re-run with --refresh-docs, which replaces every documentation "
+        "file whose upstream content changed, not only this one"
+        if is_doc
         else "replacing or adding the new content requires an explicit choice"
     )
-    return PullIntegrityError(
-        f"{target_rel} {detail}; the archive is payload-immutable — {way_out}"
+    # Name the directory, not just the path relative to it: this stop can
+    # fire before any prompt or line has put the model home on screen,
+    # and the human cannot inspect a file they cannot locate (spec 0020).
+    message = (
+        f"{target_rel} (in {model_dir}) {detail}; the archive is payload-immutable — {way_out}"
     )
+    return PullDocRefreshError(message) if is_doc else PullIntegrityError(message)
 
 
 def _reconcile_unrecorded_file(
-    planned: PlannedDownload, target_abs: Path, commit: str
+    planned: PlannedDownload, target_abs: Path, commit: str, model_dir: Path
 ) -> FileEntry:
     """Adopt an on-disk-but-unrecorded file whose hash matches the hub.
 
@@ -101,7 +123,8 @@ def _reconcile_unrecorded_file(
         ) from exc
     if declared is None or on_disk_hash != declared.lower():
         raise PullIntegrityError(
-            f"{planned.target_rel} exists on disk but is not in the record and cannot be "
+            f"{planned.target_rel} (in {model_dir}) exists on disk but is not in the "
+            "record and cannot be "
             f"reconciled against the hub (hub-declared hash: {declared or 'none published'}); "
             "the archive is payload-immutable — refusing to overwrite an unrecorded file"
         )
@@ -174,7 +197,7 @@ def plan_downloads(
         entry = recorded.get(target_rel)
         if entry is None:
             if target_abs.exists():
-                adopted.append(_reconcile_unrecorded_file(planned, target_abs, commit))
+                adopted.append(_reconcile_unrecorded_file(planned, target_abs, commit, model_dir))
             else:
                 to_download.append(planned)
             continue
@@ -191,6 +214,7 @@ def plan_downloads(
                     f"changed upstream: archived sha256 {entry.sha256} differs from "
                     f"hub-declared sha256 {repo_file.sha256}",
                     repo_file.path,
+                    model_dir,
                 )
             if on_disk:
                 logger.info("already archived: %s (hub hash matches the record)", target_rel)
@@ -212,6 +236,7 @@ def plan_downloads(
                 f"is recorded with size {entry.size} but the hub reports size "
                 f"{repo_file.size} and publishes no hash to compare",
                 repo_file.path,
+                model_dir,
             )
         # Recorded and content-matched, but the file is gone: the
         # archive was damaged outside the tool. Re-download rather than

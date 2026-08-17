@@ -16,9 +16,10 @@ from llm_preserver.archive import ArchiveError
 from llm_preserver.cli.app import fail
 from llm_preserver.cli.pull_exec.plumbing import exit_for_pull_error
 from llm_preserver.cli.pull_exec.prompts import confirm_or_stop, prompt_for_selection
-from llm_preserver.cli.resume_hint import compose_resume_hint
+from llm_preserver.cli.resume_hint import compose_doc_refresh_hint, compose_resume_hint
 from llm_preserver.hub import (
     HubClientProtocol,
+    PullDocRefreshError,
     PullError,
     PullInvalidIdError,
     RepoInfo,
@@ -86,8 +87,14 @@ def run_pull(
     # on it.
     no_op = False
     metadata_only = False
+    # Bound before the try, not inside it. This is not a bug fix — as
+    # the first statement in the body it was always bound by the time
+    # anything could raise — but the doc-refresh recovery line (spec
+    # 0020) reads it from the handler, and a name the handler depends on
+    # should not sit in the block it is recovering from, one inserted
+    # line away from being unbound.
+    patterns = list(include)
     try:
-        patterns = list(include)
         info = repo_info
         if not select_all and not patterns:
             if info is None:
@@ -209,6 +216,24 @@ def run_pull(
         raise fail(str(exc)) from exc
     except PullError as exc:
         exit_exc = exit_for_pull_error(exc)
+        if isinstance(exc, PullDocRefreshError):
+            # Spec 0020: this stop fires inside prepare_pull — before
+            # the on_transfer_start seam that composes the 0007 hint —
+            # so the human is told to re-run with a flag and has no
+            # command to append it to. Compose it here, from the shape
+            # this run already holds. Dispatch is on the type, never on
+            # the message text.
+            recovery = compose_doc_refresh_hint(
+                repo_id,
+                path,
+                include=patterns,
+                select_all=select_all,
+                roles=roles,
+                base_model=base_model,
+                hf_logging=hf_logging,
+            )
+            if recovery is not None:
+                typer.echo(recovery, err=True)
         if isinstance(exc, PullInvalidIdError):
             # Spec 0013: an Ollama-shaped id gets the deterministic
             # recovery command appended to the 0011 error. Detection

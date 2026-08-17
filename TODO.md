@@ -83,7 +83,7 @@ Check items off as they ship; update when priorities shift.
   every test used a single relation, where one label hides inside the
   reserve. Belongs on its own branch, not spec 0017's.
 
-## Next spec (0020) — pick one
+## Next spec (0021) — pick one
 
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
   PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over
@@ -130,6 +130,31 @@ queue entry did **not** make the spec and stay open here:
 
 ## Shipped
 
+- 0020 planning-stop recovery command: a planning stop that names
+  `--refresh-docs` as the way out now prints the exact `pull` command
+  that takes it, on stderr under the error. Live trigger: a
+  `discover 'deepseek v4 flash'` walk — search, tree, pick-files,
+  patterns `*dspark*,*UD-Q4*,*UD-Q8*` — ended on "re-run with
+  --refresh-docs" with nowhere to put the flag. `--refresh-docs` is a
+  `pull` flag; `discover` has neither the flag nor a history entry to
+  append it to, and the pull's shape existed only in scrollback. Cause
+  was sequencing, not a missing feature: `compose_resume_hint` already
+  built that line, but it is wired to `pull_model`'s
+  `on_transfer_start` seam and the stop raises inside `prepare_pull`,
+  one step earlier. Fix: `PullDocRefreshError(PullIntegrityError)` as a
+  typed carrier (the `PullInvalidIdError` precedent), a
+  `compose_doc_refresh_hint` wrapper over the extracted
+  `_compose_pull_command` with `--refresh-docs` pinned on and no
+  parameter to turn it off, and one `isinstance` branch beside the
+  existing Ollama-hint branch. Dispatch keys on the type, never on the
+  message text — pinned by a guard that feeds a plain
+  `PullIntegrityError` whose *message* contains the literal
+  `--refresh-docs` and asserts no line prints, which is the test that
+  fails if anyone re-implements this as a substring check (spec 0017's
+  lesson). Absorbs the queued "planning errors should name the model
+  directory" item. Prints on every pull that hits the stop, including
+  a fully typed one — deliberately unlike the 0007 hint, because what
+  history lacks here is the flag, not the shape. 1343 tests.
 - 0019 pull staging cleanup (PR #33): a pull that archived every byte
   could still report failure. The staging delete sat *inside* the `try`
   whose `except OSError` raises `PullEnvError` (exit 3), and it runs
@@ -361,6 +386,23 @@ queue entry did **not** make the spec and stay open here:
 
 ## Smaller items (from live use)
 
+- [ ] **Long errors need a house style** (measured in live use,
+  2026-08-17, on the first real spec 0020 stop): the doc-refresh
+  integrity error renders **387 characters — five wrapped rows at 80
+  columns** — and the recovery command below it takes three more, so a
+  stop the human is meant to read and act on arrives as an
+  eight-row wall. Spec 0020 itself added 124 of those characters (68
+  naming the model directory, 56 expanding the way-out wording); both
+  were correct review findings that bought accuracy with legibility.
+  The fix is a labeled multi-line block — subject line, then indented
+  `in:` / `recorded:` / `hub:` rows — and it is a decision for **every**
+  long error in the tool (`verify`, `remove`, and `migrate` all carry
+  messages in this range), not a patch to one string. Deliberately not
+  improvised inside spec 0020: breaking just the recovery line onto its
+  own row buys one row, breaks the byte-exact tests, and makes it
+  render differently from spec 0007's identically shaped resume hint —
+  two near-identical features formatted two ways is worse than one
+  long line. Needs a spec.
 - [ ] **`verify --staging --clean`** (queued from spec 0019,
   2026-08-13): 0019 leaves cleanup residue on disk until a human
   deletes it, so `verify --staging` keeps listing a fully archived
@@ -401,12 +443,21 @@ queue entry did **not** make the spec and stay open here:
   a platform-conditional API (`.claude/rules/python-code.md` →
   "Platform-conditional APIs" — reach it via `getattr`, and note Linux
   CI will not exercise it), so it wants its own spec.
-- [ ] Pull planning errors should name the model directory (queued
-  from the 0014 review round, 2026-07-31): with the plan computed
-  before the grouping prompt, a changed-weight integrity stop can now
-  fire before any question puts the home on screen — the error names
-  the file's relative path but not which model directory holds the
-  conflicting record. Add the directory to those messages.
+- [ ] The every-weight decline (`pull_prepare.py:160` — "every-weight
+  pull declined: narrow `--include` and re-run") names a flag the way
+  the doc stop did, and is reachable from the same discover walk, but
+  spec 0020 deliberately left it alone: the composed command would
+  carry the *rejected* selection, so a paste-and-go line would be
+  actively wrong — the whole point is that the selection needs
+  narrowing first. Worth revisiting only if the line can say "narrow
+  this" without becoming a footgun.
+- [ ] `--refresh-docs` discards the model card you archived. Replacing
+  a changed doc unlocks, overwrites, re-locks, and updates the record —
+  correct for the flag's purpose, but the superseded card is the one
+  that shipped with the weights you hold, which is provenance a
+  preservation tool arguably should not drop on the floor. Options: keep
+  the old copy beside the new one under a dated name, or refuse without
+  a second flag. Raised 2026-08-16 while shipping 0020; not scoped.
 
 - [ ] `--json` on the read-only reporting commands (queued
   2026-07-13, from the 0009 wrap-up: exit codes serve cron, but an

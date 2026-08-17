@@ -43,6 +43,19 @@ class PullIntegrityError(PullError):
     """Integrity fault: SHA256 mismatch, or a payload-immutability conflict."""
 
 
+class PullDocRefreshError(PullIntegrityError):
+    """A *documentation* file changed upstream (spec 0020).
+
+    Same fault domain and exit code as ``PullIntegrityError``; the
+    subclass exists so the CLI can append the exact ``pull ...
+    --refresh-docs`` command that resolves it, exactly as
+    ``PullInvalidIdError`` carries the Ollama-shape hint. Raised only by
+    the doc branch of the payload-immutability stop — a changed *weight*
+    stays a plain ``PullIntegrityError`` with no way out, and dispatch
+    keys on this type rather than on the message text.
+    """
+
+
 def _server_message(exc: hf_errors.HfHubHTTPError) -> str:
     """Render the hub's own error text, never the request or headers."""
     return exc.server_message or "no server message"
