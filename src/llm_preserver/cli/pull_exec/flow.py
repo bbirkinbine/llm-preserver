@@ -14,8 +14,9 @@ import typer
 
 from llm_preserver.archive import ArchiveError
 from llm_preserver.cli.app import fail
+from llm_preserver.cli.pull_exec.confirmations import confirm_or_stop
 from llm_preserver.cli.pull_exec.plumbing import exit_for_pull_error
-from llm_preserver.cli.pull_exec.prompts import confirm_or_stop, prompt_for_selection
+from llm_preserver.cli.pull_exec.prompts import prompt_for_selection
 from llm_preserver.cli.resume_hint import compose_doc_refresh_hint, compose_resume_hint
 from llm_preserver.hub import (
     HubClientProtocol,
@@ -26,6 +27,7 @@ from llm_preserver.hub import (
 )
 from llm_preserver.ollama_store import ollama_shape_hint
 from llm_preserver.pull import pull_model, validated_base_model, validated_roles
+from llm_preserver.pull_decline import PullDeclined
 from llm_preserver.pull_preflight import require_disk_budget
 from llm_preserver.pull_prepare import prepare_pull
 from llm_preserver.pull_report import render_plan
@@ -75,8 +77,11 @@ def run_pull(
             scenario the hint serves is the one the flag exists for).
 
     Raises:
-        typer.Exit: The fault-domain exit for any pull failure, or
-            exit 130 when Ctrl-C interrupts the transfer.
+        typer.Exit: The fault-domain exit for any pull failure; exit
+            130 when Ctrl-C interrupts the transfer; or **exit 0** when
+            the human declines at a prompt (spec 0021), which prints
+            one plain line and is the only non-failure exit raised
+            from inside the try.
     """
     # Spec 0007: a hint is owed whenever the pull's shape was assembled
     # interactively; hint holds the printed line for the Ctrl-C repeat.
@@ -205,6 +210,15 @@ def run_pull(
             on_no_op=mark_no_op,
             on_metadata_only=mark_metadata_only,
         )
+    except PullDeclined as exc:
+        # Spec 0021: the human answered the question — typed q, said no,
+        # or pressed Ctrl-D at an interactive prompt. Nothing was
+        # pulled, but nothing failed either, so this is a plain line on
+        # stdout at exit 0, never the `error [domain]:` shape. Deliberately
+        # NOT a PullError: exit_for_pull_error cannot reach it, so no
+        # future fault domain can reclassify a decline as a failure.
+        typer.echo(clean_text(str(exc), single_line=True))
+        raise typer.Exit(code=0) from None
     except KeyboardInterrupt:
         # Ctrl-C mid-transfer (spec 0007): repeat the hint as the final
         # line — directly above the next shell prompt — then exit

@@ -208,8 +208,12 @@ def test_interrupted_pull_records_nothing(archive, fake_hub_factory):
     assert list((archive / "models").rglob("model-record.json")) == []
 
 
-def test_declined_grouping_writes_nothing(archive, fake_hub_factory):
-    with contextlib.suppress(hub.PullUserError):
+def test_a_declined_confirmation_writes_nothing(archive, fake_hub_factory):
+    # Spec 0021 retyped the decline: PullDeclined, deliberately outside
+    # the PullError hierarchy so no fault domain can reach it.
+    from llm_preserver.pull_decline import PullDeclined
+
+    with contextlib.suppress(PullDeclined):
         do_pull(archive, make_client(fake_hub_factory), confirm=lambda prompt: False)
     assert list((archive / "models").iterdir()) == []
 

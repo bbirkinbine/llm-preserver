@@ -36,7 +36,14 @@ Check items off as they ship; update when priorities shift.
   it, but this one is pre-existing and would restyle four unrelated
   dashboard rows in a listing diff.
 
-- [ ] **EOF at the interactive file-listing prompt exits 1, not 2** —
+- [x] **EOF at the interactive file-listing prompt exits 1, not 2** —
+  *Closed by spec 0021*, which had to answer the same question for `q`
+  and settled both with one rule: on a terminal EOF is that prompt's
+  decline (exit 0, `nothing pulled: …`); with no interactive stdin it
+  is the scripted fault below (exit 2, naming `--include` /
+  `--whole-repo`). The fix landed in `_ask`, the sole prompt call for
+  all three listing paths, so the pipe, fits and windowed frames share
+  it. Original report:
   found by spec 0018's plan round, 2026-08-12, pre-existing.
   `prompt_for_selection` calls `typer.prompt` with no
   `except typer.Abort`, and `run_pull`'s try block catches only
@@ -64,6 +71,12 @@ Check items off as they ship; update when priorities shift.
   `tests/test_remove_immutable.py` pins that nothing survives under
   `models/`. Pre-existing on `main`, unrelated to spec 0017's design.
 
+- [ ] **`tests/test_cli_pull_listing_tty.py` sits at exactly 300 lines**
+  (spec 0021, 2026-09-03). Compliant with the cap and with zero
+  headroom, so the next test added there splits the file first. The
+  natural seam is the one 0018 already used: the fits-frame tests away
+  from the roll-up and window frame tests.
+
 - [ ] **`discover`'s tree frame overruns the terminal — spec 0015 bug,
   found in live use 2026-08-11** (the live terminal check session 18
   deferred). `tree_chrome_lines`
@@ -83,7 +96,7 @@ Check items off as they ship; update when priorities shift.
   every test used a single relation, where one label hides inside the
   reserve. Belongs on its own branch, not spec 0017's.
 
-## Next spec (0021) — pick one
+## Next spec (0022) — pick one
 
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
   PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over
@@ -129,6 +142,35 @@ queue entry did **not** make the spec and stay open here:
   practice, drop the heuristic entirely.
 
 ## Shipped
+
+- 0021 quit at pull prompts: `q = quit` now works at the file listing
+  frame that *fits* the screen, and a human's decline is exit 0 rather
+  than a fault. Live trigger: a `discover 'minimax h3'` walk whose
+  first three prompts each advertised `q = quit` and whose fourth read
+  a typed `q` as a glob, answering with a no-match wall. The fits path
+  never offered or honored `q` — spec 0018's "offered keys only" rule
+  holding literally, and documented as such in `docs/cli.md`. The rule
+  survives; `q` was the wrong key to apply it to, because unlike
+  `m`/`b`/`s` it is taught by every stage of the walk, not by the
+  listing alone. One rule now covers the flow: a human who declines or
+  quits at a pull prompt gets a plain `nothing pulled: …` line on
+  stdout and exit 0 — `q`, `n` at either confirmation, and Ctrl-D at
+  any of them on a terminal. `PullDeclined` deliberately sits outside
+  the `PullError` hierarchy so `exit_for_pull_error` cannot reach it.
+  Absorbed the queued EOF item above: the same Ctrl-D with no
+  interactive stdin stays the scripted fault (exit 2, naming
+  `--include` / `--whole-repo`), replacing an undocumented exit 1.
+  Found while implementing, not by a test: click writes a prompt with
+  no trailing newline and emits none on EOF, so the decline line landed
+  *on* the prompt — true on a real terminal, fixed with an explicit
+  newline in both abort handlers. `prompts.py` crossed the 300-line cap
+  and split: `confirmations.py` took the y/N seam, `chrome_lines` moved
+  into `listing/frame.py` (which already owns what surrounds the rows),
+  and a duplicated `PATTERN_PROMPT` literal collapsed onto its own
+  renderer. Live-verified on a real pty against the real hub
+  (`gpustack/bge-m3-GGUF`): key line present, `q` and Ctrl-D exit 0,
+  piped `q` still a pattern at exit 2, scripted EOF now 2 instead of 1.
+  1513 tests. (spec 0021, PR #39)
 
 - 0020 planning-stop recovery command: a planning stop that names
   `--refresh-docs` as the way out now prints the exact `pull` command
@@ -443,8 +485,10 @@ queue entry did **not** make the spec and stay open here:
   a platform-conditional API (`.claude/rules/python-code.md` →
   "Platform-conditional APIs" — reach it via `getattr`, and note Linux
   CI will not exercise it), so it wants its own spec.
-- [ ] The every-weight decline (`pull_prepare.py:160` — "every-weight
-  pull declined: narrow `--include` and re-run") names a flag the way
+- [ ] The every-weight decline (`pull_prepare.py:160` — now "nothing
+  pulled: every-weight pull declined; narrow `--include` and re-run",
+  and exit 0 since spec 0021, though the hint question is
+  unchanged) names a flag the way
   the doc stop did, and is reachable from the same discover walk, but
   spec 0020 deliberately left it alone: the composed command would
   carry the *rejected* selection, so a paste-and-go line would be

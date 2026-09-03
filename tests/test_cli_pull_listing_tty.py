@@ -6,8 +6,8 @@ windowed frames. This module holds the **shared harness** for the CLI
 contract of the two-frame loop inside ``prompt_for_selection``, plus the
 tests for which frame a repo opens on:
 
-- a listing that fits prints exactly as it does today — flat, no key
-  line, one prompt (so ``q`` there is a pattern, adjudication 5);
+- a listing that fits prints flat, one prompt, and (spec 0021) one
+  key line offering ``q`` — the only key that is not frame-local;
 - an overflowing listing on a TTY opens on the roll-up, with every file
   one ``f`` away.
 
@@ -57,7 +57,7 @@ COLUMNS = 80
 ROWS = 24
 REPO_ID = "unsloth/Kimi-K3-Thinking-GGUF"
 
-# Verbatim from prompts.py:50 — the prompt text is unchanged by 0018.
+# Restated to pin it independently; the source is `listing/frame.py`.
 PATTERN_PROMPT = "files to pull (comma-separated patterns, e.g. *Q4_K_M* or *.gguf,*mmproj*)"
 
 ROLLUP_KEYS = "f = list every file (paged), q = quit"
@@ -261,7 +261,7 @@ def paths_in(frame: str, info: RepoInfo) -> list[str]:
 # --- the listing that fits is the listing that shipped ------------------
 
 
-def test_a_fitting_listing_prints_the_flat_frame_with_no_keys(monkeypatch, capsys):
+def test_a_fitting_listing_prints_the_flat_frame_and_one_quit_key(monkeypatch, capsys):
     info = small_repo()
 
     patterns, prompter = run_listing(monkeypatch, capsys, info, scripted("*Q4_K_M*"))
@@ -271,8 +271,9 @@ def test_a_fitting_listing_prints_the_flat_frame_with_no_keys(monkeypatch, capsy
     frame = prompter.frames[0]
     assert frame.splitlines()[0] == f"files in {REPO_ID}:"
     assert paths_in(frame, info) == [repo_file.path for repo_file in info.files]
-    # No key line at all, not merely no "f" — and no window furniture.
-    assert "q = quit" not in frame
+    # One key line, offering the one key that is not frame-local — and
+    # no window furniture (spec 0021; the rest is pinned in ..._quit.py).
+    assert "q = quit" in frame
     assert "f = list every file" not in frame
     assert "showing" not in frame
     assert prompter.texts[0] == PATTERN_PROMPT

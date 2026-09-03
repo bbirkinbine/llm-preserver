@@ -4,9 +4,11 @@ The spec-0005 rider extends the whole-repo plan -> preflight -> confirm
 sequence to selective pulls: `--include` and interactive pulls state
 the selection's total download size in a confirmation before any bytes
 move, `--yes` auto-accepts it (it starts with ``pull ``, the prefix
-`_confirm_or_stop` keys on), declining it aborts with the user-input
-exit (2) and downloads nothing, and an over-budget selection refuses
-with the local-environment exit (3) before prompting. Everything runs
+`_confirm_or_stop` keys on), and an over-budget selection refuses with
+the local-environment exit (3) before prompting. Spec 0021 moved the
+*declined* confirmation to exit 0 with one plain line: an answered
+question is not a fault, and only the prompt nobody can answer stays
+the exit-2 scripted fault it is today. Everything runs
 via typer.testing.CliRunner with the hub-client seam faked; no network.
 """
 
@@ -14,6 +16,7 @@ import contextlib
 import shutil
 from collections import namedtuple
 
+import click
 from typer.testing import CliRunner
 
 from llm_preserver.cli import app
@@ -73,15 +76,19 @@ def test_include_pull_confirms_size_before_pulling(tmp_path, monkeypatch, fake_h
     assert (archive / "models/bartowski/tiny-chat-GGUF/gguf/tiny-chat-Q4_K_M.gguf").is_file()
 
 
-def test_declined_size_confirmation_exits_2_downloading_nothing(
+def test_declined_size_confirmation_exits_0_downloading_nothing(
     tmp_path, monkeypatch, fake_hub_factory
 ):
+    # Spec 0021: a scripted `echo n | pull …` answered the question, so
+    # it is a decline (exit 0, one plain line), not a fault. The exit
+    # code stops carrying "did anything land" — the final line does.
     archive = init_archive_dir(tmp_path)
     install_fake_hub(monkeypatch, fake_hub_factory())
 
     result = invoke_pull(archive, stdin="n\n")
 
-    assert result.exit_code == 2  # user-input fault domain
+    assert result.exit_code == 0
+    assert "nothing pulled: size confirmation declined" in click.unstyle(result.stdout)
     assert list((archive / "models").iterdir()) == []
 
 
@@ -124,7 +131,8 @@ def test_interactive_selection_declining_size_confirmation_downloads_nothing(
         input="*Q4_K_M*\nn\n",  # patterns, then decline the size confirm
     )
 
-    assert result.exit_code == 2
+    assert result.exit_code == 0
+    assert "nothing pulled: size confirmation declined" in click.unstyle(result.stdout)
     assert list((archive / "models").iterdir()) == []
 
 

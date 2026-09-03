@@ -19,7 +19,6 @@ import click
 import pytest
 from typer.testing import CliRunner
 
-import llm_preserver.hub as hub
 import llm_preserver.pull as pull
 from llm_preserver.archive import init_archive
 from llm_preserver.cli import app
@@ -248,9 +247,12 @@ def test_all_confirms_once_with_file_count_and_total_size_only(archive, fake_hub
 
 
 def test_declined_all_confirmation_downloads_and_writes_nothing(archive, fake_hub_factory):
+    # Spec 0021: declining is a decline, not a user-input fault.
+    from llm_preserver.pull_decline import PullDeclined
+
     client = make_snapshot_client(fake_hub_factory)
 
-    with pytest.raises(hub.PullUserError):
+    with pytest.raises(PullDeclined):
         do_pull_all(archive, client, confirm=lambda prompt: False)
 
     assert client.download_calls == []

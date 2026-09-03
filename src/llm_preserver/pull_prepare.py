@@ -23,6 +23,7 @@ from llm_preserver.layout import (
     staging_dir_for,
 )
 from llm_preserver.pull_advisory import Advisory, advisories_for, archived_hub_repos
+from llm_preserver.pull_decline import EVERY_WEIGHT_DECLINED, PullDeclined
 from llm_preserver.pull_home import ConfirmCallback, load_existing_record
 from llm_preserver.pull_metadata import fetch_adapter_base, resolved_base_model
 from llm_preserver.pull_plan import PullPlan, plan_downloads
@@ -157,7 +158,7 @@ def prepare_pull(
         and selects_all_weights(info.files, selected)
         and not confirm(f"selection covers every weight file in {repo_id}; pull them all?")
     ):
-        raise PullUserError("every-weight pull declined: narrow --include and re-run")
+        raise PullDeclined(EVERY_WEIGHT_DECLINED)
     staging_dir = staging_dir_for(archive_root, repo_id)
     adapter_base, adapter_config_fetched = fetch_adapter_base(client, repo_id, info)
     advisories = advisories_for(

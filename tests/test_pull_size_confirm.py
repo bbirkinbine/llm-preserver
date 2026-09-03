@@ -94,11 +94,16 @@ def test_selective_size_confirmation_is_asked_before_any_download(archive, fake_
 
 
 def test_declined_size_confirmation_downloads_and_writes_nothing(archive, fake_hub_factory):
+    # Spec 0021: declining is a decline, not a user-input fault.
+    from llm_preserver.pull_decline import PullDeclined
+
     client = make_client(fake_hub_factory)
 
-    with pytest.raises(hub.PullUserError):
+    with pytest.raises(PullDeclined) as excinfo:
         # Accept everything except the size confirmation.
         do_pull(archive, client, confirm=lambda prompt: not prompt.startswith("pull "))
+
+    assert str(excinfo.value) == "nothing pulled: size confirmation declined"
 
     assert client.download_calls == []
     assert list((archive / "models").iterdir()) == []

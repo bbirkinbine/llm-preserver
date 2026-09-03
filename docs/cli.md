@@ -244,9 +244,9 @@ Options:
 Behavior worth knowing:
 
 - **The interactive file listing pages instead of walling** (spec
-  0018). A repo whose listing fits your terminal prints exactly as it
-  always has: every file, one row each, size then path, then the
-  pattern prompt. A repo whose listing would overrun the screen opens
+  0018). A repo whose listing fits your terminal prints every file,
+  one row each, size then path, then a single key line (`q = quit`)
+  and the pattern prompt. A repo whose listing would overrun the screen opens
   on a **roll-up** instead — one line per top-level directory and one
   per sharded weight set, each with its file count and total size,
   everything else listed individually, because the fact that decides
@@ -303,12 +303,26 @@ Behavior worth knowing:
   free disk, so it says when it is understating.
 
   Two consequences of the key line worth knowing. **Keys are only keys
-  where a key line is showing** — a listing that fits prints none, so a
-  bare `q` there is a pattern matching a file named `q`, while on an
-  overflowing listing it quits (exit 2). And keys match the whole
-  answer before the comma split, so `f` is the key but `f,` and
-  `f, *.gguf` are pattern lists. Since patterns match the full repo
-  path and want a leading `*`, a real pattern never collides.
+  where a key line is showing.** Every interactive frame offers `q`, so
+  `q` quits from any of them — exit 0, one plain line, nothing pulled
+  (spec 0021). The other four keys are frame-local: `f`, `m`, `b` and
+  `s` mean something only inside a windowed listing, so on a listing
+  that fits — which has nothing to expand, no page to advance to and no
+  summary to return to — all four are patterns, not keys. A pipe offers
+  no keys at all, so a bare `q` there is still a pattern matching a file
+  named `q`.
+
+  One consequence of the two verdicts having different sources: with a
+  terminal on stdin but a pipe on stdout (`pull … | tee log`), the
+  listing takes the pipe path, so a typed `q` is a pattern and ends in
+  the no-match error, while Ctrl-D at that same prompt is a clean quit.
+  Both follow the stated rules — a key needs a key line, and
+  answerability reads stdin — but it is the one combination where they
+  visibly disagree. And keys match the
+  whole answer before the comma split, so `f` is the key but `f,` and
+  `f, *.gguf` are pattern lists; `q,` is how you archive a file actually
+  named `q`. Since patterns match the full repo path and want a leading
+  `*`, a real pattern never collides.
 
   Inside a windowed listing all five of `f m b s q` are keys whether or
   not the frame currently acts on them: pressing one that does nothing
@@ -327,7 +341,11 @@ Behavior worth knowing:
   disk preflight (refusing with exit 3 when the archive volume is
   short) and asks one confirmation stating what this run will
   download: "pull 2 of 2 files (4.6 GiB to download) from …?". `--yes`
-  auto-accepts exactly this prompt.
+  auto-accepts exactly this prompt. Declining it — `n`, or Ctrl-C or
+  Ctrl-D at a terminal — prints `nothing pulled: size confirmation declined` and
+  exits **0**: you answered the question, so nothing failed. The same
+  holds for the every-weight confirmation and for `q` at the file
+  listing, matching `remove`'s declined confirmation.
 - **Companion-artifact advisories.** Before the confirmation, the pull
   checks the repo tree against a curated rules table (data, not
   inference) and prints an advisory when your selection leaves a known
@@ -341,11 +359,25 @@ Behavior worth knowing:
   contradicted the declared base, went with the flag: no override can
   misfile a pull when the repo id names the directory.)
 - **Non-interactive runs never hang or die vaguely.** When stdin
-  cannot answer a confirmation (cron, CI, piped input exhausted), the
-  pull exits 2 with a message naming the bypass — `--yes` for the size
-  confirmation, which is now the only question a pull asks. The exception
-  is a pull with nothing to do — it asks no questions (next bullet),
-  so a scripted re-pull of an already-complete selection exits 0.
+  cannot answer a prompt (cron, CI, piped input exhausted), the pull
+  exits 2 with a message naming the bypass — `--yes` for the size
+  confirmation, `--include <pattern>` or `--whole-repo` for the file
+  listing. The exception is a pull with nothing to do — it asks no
+  questions (next bullet), so a scripted re-pull of an already-complete
+  selection exits 0.
+
+  **An unanswered prompt is not a declined one.** The split is stdin:
+  a terminal means a human is typing, so Ctrl-C and Ctrl-D are both
+  that prompt's decline (exit 0) — click reports the two identically,
+  and `remove` has treated an interrupted prompt as a decline since
+  spec 0010. No interactive stdin means nobody can answer, so the same
+  EOF is the scripted fault above (exit 2). Answerability is a question
+  about who is typing, which is why it reads stdin rather than the
+  stdout verdict that decides whether a listing gets a window.
+
+  Ctrl-C **during a transfer** is unchanged: bytes have moved, so it
+  prints the resume command and exits 130. The difference is not which
+  key was pressed but whether the pull had started.
 
 - **Re-pulls are idempotent, and a complete one asks nothing.** A
   file already archived with a matching hash is skipped ("already
@@ -499,8 +531,9 @@ reading source:
 
 | Code | Domain | Typical cause / next step |
 | --- | --- | --- |
+| 0 | success | files pulled; also nothing left to pull (an already-complete re-pull), and a **declined prompt** — `q` at the file listing, `n` at either confirmation, or Ctrl-C / Ctrl-D at any of them on a terminal (before any transfer starts; an interrupt mid-transfer is still 130). Nothing was pulled, but nothing failed; read the final line, not the exit code, to tell the two apart |
 | 1 | archive/usage | path is not an archive; bad arguments |
-| 2 | user input | malformed or unknown repo id; gated repo not accepted; no matching files |
+| 2 | user input | malformed or unknown repo id; gated repo not accepted; no matching files; a prompt that **could not be answered** because stdin is not interactive (the message names the bypass) |
 | 3 | local environment | network unreachable, disk full — check your machine |
 | 4 | hub-side | 5xx or rate limiting — retry later; not your fault |
 | 5 | integrity | hash mismatch after download — the file never entered the archive |

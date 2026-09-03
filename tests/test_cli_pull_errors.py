@@ -142,9 +142,14 @@ def test_pull_verbose_failure_never_leaks_authorization_header(tmp_path, monkeyp
     assert "Authorization" not in everything
 
 
-def test_grouping_prompt_sanitizes_hostile_base_model(tmp_path, monkeypatch, fake_hub_factory):
-    # base_model is hub-supplied text and reaches the confirm prompt;
-    # a value carrying terminal escapes must render control-char-free.
+def test_hostile_base_model_renders_without_control_characters(
+    tmp_path, monkeypatch, fake_hub_factory
+):
+    # base_model is hub-supplied text and reaches the rendered prompts
+    # and advisories; a value carrying terminal escapes must render
+    # control-char-free. The run is ended by declining the size
+    # confirmation, which is exit 0 since spec 0021 — so the scrub is
+    # asserted on the output, never on the exit code.
     archive = init_archive_dir(tmp_path)
     hostile = "acme/tiny\x1b]52;c;evil\x07chat"
     install_fake_hub(monkeypatch, fake_hub_factory(base_model=hostile))
@@ -152,11 +157,11 @@ def test_grouping_prompt_sanitizes_hostile_base_model(tmp_path, monkeypatch, fak
     result = runner.invoke(
         app,
         ["pull", "bartowski/tiny-chat-GGUF", str(archive), "--include", "*Q4_K_M*"],
-        input="n\n",  # decline the grouping; the prompt has already rendered
+        input="n\n",  # decline the size confirm; the text has already rendered
     )
 
-    assert result.exit_code != 0
     output = combined_output(result)
+    assert "nothing pulled: size confirmation declined" in click.unstyle(result.stdout)
     assert "\x1b" not in output
     assert "\x07" not in output
     assert "evil" in output  # content survives, escapes do not

@@ -5,14 +5,14 @@ import.
 
 The prompt does double duty: it takes a glob pattern list, and it takes
 single-character keys. Adjudication 5 settles the outer ambiguity with
-**offered keys only** — a listing that fits shows no key line at all,
-so every keystroke there is a pattern. *Inside* a windowed listing the
-five reserved characters are always keys, and pressing one the frame
-does not currently act on re-prompts with a one-line reason rather than
-falling through as a glob (Brian's call, 2026-08-12, after the review
-round measured what the fall-through cost). So each key needs two
-tests: it works where it is offered, and it *re-prompts* where it is
-not. The second half is the half that fails when a guard is deleted:
+**offered keys only** — a character is a key exactly where the frame
+advertises it. *Inside* a windowed listing the five reserved characters
+are always keys, and pressing one the frame does not currently act on
+re-prompts with a one-line reason rather than falling through as a glob
+(Brian's call, 2026-08-12, after the review round measured what the
+fall-through cost). So each key needs two tests: it works where it is
+offered, and it *re-prompts* where it is not. The second half is the
+half that fails when a guard is deleted:
 
 - ``b`` on the first expanded window has no history to pop. Without
   ``and back`` the implementation raises ``IndexError: pop from empty
@@ -63,23 +63,14 @@ from test_cli_pull_listing_tty import (
     paths_in,
     run_listing,
     scripted,
-    small_repo,
     walk_all,
 )
 
 from llm_preserver.cli.pull_exec.prompts import prompt_for_selection
-from llm_preserver.hub import PullUserError
 
-# --- a fitting listing offers no keys, so every character is a pattern --
-
-
-def test_q_typed_on_a_fitting_listing_is_a_pattern_not_a_key(monkeypatch, capsys):
-    # Adjudication 5: offered-keys-only means a repo with no wall keeps
-    # every keystroke a pattern.
-    patterns, _ = run_listing(monkeypatch, capsys, small_repo(), scripted("q"))
-
-    assert patterns == ["q"]
-
+# The fits frame's own keys moved to ``test_cli_pull_listing_quit.py``
+# when spec 0021 gave it one (``q``); ``small_repo`` still backs the
+# frames here that must stay key-free.
 
 # --- keys that are offered ----------------------------------------------
 
@@ -101,11 +92,16 @@ def test_a_pattern_typed_from_a_later_window_ends_the_stage(monkeypatch, capsys)
     assert prompter.calls == 4
 
 
-def test_q_on_an_overflowing_listing_aborts_the_pull_the_exit_2_way(monkeypatch, capsys):
-    # PullUserError → exit 2, matching confirm_or_stop's posture that
-    # user input is the exit-2 domain (spec 0018 scope correction).
-    with pytest.raises(PullUserError):
+def test_q_on_an_overflowing_listing_declines_rather_than_faulting(monkeypatch, capsys):
+    # Spec 0021: a human answering a question the tool asked is not a
+    # fault, so quit raises the decline type the CLI maps to exit 0 —
+    # not a PullUserError the fault-domain mapper could reach.
+    from llm_preserver.pull_decline import PullDeclined
+
+    with pytest.raises(PullDeclined) as excinfo:
         run_listing(monkeypatch, capsys, kimi_repo(), scripted("q"))
+
+    assert str(excinfo.value) == "nothing pulled: quit at the file listing"
 
 
 # --- keys that are not offered are ordinary text ------------------------

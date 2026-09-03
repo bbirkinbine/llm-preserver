@@ -7,6 +7,7 @@ fault-domain exits), ``prompts`` (confirmations, file picking), and
 ``llm_preserver.cli.pull_exec`` as before.
 """
 
+from .confirmations import confirm_or_stop
 from .flow import run_pull
 from .plumbing import (
     PULL_FAULT_DOMAINS,
@@ -15,7 +16,7 @@ from .plumbing import (
     make_hub_client,
     setup_logging,
 )
-from .prompts import confirm_or_stop, prompt_for_selection
+from .prompts import prompt_for_selection
 
 __all__ = [
     "PULL_FAULT_DOMAINS",

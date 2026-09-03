@@ -966,7 +966,87 @@ parallelize only with partitioned file ownership.
   mutation-proved by deleting the Shipped entry and confirming the
   gate still refuses. **Never pipe a producer into `grep -q` under
   `pipefail`** — the pattern reads correct and fails by timing.
-- **Next spec (0021): pick from TODO.md** — smoke test, spec 0002's
+- **Session 26 (2026-09-03): spec 0021 quit at pull prompts.** Live
+  trigger: a `discover 'minimax h3'` walk whose first three prompts
+  each ended in `q = quit` and whose fourth — the file listing — read
+  a typed `q` as a glob and answered with a no-match wall. **The cause
+  was read off the transcript, not guessed**: no footer, no key line,
+  and the *generic* `*Q4_K_M*` example proved the run took the **fits**
+  path (`prompts.py:176`), which spec 0018 deliberately left untouched
+  ("a listing that fits is untouched"); the tree frame rendering 51
+  rows in one window proved the terminal was tall enough to reach it.
+  Not an oversight — `docs/cli.md:307` documented exactly this outcome
+  as a consequence of **offered keys only**. That rule survives; `q`
+  was the wrong key to apply it to. `m`/`b`/`s` are frame-local, taught
+  only inside a windowed listing; `q` is a property of the *walk*,
+  taught by three stages before this prompt, so its silence read as a
+  change of contract. The disambiguation argument still holds once `q`
+  is *offered* there, and the literal-`q` escape hatch (`q,`, keys
+  match the whole answer before the comma split) already existed.
+  Second half, and the larger change: **a human's answer is not a
+  fault.** `q` raised `PullUserError`, so pressing the advertised quit
+  key printed `error [user input]:` at exit 2 — as did `n` at the size
+  and every-weight confirms, while `remove` has always documented a
+  declined confirmation as exit 0 and `discover`'s own three quit
+  prompts return cleanly. One rule now: decline or quit at any pull
+  prompt → one plain `nothing pulled: …` line on stdout, exit 0.
+  `PullDeclined` sits **outside** the `PullError` hierarchy so
+  `exit_for_pull_error` cannot reach it — asserted by a test, not left
+  to prose, so no future fault domain can reclassify a decline.
+  Absorbed the queued `TODO.md:39` item (EOF here escaped every handler
+  and died with click's bare `Aborted!` at exit 1): the same Ctrl-D now
+  splits on **stdin** — a terminal means a human answered (exit 0), no
+  interactive stdin means nobody could (exit 2, naming the bypass).
+  **stdin for answerability, stdout for frame shape**: two different
+  questions that are allowed to disagree (`pull … | tee` from a
+  keyboard). Two checkpoint adjudications, both the same shape as the
+  spec itself — don't move the inconsistency one prompt down: the
+  every-weight decline joined the rule, and so did Ctrl-D at the
+  confirms, which until then would have kept saying "stdin is not
+  interactive" *on a terminal*. **Found while implementing, not by any
+  test**: click writes a prompt with no trailing newline and emits none
+  on EOF (it echoes one only for hidden input), so the decline line
+  landed *on* the prompt — `files to pull (…): nothing pulled: …` —
+  true on a real terminal, not a runner artifact; both abort handlers
+  now emit the newline. `prompts.py` crossed the cap and split on the
+  concept seam, not the line count: `confirmations.py` took the y/N
+  seam (a confirmation is one question with two answers and no frame),
+  `chrome_lines` moved into `listing/frame.py`, which already owns what
+  surrounds the rows, and a `PATTERN_PROMPT` literal that duplicated
+  `pattern_prompt()`'s output byte for byte collapsed onto its renderer
+  — one edit from the two disagreeing about the prompt the tool asks.
+  Live-verified on a real pty against the real hub
+  (`gpustack/bge-m3-GGUF`, whose 16-file listing takes the fits path):
+  key line present, `q` and Ctrl-D exit 0, piped `q` still a pattern at
+  exit 2, scripted EOF 1 → 2. The review round then measured the two
+  mixed-stream cases, both reproduced here with a pty harness: `q` under
+  `| tee` is a pattern (no key line was shown) while Ctrl-D there quits
+  cleanly, and `echo q |` with a TTY stdout quits at 0 — so the spec's
+  "only one scripted invocation changes" note was false and is
+  corrected in place rather than edited away. **The review round's
+  sharpest find was a consequence nobody had specced: Ctrl-C at a
+  prompt now declines at exit 0**, because click folds
+  `KeyboardInterrupt` into the same `Abort` as EOF. Accepted (Brian) —
+  `remove` has said exactly that since 0010, no bytes have moved at
+  either prompt, and `run_pull`'s own handler still owns the
+  mid-transfer interrupt at 130; the line that matters is whether the
+  transfer started, not which key was pressed. **Verifying it taught
+  the durable fact**: `typer.prompt` comes from `typer._click.termui`,
+  a *different module* from the `click` package's, so a first probe
+  patching `click.termui.visible_prompt_func` proved nothing — it fell
+  through to a real read and re-proved the EOF path. Two review claims
+  were checked rather than taken: an unpinned `.strip()` on the fits
+  frame reproduced exactly (removing it left all 1508 tests green), but
+  a reported real-code frame overflow at 38x29/76x16/77x16 did **not** —
+  a full 91x47 grid found zero on the real code and exactly those three
+  under a mutation, so it was test vacuity, and the fix is the harness
+  charging the prompt each frame actually asked plus those three points
+  pinned, since a cross through two axes cannot reach a defect off both.
+  **Brian then walked the trigger by hand** — `discover 'minimax h3'`
+  → `4` → `0` → `1` — and the prompt that produced the report now
+  offers `q = quit` and exits 0; Ctrl-C, Ctrl-D and a declined size
+  confirmation all checked on the same walk. 1513 tests.
+- **Next spec (0022): pick from TODO.md** — smoke test, spec 0002's
   later adapter phases (LM Studio / llama.cpp / vLLM), or the remaining
   TUI nice-to-haves (arrow-key highlight, type-to-filter, match
   preview). Also queued from live use: goal-definitive archiving
@@ -975,7 +1055,7 @@ parallelize only with partitioned file ownership.
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
   in progress — phase 1 shipped (PR #20), later adapters open;
   0005–0014 shipped; `0016` draft; `0017` shipped; `0018` shipped;
-  `0019` shipped; `0020` shipped (PR #36).
+  `0019` shipped; `0020` shipped (PR #36); `0021` shipped (PR #39).
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

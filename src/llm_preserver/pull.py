@@ -24,6 +24,7 @@ from llm_preserver.hub import (
     RepoInfo,
 )
 from llm_preserver.layout import split_repo_id
+from llm_preserver.pull_decline import SIZE_DECLINED, PullDeclined
 from llm_preserver.pull_home import ConfirmCallback
 from llm_preserver.pull_preflight import human_size, require_disk_budget
 from llm_preserver.pull_prepare import STAGING_DIRNAME, PullPreparation, prepare_pull
@@ -241,7 +242,7 @@ def pull_model(
             len(prep.plan.to_download), len(prep.selected), prep.needed_bytes, repo_id
         )
     ):
-        raise PullUserError("pull declined: nothing downloaded")
+        raise PullDeclined(SIZE_DECLINED)
     if prep.plan.to_download and on_transfer_start is not None:
         on_transfer_start(f"{prep.creator}/{prep.name}")
     try:
