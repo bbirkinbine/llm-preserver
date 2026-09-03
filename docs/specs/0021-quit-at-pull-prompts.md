@@ -1,6 +1,6 @@
 # 0021 — Quit At Pull Prompts
 
-**Status:** shipped
+**Status:** shipped (PR #39)
 **Last updated:** 2026-09-03
 
 ## Goal

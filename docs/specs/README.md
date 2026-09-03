@@ -43,7 +43,6 @@ line; the source of truth is the spec file, this is a rendered cache. Run
 - ~~[0011 — Clean error on an invalid repo id](0011-clean-error-invalid-repo-id.md)~~  (shipped)
 - ~~[0012 — Staging leftover detection](0012-staging-leftovers.md)~~  (shipped)
 - ~~[0017 — Per-Repo Model Directories](0017-per-repo-model-directories.md)~~  (shipped)
-- ~~[0021 — Quit At Pull Prompts](0021-quit-at-pull-prompts.md)~~  (shipped)
 - [0002 — Runtime views](0002-runtime-views.md)  (in progress — phase 1 (core + Ollama) shipped (PR #20)) — depends on 0001
 - [0013 — Ollama Match](0013-ollama-match.md)  (shipped (PR #22))
 - [0014 — Skip Prompt Already Archived](0014-skip-prompt-already-archived.md)  (shipped (PR #23))
@@ -51,6 +50,7 @@ line; the source of truth is the spec file, this is a rendered cache. Run
 - [0018 — Pull File Listing Window](0018-pull-file-listing-window.md)  (shipped (PR #31)) — depends on 0015
 - [0019 — Pull Staging Cleanup](0019-pull-staging-cleanup.md)  (shipped (PR #33))
 - [0020 — Planning Stop Recovery Command](0020-planning-stop-recovery-command.md)  (shipped (PR #36))
+- [0021 — Quit At Pull Prompts](0021-quit-at-pull-prompts.md)  (shipped (PR #39))
 <!-- specs-status:end -->
 
 ## Numbering

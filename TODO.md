@@ -170,7 +170,7 @@ queue entry did **not** make the spec and stay open here:
   renderer. Live-verified on a real pty against the real hub
   (`gpustack/bge-m3-GGUF`): key line present, `q` and Ctrl-D exit 0,
   piped `q` still a pattern at exit 2, scripted EOF now 2 instead of 1.
-  1513 tests. (spec 0021)
+  1513 tests. (spec 0021, PR #39)
 
 - 0020 planning-stop recovery command: a planning stop that names
   `--refresh-docs` as the way out now prints the exact `pull` command
