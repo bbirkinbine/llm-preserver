@@ -15,8 +15,11 @@ to know which half a name lives in.
 """
 
 from .frame import (
+    FLAT_KEYS,
+    PATTERN_PROMPT,
     RESERVED_KEYS,
     ROLLUP_KEYS,
+    chrome_lines,
     example_pattern,
     footer_line,
     offered_keys,
@@ -36,9 +39,12 @@ from .rows import (
 )
 
 __all__ = [
+    "FLAT_KEYS",
+    "PATTERN_PROMPT",
     "RESERVED_KEYS",
     "ROLLUP_KEYS",
     "ListingGroup",
+    "chrome_lines",
     "example_pattern",
     "fits",
     "flat_header",

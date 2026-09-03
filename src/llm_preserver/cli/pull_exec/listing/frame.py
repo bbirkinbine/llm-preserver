@@ -17,6 +17,7 @@ from collections.abc import Sequence
 
 from llm_preserver.cli.pull_exec.listing.rows import ListingGroup
 from llm_preserver.render import clean_text
+from llm_preserver.text_window import wrapped_height
 
 
 def footer_line(first: int, last: int, total: int, *, more: bool, back: bool) -> str:
@@ -109,6 +110,13 @@ def pattern_prompt(example: str | None = None) -> str:
     return f"files to pull (comma-separated patterns, e.g. {lead} or *.gguf,*mmproj*)"
 
 
+# The generic prompt, for every frame that has no repo directory worth
+# naming. Derived from its own renderer rather than restated: the two
+# were byte-identical literals in different modules, one edit from
+# disagreeing about the prompt the tool asks (spec 0021).
+PATTERN_PROMPT = pattern_prompt()
+
+
 def unavailable_note(key: str, *, on_rollup: bool, offered: Sequence[str]) -> str:
     """Explain why a reserved key does nothing on this frame.
 
@@ -184,3 +192,38 @@ def offered_keys(*, more: bool, back: bool, summary: bool) -> list[str]:
         keys.append("s")
     keys.append("q")
     return keys
+
+
+# The fits frame's key line, derived rather than written out: a listing
+# that fits has no page to advance to, none to go back to, and no
+# summary to return to, so `offered_keys` renders exactly "q = quit".
+# Deriving it means a key later added to that function's unconditional
+# tail cannot appear here without the pinning test noticing (spec 0021).
+FLAT_KEYS = window_keys(more=False, back=False, summary=False)
+
+
+def chrome_lines(width: int | None, *texts: str, prompt: str | None = None) -> int:
+    """Physical lines a frame spends on everything that is not a row.
+
+    The prompt is charged too — click renders it as ``{text}: `` and it
+    is 76 characters, so a narrow terminal pays two lines for it, and a
+    frame naming one of the repo's own directories in its example pays
+    for the longer text. Each caller passes the *widest* form its
+    chrome can take, following ``tree_chrome_lines``: a frame must
+    never be sized against a shorter shape than the one it prints.
+
+    Args:
+        width: Terminal columns, or None when it cannot be read (no
+            wrapping is charged then).
+        *texts: The frame's non-row lines — header, key line, footer —
+            each at the widest form that frame can print.
+        prompt: The prompt this frame asks, without click's trailing
+            ``": "``. None charges the generic prompt, which is right
+            only for a frame that asks it.
+
+    Returns:
+        Physical lines the chrome occupies, to subtract from the
+        terminal height before the rows are fitted.
+    """
+    text = prompt if prompt is not None else PATTERN_PROMPT
+    return sum(wrapped_height(item, width) for item in texts) + wrapped_height(f"{text}: ", width)

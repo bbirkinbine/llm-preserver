@@ -1,7 +1,7 @@
-"""Interactive prompts the pull flow asks: confirmations, file picking.
+"""The file listing the pull flow prints, and the patterns it asks for.
 
-Prompt classification keys on the strings ``pull_model`` composes —
-the tool owns both sides of that seam.
+The y/N confirmations live in ``confirmations``; this module owns the
+frames and the one free-text prompt they share.
 
 Spec 0018 turned the file listing into two frames. It used to echo
 every file in the repo, which put 171 rows into a 24-line terminal on
@@ -31,8 +31,11 @@ from collections.abc import Sequence
 import typer
 
 from llm_preserver.cli.pull_exec.listing import (
+    FLAT_KEYS,
+    PATTERN_PROMPT,
     RESERVED_KEYS,
     ROLLUP_KEYS,
+    chrome_lines,
     example_pattern,
     fits,
     flat_header,
@@ -48,47 +51,35 @@ from llm_preserver.cli.pull_exec.listing import (
 )
 from llm_preserver.cli.window import is_interactive, resolve_window_size, resolve_window_width
 from llm_preserver.hub import PullUserError, RepoInfo
-from llm_preserver.render import clean_text
+from llm_preserver.pull_decline import QUIT_LINE, PullDeclined
 from llm_preserver.text_window import fit_by_cost, wrapped_height
-
-# The leading * matters: patterns match the full repo path, so bare
-# "Q4_K_M*" matches nothing (live mispull, 2026-07-12).
-PATTERN_PROMPT = "files to pull (comma-separated patterns, e.g. *Q4_K_M* or *.gguf,*mmproj*)"
-
-
-def confirm_or_stop(prompt: str, assume_yes: bool) -> bool:
-    """Confirm interactively; deterministic stop when stdin cannot answer.
-
-    ``--yes`` auto-accepts the *size* confirmation only — grouping is an
-    identity decision that needs an explicit ``--model`` value, never a
-    blanket yes. When the prompt cannot be answered (non-interactive
-    stdin, exhausted piped input), click raises ``Abort``; that becomes
-    a ``PullUserError`` (exit 2) naming the bypass, so scripted pulls
-    never die with an undocumented exit 1 (spec 0004 adjudications).
-    Prompt classification keys on the strings ``pull_model`` composes —
-    the tool owns both sides of this seam.
-    """
-    cleaned = clean_text(prompt, single_line=True)
-    is_size_confirm = cleaned.startswith("pull ")
-    if assume_yes and is_size_confirm:
-        return True
-    try:
-        return bool(typer.confirm(cleaned))
-    # typer vendors click, so catch its own Abort, not the click
-    # package's (they are different classes).
-    except typer.Abort:
-        if is_size_confirm:
-            hint = "re-run with --yes to accept the size confirmation"
-        elif "every weight" in cleaned:
-            hint = "narrow --include, or run interactively"
-        else:
-            hint = "pass --model <creator>/<model> to choose the canonical model directory"
-        raise PullUserError(f"confirmation needed but stdin is not interactive: {hint}") from None
 
 
 def _ask(prompt: str = PATTERN_PROMPT) -> str:
-    """Ask for patterns, returning the raw answer for key matching."""
-    return str(typer.prompt(prompt, default="", show_default=False))
+    """Ask for patterns, returning the raw answer for key matching.
+
+    The sole prompt call for all three listing paths — pipe, fits, and
+    every windowed frame — so the ``Abort`` split lives here once. It
+    had no handler at all until spec 0021, which is why Ctrl-D here
+    escaped every ``except`` in ``run_pull`` and died with click's bare
+    ``Aborted!`` at exit 1: the one undocumented exit in the flow.
+    """
+    try:
+        return str(typer.prompt(prompt, default="", show_default=False))
+    # typer vendors click, so catch its own Abort (a different class).
+    except typer.Abort:
+        # click writes a prompt with no trailing newline and emits none
+        # on EOF (it echoes one only for hidden input), so without this
+        # the next line lands *on* the prompt: "files to pull (…): nothing
+        # pulled: quit at the file listing". True on a real terminal, not
+        # just under the runner — Ctrl-D leaves the cursor where it is.
+        typer.echo()
+        if is_interactive(sys.stdin):
+            raise PullDeclined(QUIT_LINE) from None
+        raise PullUserError(
+            "file selection needed but stdin is not interactive: "
+            "pass --include <pattern> or --whole-repo"
+        ) from None
 
 
 def _patterns(raw: str) -> list[str]:
@@ -127,19 +118,6 @@ def _answer_frame(prompt: str, *, on_rollup: bool, active: Sequence[str]) -> str
         typer.echo(unavailable_note(key, on_rollup=on_rollup, offered=active))
 
 
-def _chrome(width: int | None, *texts: str, prompt: str = PATTERN_PROMPT) -> int:
-    """Physical lines a frame spends on everything that is not a row.
-
-    The prompt is charged too — click renders it as ``{text}: `` and it
-    is 76 characters, so a narrow terminal pays two lines for it, and a
-    frame naming one of the repo's own directories in its example pays
-    for the longer text. Each caller passes the *widest* form its
-    chrome can take, following ``tree_chrome_lines``: a frame must
-    never be sized against a shorter shape than the one it prints.
-    """
-    return sum(wrapped_height(text, width) for text in texts) + wrapped_height(f"{prompt}: ", width)
-
-
 def _echo_all(lines: list[str]) -> None:
     """Print a frame's lines in order."""
     for line in lines:
@@ -164,7 +142,11 @@ def prompt_for_selection(info: RepoInfo, repo_id: str) -> list[str]:
         commas; empty when they answered with nothing.
 
     Raises:
-        PullUserError: The human answered ``q`` at a frame offering it.
+        PullDeclined: The human quit — ``q`` at a frame offering it, or
+            an aborted prompt (Ctrl-D) with an interactive stdin.
+        PullUserError: The prompt could not be answered because stdin
+            is not interactive; the message names ``--include`` and
+            ``--whole-repo`` as the bypass.
     """
     stream = sys.stdout
     flat = flat_lines(info.files)
@@ -175,10 +157,26 @@ def prompt_for_selection(info: RepoInfo, repo_id: str) -> list[str]:
         return _patterns(_ask())
 
     width = resolve_window_width(stream)
-    if fits(flat, resolve_window_size(stream, _chrome(width, flat_header(repo_id))), width):
+    # FLAT_KEYS is charged here, not merely printed below: a listing
+    # that fits only *without* the key line must take the windowed path
+    # instead of printing one physical row past the screen — spec 0018's
+    # headline defect, which is reintroduced by echoing an uncharged
+    # line. The chrome and the frame must name the same shape.
+    if fits(
+        flat,
+        resolve_window_size(stream, chrome_lines(width, flat_header(repo_id), FLAT_KEYS)),
+        width,
+    ):
         typer.echo(flat_header(repo_id))
         _echo_all(flat)
-        return _patterns(_ask())
+        typer.echo(FLAT_KEYS)
+        # _ask, never _answer_frame: q is the only key this frame
+        # offers, so f/m/b/s stay patterns here. Re-prompting on them
+        # would advertise by refusal what the key line does not offer.
+        answer = _ask()
+        if answer.strip() == "q":
+            raise PullDeclined(QUIT_LINE)
+        return _patterns(answer)
 
     return _windowed_selection(info, repo_id, flat, width)
 
@@ -215,7 +213,7 @@ def _windowed_selection(
     # un-globbed matches nothing.
     rollup_prompt = pattern_prompt(example_pattern(groups))
     rollup_budget = resolve_window_size(
-        sys.stdout, _chrome(width, header, ROLLUP_KEYS, prompt=rollup_prompt)
+        sys.stdout, chrome_lines(width, header, ROLLUP_KEYS, prompt=rollup_prompt)
     )
     offer_rollup = collapses and fits(rollup, rollup_budget, width)
 
@@ -231,7 +229,7 @@ def _windowed_selection(
     # round, 2026-08-12, found independently by both reviewers).
     widest_footer = footer_line(total, total, total, more=True, back=True)
     window_budget = resolve_window_size(
-        sys.stdout, _chrome(width, header, widest_footer, widest_keys)
+        sys.stdout, chrome_lines(width, header, widest_footer, widest_keys)
     )
 
     showing_rollup = offer_rollup
@@ -245,7 +243,7 @@ def _windowed_selection(
             answer = _answer_frame(rollup_prompt, on_rollup=True, active=["f", "q"])
             key = answer.strip()
             if key == "q":
-                raise PullUserError("nothing pulled: quit at the file listing")
+                raise PullDeclined(QUIT_LINE)
             if key == "f":
                 # Keep the offset: the spec calls the two frames a
                 # toggle, and a toggle that dumps you back at page one
@@ -264,7 +262,7 @@ def _windowed_selection(
         answer = _answer_frame(PATTERN_PROMPT, on_rollup=False, active=active)
         key = answer.strip()
         if key == "q":
-            raise PullUserError("nothing pulled: quit at the file listing")
+            raise PullDeclined(QUIT_LINE)
         if key == "m" and more:
             history.append(start)
             start = end

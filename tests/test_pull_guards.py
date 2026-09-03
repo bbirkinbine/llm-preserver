@@ -197,10 +197,16 @@ def test_every_weight_selection_requires_confirmation(archive, fake_hub_factory)
 
 
 def test_declined_every_weight_pull_writes_nothing(archive, fake_hub_factory):
+    # Spec 0021: declining is a decline, not a user-input fault.
+    from llm_preserver.pull_decline import PullDeclined
+
     client = make_client(fake_hub_factory)
 
-    with pytest.raises(hub.PullUserError):
+    with pytest.raises(PullDeclined) as excinfo:
         do_pull(archive, client, include=["*.gguf"], confirm=lambda prompt: False)
+
+    assert str(excinfo.value).startswith("nothing pulled:")
+    assert "narrow --include and re-run" in str(excinfo.value)
 
     assert client.download_calls == []
     assert list((archive / "models").iterdir()) == []
