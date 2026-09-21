@@ -5,8 +5,8 @@ requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.23,<1",
     "huggingface-hub>=1.26.0,<2",
-    "pydantic>=2.13.4",
-    "typer>=0.27.0",
+    "pydantic>=2.13.5",
+    "typer>=0.27.2",
 ]
 
 [project.scripts]
@@ -20,8 +20,8 @@ build-backend = "uv_build"
 dev = [
   "pytest>=8",
   "pytest-asyncio",
-  "ruff>=0.15.22",
-  "mypy>=2.3.0",
+  "ruff>=0.16.8",
+  "mypy>=2.3.1",
   "pre-commit",
   # Optional verification depth — cheap when an agent does the labor.
   # Uncomment per project once there is real logic worth the rigor:
