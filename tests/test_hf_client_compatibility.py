@@ -231,15 +231,22 @@ def test_compatibility_workflow_is_anonymous_and_uses_ephemeral_hf_state() -> No
     """The public canary needs read-only permissions, no secrets, and no ambient token."""
     workflow = _workflow(COMPATIBILITY_WORKFLOW_PATH)
     workflow_text = COMPATIBILITY_WORKFLOW_PATH.read_text(encoding="utf-8")
+    job = workflow["jobs"]["compatibility"]
+    cache_steps = [
+        step for step in job["steps"] if step.get("name") == "Isolate Hugging Face cache"
+    ]
 
     assert workflow["permissions"] == {"contents": "read"}
     assert "secrets." not in workflow_text.lower()
-    assert re.search(r"(?m)^\s*HF_HOME:\s*.*runner\.temp", workflow_text)
-    assert re.search(
-        r"(?m)^\s*HF_HUB_DISABLE_IMPLICIT_TOKEN:\s*[\"']?(?:1|true)[\"']?\s*$",
-        workflow_text,
-        flags=re.IGNORECASE,
-    )
+    assert "HF_HOME" not in job["env"]
+    assert job["env"]["HF_HUB_DISABLE_IMPLICIT_TOKEN"] == "1"  # noqa: S105 - boolean flag
+    assert job["env"]["LLM_PRESERVER_RUN_HF_LIVE"] == "1"
+    assert cache_steps == [
+        {
+            "name": "Isolate Hugging Face cache",
+            "run": ('echo "HF_HOME=$RUNNER_TEMP/huggingface-${{ matrix.name }}" >> "$GITHUB_ENV"'),
+        }
+    ]
 
 
 def test_compatibility_workflow_separates_install_metadata_and_download_failures() -> None:

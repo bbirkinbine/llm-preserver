@@ -22,13 +22,15 @@ jobs:
           - name: latest-1.x
             package: huggingface-hub<2
     env:
-      HF_HOME: ${{ runner.temp }}/huggingface-${{ matrix.name }}
       HF_HUB_DISABLE_IMPLICIT_TOKEN: "1"
       LLM_PRESERVER_RUN_HF_LIVE: "1"
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+
+      - name: Isolate Hugging Face cache
+        run: echo "HF_HOME=$RUNNER_TEMP/huggingface-${{ matrix.name }}" >> "$GITHUB_ENV"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
