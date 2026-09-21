@@ -155,7 +155,7 @@ queue entry did **not** make the spec and stay open here:
   floor and latest offline suites each passed 64 tests, both live canaries
   passed, the full suite passed 1,528 tests with only the two opt-in canaries
   skipped, and `pip-audit` reported no known vulnerabilities for the locked or
-  supported-floor environment. (spec 0022)
+  supported-floor environment. (spec 0022, PR #40)
 
 - 0021 quit at pull prompts: `q = quit` now works at the file listing
   frame that *fits* the screen, and a human's decline is exit 0 rather

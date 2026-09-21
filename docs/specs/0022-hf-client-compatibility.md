@@ -1,6 +1,6 @@
 # 0022 — Hugging Face Client Compatibility
 
-**Status:** shipping
+**Status:** shipped (PR #40)
 **Last updated:** 2026-09-21
 
 ## Goal
@@ -201,6 +201,6 @@ ship-level with two low findings: floor-environment auditing was added and
 verified clean, and checkout credentials no longer persist. Its follow-up found
 zero remaining issues, treating mutable action tags as the existing repo-wide
 convention rather than changing that convention in only this workflow.
-**Next phase:** Human pre-commit checkpoint
-**Entry conditions:** Review the completed diff; commit or push only with
-explicit authorization.
+**Next phase:** Human merge review in PR #40
+**Entry conditions:** Required GitHub checks are green and GitHub reports the
+PR mergeable and clean; the human owns the merge decision.

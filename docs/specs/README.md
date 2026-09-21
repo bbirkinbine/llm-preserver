@@ -31,7 +31,6 @@ line; the source of truth is the spec file, this is a rendered cache. Run
 <!-- Generated block — do not edit by hand; the specs-status hook overwrites it. Source of truth is each spec's **Status:** field. -->
 - [0000 — llm-preserver (product spec)](0000-product.md)  (evergreen)
 - [0016 — Artifact Classification And Lineage](0016-artifact-classification-and-lineage.md)  (draft)
-- [0022 — Hugging Face Client Compatibility](0022-hf-client-compatibility.md)  (shipping)
 - ~~[0001 — Archive init and model-record manifest](0001-archive-init-and-manifest.md)~~  (shipped)
 - ~~[0003 — Selective Pull](0003-selective-pull.md)~~  (shipped)
 - ~~[0004 — Full Snapshot](0004-full-snapshot.md)~~  (shipped)
@@ -52,6 +51,7 @@ line; the source of truth is the spec file, this is a rendered cache. Run
 - [0019 — Pull Staging Cleanup](0019-pull-staging-cleanup.md)  (shipped (PR #33))
 - [0020 — Planning Stop Recovery Command](0020-planning-stop-recovery-command.md)  (shipped (PR #36))
 - [0021 — Quit At Pull Prompts](0021-quit-at-pull-prompts.md)  (shipped (PR #39))
+- [0022 — Hugging Face Client Compatibility](0022-hf-client-compatibility.md)  (shipped (PR #40))
 <!-- specs-status:end -->
 
 ## Numbering

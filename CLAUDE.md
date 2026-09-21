@@ -1046,7 +1046,7 @@ parallelize only with partitioned file ownership.
   → `4` → `0` → `1` — and the prompt that produced the report now
   offers `q = quit` and exits 0; Ctrl-C, Ctrl-D and a declined size
   confirmation all checked on the same walk. 1513 tests.
-- **Spec 0022 shipping 2026-09-21: Hugging Face client compatibility.**
+- **Spec 0022 shipped 2026-09-21 (PR #40): Hugging Face client compatibility.**
   Defines the supported client range as `>=1.26.0,<2` — 1.26 is the security
   floor for the `local_dir` path-containment fix — updates the exact lock from
   1.24.0 to the qualified 1.32.0 release, adds direct adapter-contract coverage
@@ -1067,7 +1067,7 @@ parallelize only with partitioned file ownership.
   in progress — phase 1 shipped (PR #20), later adapters open;
   0005–0014 shipped; `0016` draft; `0017` shipped; `0018` shipped;
   `0019` shipped; `0020` shipped (PR #36); `0021` shipped (PR #39);
-  `0022` shipping.
+  `0022` shipped (PR #40).
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to
