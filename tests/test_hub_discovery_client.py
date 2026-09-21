@@ -12,15 +12,17 @@ Tests replace ``llm_preserver.hub.HfApi`` with a recording fake before
 constructing ``HubClient`` — zero network. Hub API facts (attribute
 names, ``expand`` field names, filter syntax, the ``baseModels`` shape
 ``{"relation": ..., "models": [{"id": ...}]}`` landing on
-``ModelInfo.base_models``) were live-verified 2026-07-13 against
-huggingface_hub 1.23.0 and are encoded here, not re-verified.
+``ModelInfo.base_models``) were first live-verified against
+``huggingface_hub`` 1.23.0 and requalified on 2026-09-21 against the
+supported 1.26.0 floor and locked 1.32.0 client. Official API-source
+provenance is pinned in spec 0022.
 """
 
 from datetime import UTC, datetime
-from types import SimpleNamespace
 
 import httpx
 import pytest
+from huggingface_hub import ModelInfo
 from huggingface_hub import errors as hf_errors
 
 import llm_preserver.hub as hub
@@ -36,29 +38,42 @@ def hf_http_error(status_code, cls=hf_errors.HfHubHTTPError, message="boom"):
 
 
 def hub_model(repo_id, *, downloads=100, last_modified=None, gated=False, base_models=None):
-    """Fake hub listing/info object with the live-verified attributes."""
-    return SimpleNamespace(
+    """Build a real public ``ModelInfo`` from a Hub-shaped response payload."""
+    # Source: https://huggingface.co/docs/huggingface_hub/package_reference/hf_api
+    # Retrieved 2026-09-21; Hugging Face Hub documentation is Apache-2.0.
+    return ModelInfo(
         id=repo_id,
         downloads=downloads,
-        last_modified=last_modified,
+        lastModified=(
+            last_modified.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            if last_modified is not None
+            else None
+        ),
         gated=gated,
-        base_models=base_models,
+        baseModels=base_models,
     )
 
 
 class RecordingApi:
     """Stands in for ``HfApi``: records call kwargs, serves canned data."""
 
-    def __init__(self, models=(), info=None, info_error=None):
+    def __init__(self, models=(), info=None, info_error=None, list_error=None):
         self.models = list(models)
         self.info = info
         self.info_error = info_error
+        self.list_error = list_error
         self.list_models_calls: list[dict] = []
         self.model_info_calls: list[tuple] = []
 
     def list_models(self, **kwargs):
         self.list_models_calls.append(kwargs)
-        return iter(self.models)
+
+        def rows():
+            yield from self.models
+            if self.list_error is not None:
+                raise self.list_error
+
+        return rows()
 
     def model_info(self, repo_id, **kwargs):
         self.model_info_calls.append((repo_id, kwargs))
@@ -95,7 +110,7 @@ def test_search_requests_the_discovery_expand_fields(real_client):
     api = RecordingApi(models=[hub_model("acme/tiny-chat")])
     real_client(api).search_models("tiny").next_page()
     expand = set(api.list_models_calls[0]["expand"])
-    assert {"downloads", "lastModified", "gated", "baseModels"} <= expand
+    assert expand == {"downloads", "lastModified", "gated", "baseModels"}
 
 
 def test_search_preserves_hub_result_order(real_client):
@@ -150,6 +165,13 @@ def test_search_extracts_first_declared_base_model_id(real_client, base_models, 
     assert page[0].base_model == expected
 
 
+def test_search_maps_failure_raised_during_lazy_iteration(real_client):
+    api = RecordingApi(list_error=httpx.ConnectError("connection refused"))
+
+    with pytest.raises(hub.PullEnvError, match="network failure"):
+        real_client(api).search_models("tiny").next_page()
+
+
 # --- list_children ----------------------------------------------------
 
 
@@ -179,6 +201,18 @@ def test_model_summary_maps_repo_404_to_user_error(real_client):
     api = RecordingApi(info_error=hf_http_error(404, hf_errors.RepositoryNotFoundError))
     with pytest.raises(hub.PullUserError):
         real_client(api).model_summary("acme/does-not-exist")
+
+
+def test_model_summary_requests_the_discovery_expand_fields(real_client):
+    api = RecordingApi(info=hub_model("acme/tiny-chat"))
+
+    real_client(api).model_summary("acme/tiny-chat")
+
+    assert len(api.model_info_calls) == 1
+    repo_id, kwargs = api.model_info_calls[0]
+    assert repo_id == "acme/tiny-chat"
+    assert set(kwargs) == {"expand"}
+    assert set(kwargs["expand"]) == {"downloads", "lastModified", "gated", "baseModels"}
 
 
 def test_model_summary_returns_post_rename_repo_id(real_client):

@@ -96,7 +96,7 @@ Check items off as they ship; update when priorities shift.
   every test used a single relation, where one label hides inside the
   reserve. Belongs on its own branch, not spec 0017's.
 
-## Next spec (0022) — pick one
+## Next spec (0023) — pick one
 
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
   PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over
@@ -142,6 +142,20 @@ queue entry did **not** make the spec and stay open here:
   practice, drop the heuristic entirely.
 
 ## Shipped
+
+- 0022 Hugging Face client compatibility: the supported range is now
+  `huggingface-hub>=1.26.0,<2`, where 1.26.0 is the security floor for the
+  `local_dir` path-containment fix and 2.x remains an explicit future
+  qualification. The reproducible lock selects 1.32.0 and moves transitive
+  `anyio` past its known advisories. Real-client adapter tests cover metadata,
+  downloads, discovery, lazy failures, exception symbols, and logging; a
+  weekly/manual least-privilege workflow exercises the 1.26.0 floor and newest
+  1.x client, then runs a credential-free public GPT-2 metadata/discovery and
+  665-byte pinned-download canary from ephemeral storage. Local evidence:
+  floor and latest offline suites each passed 64 tests, both live canaries
+  passed, the full suite passed 1,528 tests with only the two opt-in canaries
+  skipped, and `pip-audit` reported no known vulnerabilities for the locked or
+  supported-floor environment. (spec 0022, PR #40)
 
 - 0021 quit at pull prompts: `q = quit` now works at the file listing
   frame that *fits* the screen, and a human's decline is exit 0 rather

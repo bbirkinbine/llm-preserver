@@ -135,6 +135,8 @@ uv run pre-commit install     # wire the local gate (+ secret scan) to every com
 See [`CLAUDE.md`](CLAUDE.md) for the per-project agent contract (what
 Claude Code should and shouldn't do in this repo) and
 [`WORKFLOW.md`](WORKFLOW.md) for the spec-driven loop.
+Hugging Face dependency updates use the qualification checklist in
+[`docs/hf-client-maintenance.md`](docs/hf-client-maintenance.md).
 
 ## Acknowledgements
 

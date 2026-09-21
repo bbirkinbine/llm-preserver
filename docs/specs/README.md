@@ -51,6 +51,7 @@ line; the source of truth is the spec file, this is a rendered cache. Run
 - [0019 — Pull Staging Cleanup](0019-pull-staging-cleanup.md)  (shipped (PR #33))
 - [0020 — Planning Stop Recovery Command](0020-planning-stop-recovery-command.md)  (shipped (PR #36))
 - [0021 — Quit At Pull Prompts](0021-quit-at-pull-prompts.md)  (shipped (PR #39))
+- [0022 — Hugging Face Client Compatibility](0022-hf-client-compatibility.md)  (shipped (PR #40))
 <!-- specs-status:end -->
 
 ## Numbering
