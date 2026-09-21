@@ -8,12 +8,13 @@ Auth is ambient: ``huggingface_hub`` discovers ``HF_TOKEN`` or the
 arguments, stores nothing, and never reads or logs the token value.
 
 API facts (``model_info`` fields, ``hf_hub_download`` local-dir
-behavior) verified against the installed ``huggingface_hub`` 1.23.0
-and its official docs (Apache-2.0), retrieved 2026-07-10 — sources
-pinned in ``docs/specs/0003-selective-pull.md`` → "External
-references". Discovery listing facts (``expand`` fields, the
-``base_model:<relation>:<id>`` filter, ``sort="downloads"``)
-live-verified 2026-07-13 — sources pinned in spec 0006.
+behavior) were first verified against ``huggingface_hub`` 1.23.0.
+They were requalified on 2026-09-21 against the supported 1.26.0
+floor and locked 1.32.0 client using the official Apache-2.0 docs at
+https://huggingface.co/docs/huggingface_hub/package_reference/hf_api
+and https://huggingface.co/docs/huggingface_hub/guides/download.
+Discovery listing facts were requalified in the same matrix; full
+provenance is pinned in spec 0022.
 """
 
 from collections.abc import Iterator

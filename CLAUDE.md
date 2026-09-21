@@ -1046,16 +1046,28 @@ parallelize only with partitioned file ownership.
   → `4` → `0` → `1` — and the prompt that produced the report now
   offers `q = quit` and exits 0; Ctrl-C, Ctrl-D and a declined size
   confirmation all checked on the same walk. 1513 tests.
-- **Next spec (0022): pick from TODO.md** — smoke test, spec 0002's
+- **Spec 0022 shipping 2026-09-21: Hugging Face client compatibility.**
+  Defines the supported client range as `>=1.26.0,<2` — 1.26 is the security
+  floor for the `local_dir` path-containment fix — updates the exact lock from
+  1.24.0 to the qualified 1.32.0 release, adds direct adapter-contract coverage
+  plus floor/latest checks, and fills the roadmap's live-Hub gap with a weekly
+  public canary. The floor and latest offline suites each pass 64 tests; the
+  anonymous metadata/discovery/download canary passes on both endpoints; the
+  full suite passes 1,528 tests with only its two opt-in canaries skipped; and
+  `pip-audit` reports no known vulnerabilities at the lock or support floor.
+  Four mutation checks prove the new contracts reject a changed
+  `files_metadata` call, ambient-token use, a missing matrix override, and a
+  post-override command that could resynchronize the lock.
+- **Next spec (0023): pick from TODO.md** — smoke test, spec 0002's
   later adapter phases (LM Studio / llama.cpp / vLLM), or the remaining
   TUI nice-to-haves (arrow-key highlight, type-to-filter, match
   preview). Also queued from live use: goal-definitive archiving
-  (capability report in `status`), file-kind dictionary, live-hub
-  canary (0000 roadmap).
+  (capability report in `status`) and the file-kind dictionary.
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
   in progress — phase 1 shipped (PR #20), later adapters open;
   0005–0014 shipped; `0016` draft; `0017` shipped; `0018` shipped;
-  `0019` shipped; `0020` shipped (PR #36); `0021` shipped (PR #39).
+  `0019` shipped; `0020` shipped (PR #36); `0021` shipped (PR #39);
+  `0022` shipping.
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

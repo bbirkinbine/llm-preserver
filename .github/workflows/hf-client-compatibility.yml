@@ -1,0 +1,68 @@
+name: Hugging Face client compatibility
+
+on:
+  schedule:
+    # Weekly signal for client releases and hosted-API drift.
+    - cron: "23 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    name: HF ${{ matrix.name }} compatibility
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: floor
+            package: huggingface-hub==1.26.0
+          - name: latest-1.x
+            package: huggingface-hub<2
+    env:
+      HF_HOME: ${{ runner.temp }}/huggingface-${{ matrix.name }}
+      HF_HUB_DISABLE_IMPLICIT_TOKEN: "1"
+      LLM_PRESERVER_RUN_HF_LIVE: "1"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install locked project and ${{ matrix.name }} client
+        run: |
+          uv sync --locked
+          uv pip install --upgrade "${{ matrix.package }}"
+
+      - name: Report resolved Hugging Face version
+        run: |
+          uv run --no-sync python -c \
+            "import huggingface_hub; print(huggingface_hub.__version__)"
+
+      - name: Audit resolved compatibility environment
+        run: uv run --no-sync --with pip-audit pip-audit
+
+      - name: Run offline adapter contracts
+        run: |
+          uv run --no-sync pytest \
+            tests/test_hf_client_compatibility.py \
+            tests/test_hub.py \
+            tests/test_hub_discovery_client.py \
+            tests/test_hf_logging.py
+
+      - name: Run live metadata and discovery canary
+        run: |
+          uv run --no-sync pytest \
+            tests/test_hf_live_canary.py::test_live_metadata_and_discovery_for_public_gpt2
+
+      - name: Run live download canary
+        run: |
+          uv run --no-sync pytest \
+            tests/test_hf_live_canary.py::test_live_download_of_pinned_gpt2_config

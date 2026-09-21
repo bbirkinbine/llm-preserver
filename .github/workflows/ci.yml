@@ -28,7 +28,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Lint (ruff)
         run: uv run ruff check .
@@ -59,7 +59,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       # `--with` adds pip-audit to the run ephemerally, so it sees the
       # project's installed deps without becoming a permanent dev

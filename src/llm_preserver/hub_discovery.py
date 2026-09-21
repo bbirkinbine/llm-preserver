@@ -5,8 +5,11 @@ per-repo summaries, paged. This module holds the pure types and
 normalization; the network calls live on ``HubClient`` (hub.py),
 behind the same protocol seam the fakes implement.
 
-Hub API facts encoded here were live-verified 2026-07-13 against
-huggingface_hub 1.23.0 (see spec 0006 ``## External references``):
+Hub API facts encoded here were first live-verified against
+``huggingface_hub`` 1.23.0 and requalified on 2026-09-21 against the
+supported 1.26.0 floor and locked 1.32.0 client. The official Apache-2.0
+API source is https://huggingface.co/docs/huggingface_hub/package_reference/hf_api;
+full provenance is pinned in spec 0022. The relevant response fields are:
 list responses carry ``downloads`` (int), ``last_modified``
 (datetime), ``gated`` (False | "auto" | "manual"), and — with the
 ``baseModels`` expand — ``base_models`` as
