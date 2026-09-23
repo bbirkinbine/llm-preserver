@@ -143,12 +143,14 @@ numbers):
   deliberately does only a per-file existence check on its own skip
   path (spec 0003) — whole-archive drift detection lives here.
 
+The **live-Hub canary** originally listed here shipped in spec 0022
+(PR #40) as a weekly/manual, credential-free compatibility workflow over
+the supported client floor and latest 1.x release. It checks public metadata,
+discovery, and a pinned 665-byte download while leaving deterministic offline
+CI unchanged.
+
 Planned features, spec pending (in rough priority order):
 
-- **Live-hub canary** — a scheduled (not per-PR) CI job running a
-  cheap read-only real-hub operation (`pull --plan` on one small
-  known repo) so server-side API/metadata drift is an email, not a
-  failed pull; CI's deterministic offline suite stays untouched.
 - **Smoke test** — offline smoke test integration (ollama /
   llama-cli), recorded per model.
 - **Cache import** — import/inventory existing Ollama, LM Studio,

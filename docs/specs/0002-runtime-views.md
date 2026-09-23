@@ -1,8 +1,12 @@
 # 0002 — Runtime views
 
-**Status:** in progress — phase 1 (core + Ollama) shipped (PR #20)
-**Last updated:** 2026-07-31
+**Status:** paused
+**Last updated:** 2026-09-23
 **Depends on:** 0001
+
+**Phase:** Phase 1 (shared core + Ollama) shipped in PR #20. Later adapters
+remain candidates in `TODO.md`; no runtime-view implementation is currently
+in flight.
 
 ## Goal
 

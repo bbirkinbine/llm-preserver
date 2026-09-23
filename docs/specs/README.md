@@ -42,16 +42,16 @@ line; the source of truth is the spec file, this is a rendered cache. Run
 - ~~[0010 — Managed remove](0010-managed-remove.md)~~  (shipped)
 - ~~[0011 — Clean error on an invalid repo id](0011-clean-error-invalid-repo-id.md)~~  (shipped)
 - ~~[0012 — Staging leftover detection](0012-staging-leftovers.md)~~  (shipped)
+- ~~[0013 — Ollama Match](0013-ollama-match.md)~~  (shipped (PR #22))
+- ~~[0014 — Skip Prompt Already Archived](0014-skip-prompt-already-archived.md)~~  (shipped (PR #23))
+- ~~[0015 — Discover paging windows and stable pick numbers](0015-discover-paging-windows.md)~~  (shipped (PR #25)) — depends on 0006
 - ~~[0017 — Per-Repo Model Directories](0017-per-repo-model-directories.md)~~  (shipped)
-- [0002 — Runtime views](0002-runtime-views.md)  (in progress — phase 1 (core + Ollama) shipped (PR #20)) — depends on 0001
-- [0013 — Ollama Match](0013-ollama-match.md)  (shipped (PR #22))
-- [0014 — Skip Prompt Already Archived](0014-skip-prompt-already-archived.md)  (shipped (PR #23))
-- [0015 — Discover paging windows and stable pick numbers](0015-discover-paging-windows.md)  (shipped (PR #25)) — depends on 0006
-- [0018 — Pull File Listing Window](0018-pull-file-listing-window.md)  (shipped (PR #31)) — depends on 0015
-- [0019 — Pull Staging Cleanup](0019-pull-staging-cleanup.md)  (shipped (PR #33))
-- [0020 — Planning Stop Recovery Command](0020-planning-stop-recovery-command.md)  (shipped (PR #36))
-- [0021 — Quit At Pull Prompts](0021-quit-at-pull-prompts.md)  (shipped (PR #39))
-- [0022 — Hugging Face Client Compatibility](0022-hf-client-compatibility.md)  (shipped (PR #40))
+- ~~[0018 — Pull File Listing Window](0018-pull-file-listing-window.md)~~  (shipped (PR #31)) — depends on 0015
+- ~~[0019 — Pull Staging Cleanup](0019-pull-staging-cleanup.md)~~  (shipped (PR #33))
+- ~~[0020 — Planning Stop Recovery Command](0020-planning-stop-recovery-command.md)~~  (shipped (PR #36))
+- ~~[0021 — Quit At Pull Prompts](0021-quit-at-pull-prompts.md)~~  (shipped (PR #39))
+- ~~[0022 — Hugging Face Client Compatibility](0022-hf-client-compatibility.md)~~  (shipped (PR #40))
+- [0002 — Runtime views](0002-runtime-views.md)  (paused) — depends on 0001
 <!-- specs-status:end -->
 
 ## Numbering
@@ -92,7 +92,7 @@ Top of every spec:
 ```markdown
 # NNNN — <Title>
 
-**Status:** draft | shipping | shipped | paused | abandoned | superseded-by-NNNN | evergreen
+**Status:** draft | shipping | shipped [(PR #N)] | paused | abandoned | superseded-by-NNNN | evergreen
 **Last updated:** YYYY-MM-DD
 **Depends on:** NNNN, NNNN
 ```
@@ -105,6 +105,11 @@ noise this convention exists to prevent. Editing this one line is what
 flips the spec to struck-through in the dashboard, so it stays honest
 about what has actually shipped.
 
+`shipped` may optionally record the landing pull request as
+`shipped (PR #N)`. The dashboard treats both forms as the same status
+for ordering, strike-through rendering, dependency checks, and summary
+counts.
+
 `**Depends on:**` is optional — list the spec numbers that must ship
 before this one can start. The dashboard and `/specs-status` both surface
 it with a `(blocked)` tag while any listed dependency hasn't shipped, so
@@ -115,7 +120,8 @@ Status vocabulary:
 
 - `draft` — written but not yet acted on. Planner / test-first haven't run.
 - `shipping` — currently being implemented. The spec is in flight.
-- `shipped` — merged. The feature is in the codebase.
+- `shipped` or `shipped (PR #N)` — merged. The feature is in the
+  codebase; use the suffix when preserving the landing PR is useful.
 - `paused` — deliberately set down. Will resume; not abandoned. Note in the spec why.
 - `abandoned` — decided not to build. Spec stays as a design log of "we considered this and skipped." Note why in the spec.
 - `superseded-by-NNNN` — replaced by a newer spec. Link to the successor.
