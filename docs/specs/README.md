@@ -92,7 +92,7 @@ Top of every spec:
 ```markdown
 # NNNN — <Title>
 
-**Status:** draft | shipping | shipped | paused | abandoned | superseded-by-NNNN | evergreen
+**Status:** draft | shipping | shipped [(PR #N)] | paused | abandoned | superseded-by-NNNN | evergreen
 **Last updated:** YYYY-MM-DD
 **Depends on:** NNNN, NNNN
 ```
@@ -105,6 +105,11 @@ noise this convention exists to prevent. Editing this one line is what
 flips the spec to struck-through in the dashboard, so it stays honest
 about what has actually shipped.
 
+`shipped` may optionally record the landing pull request as
+`shipped (PR #N)`. The dashboard treats both forms as the same status
+for ordering, strike-through rendering, dependency checks, and summary
+counts.
+
 `**Depends on:**` is optional — list the spec numbers that must ship
 before this one can start. The dashboard and `/specs-status` both surface
 it with a `(blocked)` tag while any listed dependency hasn't shipped, so
@@ -115,7 +120,8 @@ Status vocabulary:
 
 - `draft` — written but not yet acted on. Planner / test-first haven't run.
 - `shipping` — currently being implemented. The spec is in flight.
-- `shipped` — merged. The feature is in the codebase.
+- `shipped` or `shipped (PR #N)` — merged. The feature is in the
+  codebase; use the suffix when preserving the landing PR is useful.
 - `paused` — deliberately set down. Will resume; not abandoned. Note in the spec why.
 - `abandoned` — decided not to build. Spec stays as a design log of "we considered this and skipped." Note why in the spec.
 - `superseded-by-NNNN` — replaced by a newer spec. Link to the successor.
