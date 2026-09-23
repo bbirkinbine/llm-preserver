@@ -94,7 +94,7 @@ rank_of() {
     evergreen) echo 0 ;;
     draft) echo 1 ;;
     shipping) echo 2 ;;
-    shipped) echo 3 ;;
+    shipped | shipped\ *) echo 3 ;;
     paused) echo 4 ;;
     abandoned) echo 5 ;;
     superseded-by-*) echo 6 ;;
@@ -111,7 +111,7 @@ render_row() {
   fi
   local label="[$title]($slug)"
   case "$st" in
-    shipped | abandoned | superseded-by-*) label="~~$label~~" ;;
+    shipped | shipped\ * | abandoned | superseded-by-*) label="~~$label~~" ;;
   esac
   local line="- $label  ($st)"
   if [ -n "$dep" ] && [ "$dep" != "-" ]; then
@@ -181,7 +181,11 @@ if [ "$MODE" = "print" ]; then
   if [ -s "$rows" ]; then
     echo
     awk -F'\t' '
-      { c[$2]++; order[$2] = order[$2] }
+      {
+        status = $2
+        if (status == "shipped" || index(status, "shipped ") == 1) status = "shipped"
+        c[status]++
+      }
       END {
         n = 0
         split("evergreen draft shipping shipped paused abandoned", ks, " ")

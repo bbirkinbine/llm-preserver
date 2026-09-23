@@ -1061,10 +1061,11 @@ parallelize only with partitioned file ownership.
 - **Next spec (0023): pick from TODO.md** — smoke test, spec 0002's
   later adapter phases (LM Studio / llama.cpp / vLLM), or the remaining
   TUI nice-to-haves (arrow-key highlight, type-to-filter, match
-  preview). Also queued from live use: goal-definitive archiving
-  (capability report in `status`) and the file-kind dictionary.
+  preview), or cache inventory/import. Also queued from live use:
+  goal-definitive archiving (capability report in `status`) and the
+  file-kind dictionary.
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
-  in progress — phase 1 shipped (PR #20), later adapters open;
+  paused — phase 1 shipped (PR #20), later adapters open;
   0005–0014 shipped; `0016` draft; `0017` shipped; `0018` shipped;
   `0019` shipped; `0020` shipped (PR #36); `0021` shipped (PR #39);
   `0022` shipped (PR #40).

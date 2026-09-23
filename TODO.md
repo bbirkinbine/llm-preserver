@@ -5,7 +5,7 @@ What's next, in rough order. Feature detail lives in
 and the numbered specs; this file is the short-term working list.
 Check items off as they ship; update when priorities shift.
 
-## In progress
+## Ready to implement
 
 - [ ] **0016 artifact classification and lineage** — specced and
   planned 2026-08-06; ADR 0002 accepted. Taxonomy settled
@@ -20,21 +20,17 @@ Check items off as they ship; update when priorities shift.
   live question ("I have a Q4 — what else do I need?") against today's
   tool.
 
-
-
 ## Hardening (independent of any spec)
 
-- [ ] **`specs-status.sh` does not strike through a `shipped (PR #N)`
-  spec** — found alongside the `(blocked)` bug fixed on spec 0018's
-  branch, 2026-08-12. The strikethrough `case` at
-  `.claude/hooks/specs-status.sh:114` matches the bare string
-  `shipped`, so 0013, 0014, and 0015 render live in the dashboard
-  while 0001 and 0017 render struck through — the difference is only
-  whether the spec recorded its PR number. Same one-line shape as the
-  `(blocked)` fix (`shipped | shipped\ *`). Left off 0018's branch
-  deliberately: that branch caused the `(blocked)` falsehood and fixed
-  it, but this one is pre-existing and would restyle four unrelated
-  dashboard rows in a listing diff.
+- [x] **`specs-status.sh` did not strike through a `shipped (PR #N)`
+  spec** — fixed 2026-09-23 by teaching status ranking, row rendering,
+  and summary counts that `shipped (PR #N)` is a shipped status. Found
+  alongside the `(blocked)` bug fixed on spec 0018's branch,
+  2026-08-12. The renderer and ranker matched only the bare word
+  `shipped`, while the dependency checker already handled `shipped *`;
+  every dashboard path now uses the same rule. Regenerating the
+  dashboard struck through and grouped specs 0013–0015 and 0018–0022
+  with the other shipped work.
 
 - [x] **EOF at the interactive file-listing prompt exits 1, not 2** —
   *Closed by spec 0021*, which had to answer the same question for `q`
@@ -117,16 +113,25 @@ Check items off as they ship; update when priorities shift.
   downloaded). Pairs with runtime views — views make models
   loadable in place, smoke test proves they load.
 - [ ] **Interactive listing TUI** (promoted from smaller items —
-  see its entry below for scope): after 0006's live testing, the
-  numbered-pick UX is workable but the scroll pain is real. Spec
+  consolidated here from its duplicate smaller-item entry): after
+  0006's live testing, the numbered-pick UX is workable but the scroll
+  pain is real. Spec
   0015 took the `discover` half of this (windowed frames, `b` to
   step back, numbers that never renumber) with no new dependency,
-  and spec 0018 takes `pull`'s file listing (directory roll-up plus
+  and spec 0018 took `pull`'s file listing (directory roll-up plus
   a paged full listing behind `f`). What remains for a TUI is the
   nice-to-haves a plain-print flow cannot do — arrow-key highlight,
   type-to-filter — plus the match-preview loop declined at 0018's
   design checkpoint (show what a typed pattern matched, and let the
-  human accept or edit it before the plan runs).
+  human accept or edit it before the plan runs). A dependency such as
+  `textual` or `prompt_toolkit` must pass dependency hygiene first, and
+  the design needs a pipe-testable fallback for dumb terminals.
+- [ ] **Cache inventory and import** (0000 roadmap): scan existing
+  Hugging Face, LM Studio, and Ollama caches to show what is not yet
+  archived, then explicitly import recoverable artifacts with locally
+  computed hashes and honest nullable provenance. Prefer a fresh pull
+  whenever the source still exists; import is the rescue path for a
+  surviving cache whose upstream is gone.
 Artifact classification and lineage moved out of this list on
 2026-08-06 — it is now spec 0016, above. Two ideas from the original
 queue entry did **not** make the spec and stay open here:
@@ -545,19 +550,6 @@ queue entry did **not** make the spec and stay open here:
   (safetensors master present), with the exact missing pull named.
   The `docs/cli.md` "Archiving for a goal" table is the interim
   reference.
-- [ ] Interactive listing TUI (future spec candidate; live-use
-  2026-07-13): **the `discover` half of this shipped as spec 0015**
-  — accumulate-paging is gone, frames are windowed to the terminal,
-  and `b` steps back — so what is left here is `pull`'s file
-  listing, which still has the long-scroll problem, plus the
-  interaction affordances plain print cannot reach. A terminal UI —
-  scrollable viewport sized to the terminal, arrow-key
-  highlight-and-enter selection, optional type-to-filter — replaces
-  numbered picks as presentation only; the deterministic
-  facts/no-ranking invariants and the pipe-testable pick model both
-  need a story (TUI harness for tests, plain fallback for dumb
-  terminals). New dependency (`textual` or `prompt_toolkit`) goes
-  through the dependency-hygiene skill first.
 - [ ] File-kind dictionary in the listing (grew from the quant-label
   UX item; 0000 roadmap "Later"): annotate recognized quant labels
   (deterministic provenance-pinned table: bits/weight, quality tier,
@@ -574,9 +566,21 @@ queue entry did **not** make the spec and stay open here:
   (`--whole-repo`),
   multimodal (weights + `mmproj`), sharded weights, adapter/LoRA,
   embedding/reranker, gated repo (`hf auth login`). Each example
-  shows the non-interactive form (`--include` + `--model` + `--yes`)
-  so scripted/cron runs have a copy-paste recipe per model type.
+  shows the current non-interactive form (`--include` + `--yes`, or
+  `--whole-repo` + `--yes`; add `--base-model` only when asserting
+  missing or stale lineage) so scripted/cron runs have a copy-paste
+  recipe per model type.
   The `--plan` flag belongs in every recipe as the verify step.
+- [ ] **Pirate Face transport/recovery adapter, deferred** (researched
+  2026-09-23): consider exact-revision torrent retrieval only after
+  Pirate Face publishes a stable public metadata/download contract
+  ([current product description](https://pirateface.co/how-it-works)).
+  Preserve Hugging Face as the origin authority for HF repos; Pirate
+  Face may transport or witness bytes but must not make an unavailable
+  HF freshness query read as current. Distinguish HF-confirmed LFS
+  hashes from community-submitted checksums, require normal license
+  evidence, and verify every downloaded byte locally. Its advertised
+  drop-in `HF_ENDPOINT` and direct publishing are not live yet.
 - [ ] `quantization` record field is never populated (artifact-level
   label extraction was never specced; per-file is likely the right
   shape now that one artifact can hold several quants).
