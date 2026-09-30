@@ -1058,7 +1058,7 @@ parallelize only with partitioned file ownership.
   Four mutation checks prove the new contracts reject a changed
   `files_metadata` call, ambient-token use, a missing matrix override, and a
   post-override command that could resynchronize the lock.
-- **Spec 0023 approved (2026-09-30): archive status in file listings.**
+- **Spec 0023 shipped 2026-09-30 (PR #44): archive status in file listings.**
   Show per-directory coverage and per-file status in the shared pull
   picker. Plan approved; implemented in 17 files (one existing quit-test
   assertion updated for the annotated page budget). 105 new tests use
@@ -1077,7 +1077,7 @@ parallelize only with partitioned file ownership.
   and then crash at exit 1 on pull's conversion gate (the crash
   predates this spec). The picker now withholds status there, and the
   gate maps to exit 2.
-  Work remains uncommitted; no PR opened. See spec 0023 phase handoff.
+  See spec 0023 phase handoff.
 - **Next spec (0024): pick from TODO.md** — smoke test, spec 0002's
   later adapter phases (LM Studio / llama.cpp / vLLM), or the remaining
   TUI nice-to-haves (arrow-key highlight, type-to-filter, match
@@ -1088,7 +1088,7 @@ parallelize only with partitioned file ownership.
   paused — phase 1 shipped (PR #20), later adapters open;
   0005–0014 shipped; `0016` draft; `0017` shipped; `0018` shipped;
   `0019` shipped; `0020` shipped (PR #36); `0021` shipped (PR #39);
-  `0022` shipped (PR #40).
+  `0022` shipped (PR #40); `0023` shipped (PR #44).
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

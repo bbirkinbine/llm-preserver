@@ -5,15 +5,6 @@ What's next, in rough order. Feature detail lives in
 and the numbered specs; this file is the short-term working list.
 Check items off as they ship; update when priorities shift.
 
-## In progress
-
-- [ ] **0023 archive status in file listings** — show per-directory
-  coverage and per-file archive status before selecting download
-  patterns. [Spec](docs/specs/0023-archive-status-listing.md) approved
-  2026-09-30; implemented and verified (1,634 passed, two live canaries
-  skipped). Historical documentation-path ambiguity uses the human-approved
-  unavailable status. Uncommitted; no PR opened.
-
 ## Ready to implement
 
 - [ ] **0016 artifact classification and lineage** — specced and
@@ -157,12 +148,13 @@ queue entry did **not** make the spec and stay open here:
 
 ## Shipped
 
-- 0023 archive status in file listings — **pending landing**, implemented
-  on `spec-0023-archive-status-listing`; not yet committed or published.
-  Directory/shard coverage and per-file metadata observations appear in
-  `pull` and `discover`, including partial, missing, changed, and
-  unavailable evidence. This entry prepares the required close-out;
-  update it with the PR when the feature is published.
+- 0023 archive status in file listings (PR #44): directory/shard
+  coverage and per-file metadata observations appear in the `pull` and
+  `discover` file picker, including partial, missing, changed, and
+  unavailable evidence, from records and file metadata only (no
+  hashing, no extra Hub calls). An unconverted archive shows every file
+  unavailable, and `discover`'s pre-existing exit-1 crash on pull's
+  conversion gate now exits 2. 1,634 tests.
 
 - 0022 Hugging Face client compatibility: the supported range is now
   `huggingface-hub>=1.26.0,<2`, where 1.26.0 is the security floor for the

@@ -1,6 +1,6 @@
 # 0023 — Archive Status In File Listings
 
-**Status:** shipping
+**Status:** shipped (PR #44)
 **Last updated:** 2026-09-30
 **Depends on:** 0018, 0021
 
@@ -154,6 +154,8 @@ contract is introduced.
   `run_pull` maps the gate to exit 2, both mutation-proved. One docs
   example that showed a relocated README as `size only` is corrected.
   105 feature tests; full suite 1,634 passed, two canaries skipped.
+- Committed and opened as PR #44 on the human's instruction; the
+  workflow-rule edit rode along with the human's consent.
 
 ## Implementation plan
 
