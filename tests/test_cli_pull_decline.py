@@ -24,6 +24,7 @@ would otherwise decide which frame a listing opens on.
 """
 
 import contextlib
+import re
 
 import click
 import typer.testing
@@ -123,7 +124,10 @@ def test_quitting_a_windowed_listing_exits_0_the_same_way(tmp_path, monkeypatch,
 
     assert result.exit_code == 0
     assert decline_line(result) == QUIT_LINE
-    assert "showing 1-20 of 40" in stdout_of(result)  # it really was windowed
+    # Archive-status chrome changes how many rows fit, but this is still a page.
+    footer = re.search(r"showing 1-(\d+) of 40 — more \(m\)", stdout_of(result))
+    assert footer is not None
+    assert 0 < int(footer.group(1)) < 40
     assert list((archive / "models").iterdir()) == []
 
 

@@ -243,41 +243,83 @@ Options:
 
 Behavior worth knowing:
 
+- **File selection shows existing archive coverage** (spec 0023).
+  Both `pull` and the `discover` file picker identify the active archive.
+  Directory and root shard-set rows show `[archived 2/6]`; expanded
+  rows show each file's status. Counts refer to the files in that row,
+  so a partial quant remains visibly incomplete. All files remain
+  selectable, including ones already archived.
+
+  `[archived]` means a recorded copy is present, available sizes agree,
+  and its recorded SHA256 matches the Hub's declaration.
+  `[archived: size only]` uses the weaker name-and-size comparison
+  when comparable hashes are unavailable. Neither marker is a fresh
+  checksum check: same-size local corruption requires `verify` to
+  detect. Missing payloads, local size mismatches, changed upstream
+  metadata, and unavailable status have distinct markers; group rows
+  also report those exceptions, and `[size only N]` counts the members
+  credited by the weaker comparison. Unreadable metadata does not mean
+  zero files archived, and does not prevent choosing a pattern.
+  Selectively relocated README/license files show `[status unavailable]`
+  because existing records cannot distinguish them from verbatim nested
+  documents in a whole-repo snapshot. This remains true even if only one
+  possible source path exists upstream today. A separate unambiguous
+  copy can still count; model-weight coverage is unaffected.
+
+  Coverage is a read-only observation of this source repo in the
+  selected archive. Unrecorded files, staging data, and runtime caches
+  do not count. Copies in selective and whole-repo layouts count once
+  per Hub file; problems with another recorded copy remain visible.
+  A marker does not promise that a later pull into a different layout
+  will skip a transfer. The pull planner still determines what to do
+  after selection. Listing status reads records and file metadata,
+  without hashing model weights or making additional Hub requests.
+
+  An archive not yet converted to one directory per source repo
+  (ADR 0003) shows every file as `[status unavailable]`: a repo's files
+  may sit under another repo's directory there, so a per-repo answer
+  could claim `not archived` for bytes you hold. The pull still refuses
+  such an archive (exit 2, naming `migrate`); `discover` reaches that
+  refusal after the picker rather than before it.
+
 - **The interactive file listing pages instead of walling** (spec
   0018). A repo whose listing fits your terminal prints every file,
-  one row each, size then path, then a single key line (`q = quit`)
-  and the pattern prompt. A repo whose listing would overrun the screen opens
+  one row each, size then path and archive status, then a single key
+  line (`q = quit`) and the pattern prompt. A repo whose listing would
+  overrun the screen opens
   on a **roll-up** instead — one line per top-level directory and one
   per sharded weight set, each with its file count and total size,
   everything else listed individually, because the fact that decides
   your pattern is which groups exist, not the 166 shard names inside
-  them:
+  them. For example, with one quant already archived (archive header
+  and status explanation omitted here):
 
   ```text
   files in unsloth/Kimi-K3-GGUF (171 files, 6.9 TiB):
-      25.5 KiB  .gitattributes
-      43.5 KiB  README.md
-     630.0 GiB  UD-IQ1_M/                 15 files
+      25.5 KiB  .gitattributes  [not archived]
+      43.5 KiB  README.md  [status unavailable]
+     630.0 GiB  UD-IQ1_M/                 15 files  [archived 15/15]
      ...
-       1.4 TiB  UD-Q4_K_XL/               32 files
-     862.4 MiB  mmproj-BF16.gguf  — vision projector
+       1.4 TiB  UD-Q4_K_XL/               32 files  [archived 0/32]
+     862.4 MiB  mmproj-BF16.gguf  — vision projector  [not archived]
   f = list every file (paged), q = quit
-  files to pull (comma-separated patterns, e.g. *Q4_K_M* or *.gguf,*mmproj*):
+  files to pull (comma-separated patterns, e.g. *UD-IQ1_M* or *.gguf,*mmproj*):
   ```
 
   A full-weights snapshot has no directories at all — it is ~96 files
   of `model-NNNNN-of-NNNNNN.safetensors` at the root — so a shard set
   rolls up the same way a directory does, and its line names the set as
-  a pattern you can paste (`model-*.safetensors`):
+  a pattern you can paste (`model-*.safetensors`). This example shows
+  a partly archived set, with the archive header and explanation omitted:
 
   ```text
   files in Uniboshi/Kimi-K3-Abliterated-V1 (113 files, 1.4 TiB):
-       1.1 KiB  README.md
-       7.1 KiB  config.json
+       1.1 KiB  README.md  [status unavailable]
+       7.1 KiB  config.json  [archived: size only]
        ...
-       1.4 TiB  model-*.safetensors       96 files
-      57.0 MiB  model.safetensors.index.json
-       2.7 MiB  tiktoken.model
+       1.4 TiB  model-*.safetensors       96 files  [archived 40/96]
+      57.0 MiB  model.safetensors.index.json  [not archived]
+       2.7 MiB  tiktoken.model  [not archived]
   f = list every file (paged), q = quit
   files to pull (comma-separated patterns, e.g. model-*.safetensors or *.gguf,*mmproj*):
   ```
@@ -333,9 +375,10 @@ Behavior worth knowing:
   typing a directory name without wildcards matches nothing — patterns
   are matched against the full repo path.
 
-  **Piped and redirected runs are unaffected**: no roll-up, no window,
-  no key line — the full flat listing, byte for byte as before. A pipe
-  has no scroll problem; it has a file.
+  **Piped and redirected runs remain flat**: no roll-up, no window,
+  no key line — the full listing includes the same archive annotations
+  and explanation. Input semantics are unchanged. A pipe has no scroll
+  problem; it has a file.
 - **Every pull states its size before moving bytes.** Whatever the
   mode — `--include`, interactive, `--whole-repo` — the pull runs a
   disk preflight (refusing with exit 3 when the archive volume is

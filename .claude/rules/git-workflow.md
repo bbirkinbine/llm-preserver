@@ -67,3 +67,19 @@ In GitHub-backed mode, the PR body must contain a closing keyword
 line — `Closes #<issue-number>` — so the merge auto-closes the issue.
 Closing keywords work in the PR body, not in feature-branch commit
 messages. In local-only mode, omit the closing keyword.
+
+## After the human merges
+
+Post-merge housekeeping is part of the loop; do it automatically when
+the human reports that a PR was merged. First confirm the PR is actually
+`MERGED`, identify its exact head branch, and require a clean worktree.
+Then fetch with pruning, switch to `main`, fast-forward it from
+`origin/main`, confirm the feature branch is merged into `main`, and
+delete the local feature branch with `git branch -d`. If GitHub has not
+already removed that PR's exact remote head branch, delete it too. End
+by confirming that `main` is clean and aligned with `origin/main`.
+
+Never discard work, force-delete a branch, or infer that an unmerged or
+closed PR is safe to clean up. Stop and report any dirty worktree,
+non-fast-forward pull, merge-status mismatch, or branch that Git does
+not recognize as merged.
