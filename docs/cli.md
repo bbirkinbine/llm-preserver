@@ -99,7 +99,8 @@ The map:
   `Q4_K_M` is the common default (what Ollama usually picks);
   `Q5`/`Q6`/`Q8_0` trade more memory for quality. A file's size on
   disk approximates what it needs in RAM/VRAM, plus headroom for
-  context.
+  context. [`quant-names.md`](quant-names.md) decodes the names
+  (k-quants vs i-quants, `_M`/`_XL`, `UD-`) and their speed trade-offs.
 
 When unsure, run `pull <repo-id>` with no `--include`: the file
 listing with sizes *is* the decision aid.

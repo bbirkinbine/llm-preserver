@@ -197,6 +197,8 @@ than "this will definitely work in ten years."
 
 ## See also
 
+- [`quant-names.md`](quant-names.md) — how to read `Q4_K_M`,
+  `IQ4_XS`, `UD-Q4_K_XL` and the rest, and which to pick
 - [`cli.md`](cli.md) — the full command reference, including the
   advisory rules and `--plan`
 - [`adr/0001-model-storage.md`](adr/0001-model-storage.md) — why the
