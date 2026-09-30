@@ -245,7 +245,8 @@ Behavior worth knowing:
 
 - **File selection shows existing archive coverage** (spec 0023).
   Both `pull` and the `discover` file picker identify the active archive.
-  Directory and root shard-set rows show `[archived 2/6]`; expanded
+  Directory and root shard-set rows show `[archived 2/6]`, or
+  `[not archived]` when none of their files are; expanded
   rows show each file's status. Counts refer to the files in that row,
   so a partial quant remains visibly incomplete. All files remain
   selectable, including ones already archived.
@@ -260,11 +261,15 @@ Behavior worth knowing:
   also report those exceptions, and `[size only N]` counts the members
   credited by the weaker comparison. Unreadable metadata does not mean
   zero files archived, and does not prevent choosing a pattern.
-  Selectively relocated README/license files show `[status unavailable]`
-  because existing records cannot distinguish them from verbatim nested
-  documents in a whole-repo snapshot. This remains true even if only one
-  possible source path exists upstream today. A separate unambiguous
-  copy can still count; model-weight coverage is unaffected.
+  README/license files archived by a pick-files pull show
+  `[recorded: comes with every pull]`: a copy is on record, but in the
+  relocated docs folder the record cannot tell it apart from a nested
+  document of the same name in a whole-repo snapshot, so it is not
+  counted as `[archived]` and its bytes are not checked. It never
+  affects your pattern, because every pull fetches the repo's docs
+  whatever you select. This remains true even if only one possible
+  source path exists upstream today. A separate unambiguous copy still
+  counts as `[archived]`; model-weight coverage is unaffected.
 
   Coverage is a read-only observation of this source repo in the
   selected archive. Unrecorded files, staging data, and runtime caches
@@ -297,10 +302,10 @@ Behavior worth knowing:
   ```text
   files in unsloth/Kimi-K3-GGUF (171 files, 6.9 TiB):
       25.5 KiB  .gitattributes  [not archived]
-      43.5 KiB  README.md  [status unavailable]
+      43.5 KiB  README.md  [recorded: comes with every pull]
      630.0 GiB  UD-IQ1_M/                 15 files  [archived 15/15]
      ...
-       1.4 TiB  UD-Q4_K_XL/               32 files  [archived 0/32]
+       1.4 TiB  UD-Q4_K_XL/               32 files  [not archived]
      862.4 MiB  mmproj-BF16.gguf  — vision projector  [not archived]
   f = list every file (paged), q = quit
   files to pull (comma-separated patterns, e.g. *UD-IQ1_M* or *.gguf,*mmproj*):
@@ -314,7 +319,7 @@ Behavior worth knowing:
 
   ```text
   files in Uniboshi/Kimi-K3-Abliterated-V1 (113 files, 1.4 TiB):
-       1.1 KiB  README.md  [status unavailable]
+       1.1 KiB  README.md  [recorded: comes with every pull]
        7.1 KiB  config.json  [archived: size only]
        ...
        1.4 TiB  model-*.safetensors       96 files  [archived 40/96]

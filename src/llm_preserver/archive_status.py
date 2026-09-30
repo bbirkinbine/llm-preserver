@@ -24,8 +24,16 @@ from llm_preserver.records import (
 from llm_preserver.selection import _doc_subdir_for, checked_target_path, is_doc_file
 
 ArchiveState = Literal[
-    "archived", "not-archived", "missing", "local-mismatch", "upstream-changed", "unavailable"
+    "archived",
+    "not-archived",
+    "missing",
+    "local-mismatch",
+    "upstream-changed",
+    "unavailable",
+    "recorded-doc",
 ]
+"""``recorded-doc``: a copy is on record where its source file cannot be
+told apart (see ``_ambiguous_doc_targets``); docs ride along on every pull."""
 Comparison = Literal["sha256", "size"]
 
 
@@ -131,7 +139,12 @@ def _combine(candidates: list[FileArchiveStatus]) -> FileArchiveStatus:
         comparison: Comparison = (
             "sha256" if any(item.comparison == "sha256" for item in positives) else "size"
         )
-        return FileArchiveStatus("archived", comparison, problems)
+        # An unattributed doc alias says nothing against an attributed copy.
+        return FileArchiveStatus(
+            "archived", comparison, tuple(p for p in problems if p != "recorded-doc")
+        )
+    if "recorded-doc" in problems:
+        problems = ("recorded-doc", *(p for p in problems if p != "recorded-doc"))
     return FileArchiveStatus(problems[0], issues=problems[1:])
 
 
@@ -179,7 +192,8 @@ def _ambiguous_doc_targets(repo_id: str, recorded: Mapping[str, list[FileEntry]]
     The selective namespace comes from the same helper as the pull path
     builder. A document beneath it could also have been archived verbatim
     in a snapshot. Current Hub names cannot disprove either historical
-    origin, so these records alone must not earn positive coverage.
+    origin, so these records alone must not earn positive coverage; they
+    report ``recorded-doc`` instead, since every pull fetches docs anyway.
     """
     prefix = f"docs/{_doc_subdir_for(repo_id)}/"
     ambiguous = set()
@@ -203,7 +217,7 @@ def _file_status(
         return FileArchiveStatus("unavailable")
     return _combine(
         [
-            FileArchiveStatus("unavailable")
+            FileArchiveStatus("recorded-doc")
             if path in ambiguous
             else _candidate_status(archive, model_dir, entry, upstream)
             for path in paths

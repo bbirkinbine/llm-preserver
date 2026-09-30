@@ -41,3 +41,13 @@ def test_unwalkable_models_directory_is_unavailable_not_a_traceback(tmp_path: Pa
     state = archive_status.picker_status(archive, RENAME_TARGET_ID, INFO)
     assert {item.state for item in state.files.values()} == {"unavailable"}
     assert state.unavailable_reason is not None
+
+
+def test_recorded_doc_leads_when_another_copy_has_a_problem() -> None:
+    combined = archive_status._combine(
+        [
+            archive_status.FileArchiveStatus("missing"),
+            archive_status.FileArchiveStatus("recorded-doc"),
+        ]
+    )
+    assert combined == archive_status.FileArchiveStatus("recorded-doc", issues=("missing",))

@@ -17,8 +17,9 @@ _LABELS = {
     "local-mismatch": "local size mismatch",
     "upstream-changed": "changed upstream",
     "unavailable": "status unavailable",
+    "recorded-doc": "recorded: comes with every pull",
 }
-_EXCEPTIONS = ("missing", "local-mismatch", "upstream-changed", "unavailable")
+_EXCEPTIONS = ("missing", "local-mismatch", "upstream-changed", "unavailable", "recorded-doc")
 
 
 def _file_status(path: str, status: ArchiveStatusSnapshot) -> FileArchiveStatus:
@@ -67,7 +68,8 @@ def group_marker(paths: Sequence[str], status: ArchiveStatusSnapshot | None) -> 
         return "  [status unavailable]"
     items = [_file_status(path, status) for path in paths]
     archived = sum(item.state == "archived" for item in items)
-    markers = [f"archived {archived}/{len(paths)}"]
+    # Zero coverage reads as the file-level label; a count adds nothing.
+    markers = [f"archived {archived}/{len(paths)}" if archived else _LABELS["not-archived"]]
     weaker = sum(item.state == "archived" and item.comparison == "size" for item in items)
     if weaker:
         markers.append(f"size only {weaker}")

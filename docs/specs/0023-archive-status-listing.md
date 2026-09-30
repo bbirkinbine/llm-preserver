@@ -156,6 +156,17 @@ contract is introduced.
   105 feature tests; full suite 1,634 passed, two canaries skipped.
 - Committed and opened as PR #44 on the human's instruction; the
   workflow-rule edit rode along with the human's consent.
+- Follow-up (2026-09-30, `fix/doc-status-label`): live use showed that
+  `[status unavailable]` on a pick-files README read as "missing or
+  unknown". The human chose `[recorded: comes with every pull]` for the
+  ambiguous-document case, which states what the record shows and why it
+  cannot matter to the pattern. The ambiguity rule itself is unchanged:
+  such a copy still earns no `[archived]` credit and no disk check. An
+  attributed copy elsewhere no longer carries the alias as a problem.
+  Same follow-up: a group row with no archived members now reads
+  `[not archived]` instead of `[archived 0/N]` (human's call). Any
+  exceptions are still listed after it, and an unreadable record still
+  shows `[status unavailable]`, never either form.
 
 ## Implementation plan
 

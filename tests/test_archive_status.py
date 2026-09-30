@@ -79,7 +79,7 @@ def test_matching_record_and_present_payload_are_archived(
 @pytest.mark.parametrize(
     ("path", "expected", "comparison"),
     [
-        ("gguf/docs/acme--tiny-chat/README.md", "unavailable", None),
+        ("gguf/docs/acme--tiny-chat/README.md", "recorded-doc", None),
         ("hf-snapshot/README.md", "archived", "size"),
     ],
 )
@@ -231,12 +231,13 @@ def test_ambiguous_document_location_never_credits_two_source_files(
     snapshot = archive_status.snapshot_archive_status(
         tmp_path, REPO, info_for(RepoFile("README.md", 3, None), RepoFile(nested, 3, None))
     )
-    assert snapshot.files[nested].state == "unavailable"
+    assert snapshot.files[nested].state == "recorded-doc"
     root = snapshot.files["README.md"]
-    assert root.state == ("archived" if separate_copy else "unavailable")
+    assert root.state == ("archived" if separate_copy else "recorded-doc")
     if separate_copy:
         assert root.comparison == "size"
-        assert "unavailable" in root.issues
+        # The unattributed alias is not a problem with the attributed copy.
+        assert root.issues == ()
 
 
 @pytest.mark.parametrize(
@@ -283,7 +284,7 @@ def test_historical_document_alias_stays_uncertain_after_other_source_disappears
         tmp_path, REPO, info_for(RepoFile(current, 3, hash))
     )
     observed = snapshot.files[current]
-    assert observed.state == ("archived" if separate_copy else "unavailable")
+    assert observed.state == ("archived" if separate_copy else "recorded-doc")
     assert observed.comparison == (("sha256" if hash else "size") if separate_copy else None)
     if separate_copy:
-        assert "unavailable" in observed.issues
+        assert observed.issues == ()
