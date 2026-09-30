@@ -565,7 +565,9 @@ queue entry did **not** make the spec and stay open here:
   re-quantization sources, and/or `--quant` sugar. Companion-kind
   annotations (imatrix/mmproj/mtp, from the advisory rules table)
   shipped in the listing 2026-07-13 — this item is the rest of the
-  dictionary. Live-use addition (2026-07-12): empty pattern input at
+  dictionary. The human-readable half exists as
+  [`docs/quant-names.md`](docs/quant-names.md) (2026-09-30, with sources);
+  a listing annotation would draw its table from there. Live-use addition (2026-07-12): empty pattern input at
   the prompt errors (exit 2) instead of re-prompting. (The other
   2026-07-12 addition — human sizes in the listing — shipped
   2026-07-13.)
