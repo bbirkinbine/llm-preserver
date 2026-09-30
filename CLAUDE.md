@@ -1058,7 +1058,27 @@ parallelize only with partitioned file ownership.
   Four mutation checks prove the new contracts reject a changed
   `files_metadata` call, ambient-token use, a missing matrix override, and a
   post-override command that could resynchronize the lock.
-- **Next spec (0023): pick from TODO.md** — smoke test, spec 0002's
+- **Spec 0023 shipped 2026-09-30 (PR #44): archive status in file listings.**
+  Show per-directory coverage and per-file status in the shared pull
+  picker. Plan approved; implemented in 17 files (one existing quit-test
+  assertion updated for the annotated page budget). 105 new tests use
+  temporary archives. A real 80x24 PTY checked summary,
+  expanded paging, return to summary, and quit with tiny payloads.
+  No mounted models used. Final full gate: 1,634 passed, two live
+  canaries skipped, Ruff and native/Linux mypy clean. Reviews found
+  historical documentation-path ambiguity; the human approved unavailable
+  status for structurally ambiguous documentation paths. The correction
+  passes historical-alias regressions. Standard, adversarial, and manual
+  security reviews report no remaining findings. A later review round
+  found seven load-bearing guards that survived deletion (roll-up and
+  fits-path frame budgets, secondary markers, the no-size fallback,
+  header scrubbing): all now mutation-proved. It also found that on an
+  unconverted archive, `discover` would label a quant `[not archived]`
+  and then crash at exit 1 on pull's conversion gate (the crash
+  predates this spec). The picker now withholds status there, and the
+  gate maps to exit 2.
+  See spec 0023 phase handoff.
+- **Next spec (0024): pick from TODO.md** — smoke test, spec 0002's
   later adapter phases (LM Studio / llama.cpp / vLLM), or the remaining
   TUI nice-to-haves (arrow-key highlight, type-to-filter, match
   preview), or cache inventory/import. Also queued from live use:
@@ -1068,7 +1088,7 @@ parallelize only with partitioned file ownership.
   paused — phase 1 shipped (PR #20), later adapters open;
   0005–0014 shipped; `0016` draft; `0017` shipped; `0018` shipped;
   `0019` shipped; `0020` shipped (PR #36); `0021` shipped (PR #39);
-  `0022` shipped (PR #40).
+  `0022` shipped (PR #40); `0023` shipped (PR #44).
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

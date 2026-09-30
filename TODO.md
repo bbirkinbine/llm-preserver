@@ -92,7 +92,7 @@ Check items off as they ship; update when priorities shift.
   every test used a single relation, where one label hides inside the
   reserve. Belongs on its own branch, not spec 0017's.
 
-## Next spec (0023) — pick one
+## Next spec (0024) — pick one
 
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
   PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over
@@ -147,6 +147,14 @@ queue entry did **not** make the spec and stay open here:
   practice, drop the heuristic entirely.
 
 ## Shipped
+
+- 0023 archive status in file listings (PR #44): directory/shard
+  coverage and per-file metadata observations appear in the `pull` and
+  `discover` file picker, including partial, missing, changed, and
+  unavailable evidence, from records and file metadata only (no
+  hashing, no extra Hub calls). An unconverted archive shows every file
+  unavailable, and `discover`'s pre-existing exit-1 crash on pull's
+  conversion gate now exits 2. 1,634 tests.
 
 - 0022 Hugging Face client compatibility: the supported range is now
   `huggingface-hub>=1.26.0,<2`, where 1.26.0 is the security floor for the

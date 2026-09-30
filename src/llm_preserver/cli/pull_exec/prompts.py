@@ -16,9 +16,8 @@ Three rules hold the shape together:
   has a file. So the interactivity verdict is taken *before* any budget
   is asked for — ``resolve_window_size`` would answer with the fixed
   non-TTY window, which is right for discover and wrong here.
-- **A listing that fits is untouched.** No roll-up, no keys, no
-  footer — the frame that shipped. The roll-up answers a wall, so it
-  appears only when there is one.
+- **A listing that fits stays flat.** The roll-up answers a wall,
+  so it appears only when there is one. Every terminal frame offers quit.
 - **Offered keys only.** A character that is not offered is part of a
   pattern, so the key line is also the disambiguation. Keys match the
   raw stripped input *before* the comma split: ``f`` is the key, ``f,``
@@ -30,6 +29,7 @@ from collections.abc import Sequence
 
 import typer
 
+from llm_preserver.archive_status import ArchiveStatusSnapshot
 from llm_preserver.cli.pull_exec.listing import (
     FLAT_KEYS,
     PATTERN_PROMPT,
@@ -49,6 +49,7 @@ from llm_preserver.cli.pull_exec.listing import (
     unavailable_note,
     window_keys,
 )
+from llm_preserver.cli.pull_exec.listing.status import status_lines
 from llm_preserver.cli.window import is_interactive, resolve_window_size, resolve_window_width
 from llm_preserver.hub import PullUserError, RepoInfo
 from llm_preserver.pull_decline import QUIT_LINE, PullDeclined
@@ -124,7 +125,9 @@ def _echo_all(lines: list[str]) -> None:
         typer.echo(line)
 
 
-def prompt_for_selection(info: RepoInfo, repo_id: str) -> list[str]:
+def prompt_for_selection(
+    info: RepoInfo, repo_id: str, status: ArchiveStatusSnapshot | None = None
+) -> list[str]:
     """List the repo's files and prompt for include patterns.
 
     Takes the already-fetched metadata — one metadata call per pull
@@ -136,6 +139,7 @@ def prompt_for_selection(info: RepoInfo, repo_id: str) -> list[str]:
         info: The repo metadata whose ``files`` are being chosen from.
         repo_id: The hub id, for the header. Hub-supplied text, same
             trust class as the file paths, so it is scrubbed like them.
+        status: Precomputed archive observation; None omits annotations.
 
     Returns:
         The include patterns the human typed, stripped and split on
@@ -149,10 +153,11 @@ def prompt_for_selection(info: RepoInfo, repo_id: str) -> list[str]:
             ``--whole-repo`` as the bypass.
     """
     stream = sys.stdout
-    flat = flat_lines(info.files)
-    # A pipe gets the whole listing, unwindowed and unchanged.
+    flat = flat_lines(info.files, status)
+    context = status_lines(status)
+    # A pipe gets the whole listing, unwindowed and in one pass.
     if not is_interactive(stream):
-        typer.echo(flat_header(repo_id))
+        _echo_all([flat_header(repo_id), *context])
         _echo_all(flat)
         return _patterns(_ask())
 
@@ -164,10 +169,10 @@ def prompt_for_selection(info: RepoInfo, repo_id: str) -> list[str]:
     # line. The chrome and the frame must name the same shape.
     if fits(
         flat,
-        resolve_window_size(stream, chrome_lines(width, flat_header(repo_id), FLAT_KEYS)),
+        resolve_window_size(stream, chrome_lines(width, flat_header(repo_id), *context, FLAT_KEYS)),
         width,
     ):
-        typer.echo(flat_header(repo_id))
+        _echo_all([flat_header(repo_id), *context])
         _echo_all(flat)
         typer.echo(FLAT_KEYS)
         # _ask, never _answer_frame: q is the only key this frame
@@ -178,11 +183,15 @@ def prompt_for_selection(info: RepoInfo, repo_id: str) -> list[str]:
             raise PullDeclined(QUIT_LINE)
         return _patterns(answer)
 
-    return _windowed_selection(info, repo_id, flat, width)
+    return _windowed_selection(info, repo_id, flat, width, status)
 
 
 def _windowed_selection(
-    info: RepoInfo, repo_id: str, flat: list[str], width: int | None
+    info: RepoInfo,
+    repo_id: str,
+    flat: list[str],
+    width: int | None,
+    status: ArchiveStatusSnapshot | None,
 ) -> list[str]:
     """Drive the roll-up and expanded frames until a pattern is typed.
 
@@ -194,7 +203,9 @@ def _windowed_selection(
     no directories, and a roll-up too tall for the screen.
     """
     header = summary_header(repo_id, info.files)
-    rollup = rollup_lines(group_files(info.files))
+    context = status_lines(status)
+    groups = group_files(info.files)
+    rollup = rollup_lines(groups, status)
     total = len(flat)
     # The roll-up is worth a frame only when it actually collapses
     # something. This was written as `any("/" in path)` — provably dead
@@ -207,13 +218,12 @@ def _windowed_selection(
     # the question directly and cannot go stale the next time a group
     # kind is added.
     collapses = len(rollup) < len(flat)
-    groups = group_files(info.files)
     # The roll-up's example names one of the repo's own directories:
     # its whole purpose is to put those names on screen, and typing one
     # un-globbed matches nothing.
     rollup_prompt = pattern_prompt(example_pattern(groups))
     rollup_budget = resolve_window_size(
-        sys.stdout, chrome_lines(width, header, ROLLUP_KEYS, prompt=rollup_prompt)
+        sys.stdout, chrome_lines(width, header, *context, ROLLUP_KEYS, prompt=rollup_prompt)
     )
     offer_rollup = collapses and fits(rollup, rollup_budget, width)
 
@@ -229,7 +239,7 @@ def _windowed_selection(
     # round, 2026-08-12, found independently by both reviewers).
     widest_footer = footer_line(total, total, total, more=True, back=True)
     window_budget = resolve_window_size(
-        sys.stdout, chrome_lines(width, header, widest_footer, widest_keys)
+        sys.stdout, chrome_lines(width, header, *context, widest_footer, widest_keys)
     )
 
     showing_rollup = offer_rollup
@@ -237,7 +247,7 @@ def _windowed_selection(
     history: list[int] = []
     while True:
         if showing_rollup:
-            typer.echo(header)
+            _echo_all([header, *context])
             _echo_all(rollup)
             typer.echo(ROLLUP_KEYS)
             answer = _answer_frame(rollup_prompt, on_rollup=True, active=["f", "q"])
@@ -255,7 +265,7 @@ def _windowed_selection(
         end = fit_by_cost(costs, start, window_budget)
         more, back = end < total, bool(history)
         active = offered_keys(more=more, back=back, summary=offer_rollup)
-        typer.echo(header)
+        _echo_all([header, *context])
         _echo_all(flat[start:end])
         typer.echo(footer_line(start + 1, end, total, more=more, back=back))
         typer.echo(window_keys(more=more, back=back, summary=offer_rollup))

@@ -13,6 +13,7 @@ from pathlib import Path
 import typer
 
 from llm_preserver.archive import ArchiveError
+from llm_preserver.archive_status import picker_status
 from llm_preserver.cli.app import fail
 from llm_preserver.cli.pull_exec.confirmations import confirm_or_stop
 from llm_preserver.cli.pull_exec.plumbing import exit_for_pull_error
@@ -25,6 +26,7 @@ from llm_preserver.hub import (
     PullInvalidIdError,
     RepoInfo,
 )
+from llm_preserver.layout import UnmigratedArchiveError
 from llm_preserver.ollama_store import ollama_shape_hint
 from llm_preserver.pull import pull_model, validated_base_model, validated_roles
 from llm_preserver.pull_decline import PullDeclined
@@ -104,7 +106,8 @@ def run_pull(
         if not select_all and not patterns:
             if info is None:
                 info = client.repo_info(repo_id)
-            patterns = prompt_for_selection(info, repo_id)
+            status = picker_status(path, repo_id, info)
+            patterns = prompt_for_selection(info, repo_id, status)
         if plan:
             # Dry run (spec 0005): prepare through the same code path a
             # real pull executes, report, and exit — confirmations are
@@ -228,6 +231,11 @@ def run_pull(
         raise typer.Exit(code=130) from None
     except ArchiveError as exc:
         raise fail(str(exc)) from exc
+    except UnmigratedArchiveError as exc:
+        # pull refuses before calling here; discover reaches this gate
+        # only after the picker, so it must map to the same exit 2.
+        typer.echo(f"error [user input]: {clean_text(str(exc), single_line=True)}", err=True)
+        raise typer.Exit(code=2) from exc
     except PullError as exc:
         exit_exc = exit_for_pull_error(exc)
         if isinstance(exc, PullDocRefreshError):

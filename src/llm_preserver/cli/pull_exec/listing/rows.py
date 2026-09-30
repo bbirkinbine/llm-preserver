@@ -38,6 +38,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
+from llm_preserver.archive_status import ArchiveStatusSnapshot
+from llm_preserver.cli.pull_exec.listing.status import file_marker, group_marker
 from llm_preserver.hub import RepoFile
 from llm_preserver.pull_advisory import COMPANION_RULES
 from llm_preserver.pull_preflight import human_size
@@ -76,6 +78,7 @@ class ListingGroup:
         total_size: Sum of the sizes the hub reports. A floor, not a
             claim, when ``has_unknown_size`` is set.
         has_unknown_size: Whether any member's size is None.
+        member_paths: Original Hub paths represented by this group.
     """
 
     name: str
@@ -84,6 +87,7 @@ class ListingGroup:
     total_size: int
     has_unknown_size: bool
     is_shard_set: bool = False
+    member_paths: tuple[str, ...] = ()
 
 
 def kind_note(path: str) -> str:
@@ -159,6 +163,7 @@ def group_files(files: Sequence[RepoFile]) -> list[ListingGroup]:
             total_size=sum(entry.size or 0 for entry in members[name]),
             has_unknown_size=any(entry.size is None for entry in members[name]),
             is_shard_set=sharded[name],
+            member_paths=tuple(entry.path for entry in members[name]),
         )
         for name in order
     ]
@@ -169,32 +174,38 @@ def _size_column(size: int | None) -> str:
     return f"{'?' if size is None else human_size(size):>{_SIZE_PAD}}"
 
 
-def _file_line(path: str, size: int | None) -> str:
+def _file_line(path: str, size: int | None, status: ArchiveStatusSnapshot | None = None) -> str:
     """One per-file row: size, path, and any companion-kind note."""
-    return clean_text(f"  {_size_column(size)}  {path}{kind_note(path)}", single_line=True)
+    return clean_text(
+        f"  {_size_column(size)}  {path}{kind_note(path)}{file_marker(path, status)}",
+        single_line=True,
+    )
 
 
-def flat_lines(files: Sequence[RepoFile]) -> list[str]:
+def flat_lines(files: Sequence[RepoFile], status: ArchiveStatusSnapshot | None = None) -> list[str]:
     """Render every file, one row each, in hub order.
 
-    This is the listing that shipped, byte for byte — it is what a
-    piped run prints, what a repo small enough to fit prints, and what
-    the expanded frames page through.
+    Used by pipes, listings small enough to fit, and expanded frames.
+    Omitting status preserves the original unannotated rendering.
 
     Args:
         files: The repo's files, in hub order.
+        status: Archive evidence to annotate, or None for unannotated rows.
 
     Returns:
         One rendered row per file.
     """
-    return [_file_line(entry.path, entry.size) for entry in files]
+    return [_file_line(entry.path, entry.size, status) for entry in files]
 
 
-def rollup_lines(groups: Sequence[ListingGroup]) -> list[str]:
+def rollup_lines(
+    groups: Sequence[ListingGroup], status: ArchiveStatusSnapshot | None = None
+) -> list[str]:
     """Render the roll-up: a line per directory, root files as themselves.
 
     Args:
         groups: Groups from ``group_files``, in hub order.
+        status: Archive evidence to annotate, or None for unannotated rows.
 
     Returns:
         One rendered line per group. Directory lines carry no
@@ -216,7 +227,7 @@ def rollup_lines(groups: Sequence[ListingGroup]) -> list[str]:
     for group in groups:
         if not (group.is_directory or group.is_shard_set):
             size = None if group.has_unknown_size else group.total_size
-            lines.append(_file_line(group.name, size))
+            lines.append(_file_line(group.name, size, status))
             continue
         partial = group.has_unknown_size and bool(group.total_size)
         size = None if group.has_unknown_size and not group.total_size else group.total_size
@@ -229,7 +240,10 @@ def rollup_lines(groups: Sequence[ListingGroup]) -> list[str]:
         # It costs the two-space gutter one character, so the size
         # column stays aligned with the root-file rows beside it.
         flag = "+" if partial else " "
-        lines.append(f"  {_size_column(size)}{flag} {names[group.name]:<{pad}}{count}")
+        lines.append(
+            f"  {_size_column(size)}{flag} {names[group.name]:<{pad}}{count}"
+            f"{group_marker(group.member_paths, status)}"
+        )
     return lines
 
 

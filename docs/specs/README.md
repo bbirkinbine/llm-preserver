@@ -51,6 +51,7 @@ line; the source of truth is the spec file, this is a rendered cache. Run
 - ~~[0020 — Planning Stop Recovery Command](0020-planning-stop-recovery-command.md)~~  (shipped (PR #36))
 - ~~[0021 — Quit At Pull Prompts](0021-quit-at-pull-prompts.md)~~  (shipped (PR #39))
 - ~~[0022 — Hugging Face Client Compatibility](0022-hf-client-compatibility.md)~~  (shipped (PR #40))
+- ~~[0023 — Archive Status In File Listings](0023-archive-status-listing.md)~~  (shipped (PR #44)) — depends on 0018, 0021
 - [0002 — Runtime views](0002-runtime-views.md)  (paused) — depends on 0001
 <!-- specs-status:end -->
 
