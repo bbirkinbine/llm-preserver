@@ -36,7 +36,8 @@ def test_nested_directory_counts_match_expanded_rows_and_preserve_order() -> Non
     rows = rollup_lines(group_files(files), status=status)
     assert "Q8/" in rows[0] and "[archived 2/2]" in rows[0]
     assert "Q4/" in rows[1] and "[archived 1/2]" in rows[1]
-    assert "Q2/" in rows[2] and "[archived 0/1]" in rows[2]
+    assert "Q2/" in rows[2] and "[not archived]" in rows[2]
+    assert "archived 0/" not in rows[2]
     flat = flat_lines(files, status=status)
     assert sum("[archived]" in line for line in flat) == 3
     for file, row in zip(files, flat, strict=True):
@@ -66,6 +67,7 @@ def test_root_shard_set_uses_member_statuses() -> None:
         ("local-mismatch", None, "[local size mismatch]"),
         ("upstream-changed", None, "[changed upstream]"),
         ("unavailable", None, "[status unavailable]"),
+        ("recorded-doc", None, "[recorded: comes with every pull]"),
         ("not-archived", None, "[not archived]"),
     ],
 )
@@ -128,3 +130,21 @@ def test_archive_path_in_frame_header_is_scrubbed() -> None:
     status = archive_status.ArchiveStatusSnapshot(Path("/arch\x1b[2Jive\nforged"), {})
     lines = status_lines(status)
     assert all("\x1b" not in line and "\n" not in line for line in lines)
+
+
+def test_recorded_doc_alongside_a_problem_copy_keeps_both_visible() -> None:
+    files = [RepoFile("README.md", 3, None)]
+    status = archive_status.ArchiveStatusSnapshot(
+        Path("/archive"),
+        {"README.md": archive_status.FileArchiveStatus("recorded-doc", None, ("missing",))},
+    )
+    row = flat_lines(files, status=status)[0]
+    assert "[recorded: comes with every pull] [missing locally]" in row
+
+
+def test_group_with_nothing_archived_still_shows_its_exceptions() -> None:
+    files = [RepoFile("Q4/a.gguf", 3, None), RepoFile("Q4/b.gguf", 3, None)]
+    status = snapshot({"Q4/a.gguf": ("missing", None), "Q4/b.gguf": ("not-archived", None)})
+    row = rollup_lines(group_files(files), status=status)[0]
+    assert "[not archived] [missing locally 1]" in row
+    assert "archived 0/" not in row
