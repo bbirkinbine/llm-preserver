@@ -4,7 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.23,<1",
-    "huggingface-hub>=1.26.0,<2",
+    "huggingface-hub>=2.0.0,<3",
     "pydantic>=2.13.5",
     "typer>=0.27.2",
 ]
