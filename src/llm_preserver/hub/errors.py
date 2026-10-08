@@ -6,7 +6,8 @@ error text and a next step, but never the request, headers, or token.
 
 Exception hierarchy and status codes were first verified against
 ``huggingface_hub`` 1.23.0, then requalified on 2026-09-21 against the
-supported 1.26.0 floor and locked 1.32.0 client. The official Apache-2.0
+supported 1.26.0 floor and then-locked 1.32.0 client, and on
+2026-10-08 against the locked 1.33.0 client. The official Apache-2.0
 API source is https://huggingface.co/docs/huggingface_hub/package_reference/hf_api;
 full provenance is pinned in spec 0022.
 """

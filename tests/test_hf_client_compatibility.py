@@ -88,7 +88,7 @@ def test_httpx_is_a_declared_runtime_contract() -> None:
 
 def test_lock_pins_the_qualified_huggingface_hub_release() -> None:
     """Ordinary development and CI resolve the client qualified by spec 0022."""
-    assert _locked_version("huggingface-hub") == Version("1.32.0")
+    assert _locked_version("huggingface-hub") == Version("1.33.0")
 
 
 def test_lock_uses_an_anyio_release_with_the_known_advisories_fixed() -> None:

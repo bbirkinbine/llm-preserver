@@ -10,7 +10,8 @@ arguments, stores nothing, and never reads or logs the token value.
 API facts (``model_info`` fields, ``hf_hub_download`` local-dir
 behavior) were first verified against ``huggingface_hub`` 1.23.0.
 They were requalified on 2026-09-21 against the supported 1.26.0
-floor and locked 1.32.0 client using the official Apache-2.0 docs at
+floor and then-locked 1.32.0 client, and on
+2026-10-08 against the locked 1.33.0 client using the official Apache-2.0 docs at
 https://huggingface.co/docs/huggingface_hub/package_reference/hf_api
 and https://huggingface.co/docs/huggingface_hub/guides/download.
 Discovery listing facts were requalified in the same matrix; full

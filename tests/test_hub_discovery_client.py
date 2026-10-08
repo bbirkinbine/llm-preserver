@@ -14,7 +14,8 @@ names, ``expand`` field names, filter syntax, the ``baseModels`` shape
 ``{"relation": ..., "models": [{"id": ...}]}`` landing on
 ``ModelInfo.base_models``) were first live-verified against
 ``huggingface_hub`` 1.23.0 and requalified on 2026-09-21 against the
-supported 1.26.0 floor and locked 1.32.0 client. Official API-source
+supported 1.26.0 floor and then-locked 1.32.0 client, and on
+2026-10-08 against the locked 1.33.0 client. Official API-source
 provenance is pinned in spec 0022.
 """
 
