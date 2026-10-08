@@ -19,6 +19,13 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    # huggingface-hub majors are adopted only through a dedicated spec
+    # with its own testing (spec 0022 non-goals); 2.0 replaced httpx with
+    # httpx2, which the hub seam's exception mapping depends on. Routine
+    # 1.x minor/patch updates still flow through the group below.
+    ignore:
+      - dependency-name: "huggingface-hub"
+        update-types: ["version-update:semver-major"]
     groups:
       python-minor-patch:
         update-types:

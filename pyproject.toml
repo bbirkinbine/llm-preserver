@@ -13,15 +13,15 @@ dependencies = [
 llm-preserver = "llm_preserver.cli:app"
 
 [build-system]
-requires = ["uv_build>=0.12.17,<0.13"]
+requires = ["uv_build>=0.12.19,<0.13"]
 build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
   "pytest>=8",
   "pytest-asyncio",
-  "ruff>=0.16.8",
-  "mypy>=2.3.1",
+  "ruff>=0.16.10",
+  "mypy>=2.4.0",
   "pre-commit",
   # Optional verification depth — cheap when an agent does the labor.
   # Uncomment per project once there is real logic worth the rigor:
