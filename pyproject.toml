@@ -20,8 +20,8 @@ build-backend = "uv_build"
 dev = [
   "pytest>=8",
   "pytest-asyncio",
-  "ruff>=0.16.8",
-  "mypy>=2.3.1",
+  "ruff>=0.16.10",
+  "mypy>=2.4.0",
   "pre-commit",
   # Optional verification depth — cheap when an agent does the labor.
   # Uncomment per project once there is real logic worth the rigor:
