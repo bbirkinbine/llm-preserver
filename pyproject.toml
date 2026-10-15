@@ -5,8 +5,8 @@ requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.23,<1",
     "huggingface-hub>=1.26.0,<2",
-    "pydantic>=2.13.5",
-    "typer>=0.27.2",
+    "pydantic>=2.14.1",
+    "typer>=0.27.3",
 ]
 
 [project.scripts]
@@ -20,7 +20,7 @@ build-backend = "uv_build"
 dev = [
   "pytest>=8",
   "pytest-asyncio",
-  "ruff>=0.16.10",
+  "ruff>=0.17.0",
   "mypy>=2.4.0",
   "pre-commit",
   # Optional verification depth — cheap when an agent does the labor.
