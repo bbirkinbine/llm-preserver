@@ -79,6 +79,14 @@ delete the local feature branch with `git branch -d`. If GitHub has not
 already removed that PR's exact remote head branch, delete it too. End
 by confirming that `main` is clean and aligned with `origin/main`.
 
+The same pass sweeps every other local branch whose PR is already
+merged — not just the one the human named (Brian, 2026-10-19). Delete a
+branch without asking only when both hold: `gh pr list --head <branch>
+--state merged` returns a PR, and `git branch -d` accepts it. "Merged
+into `main`" alone is not enough — a branch just created from `main`,
+or one never used, passes that check with no PR behind it. List any
+such PR-less branch in the report and leave it for the human.
+
 Never discard work, force-delete a branch, or infer that an unmerged or
 closed PR is safe to clean up. Stop and report any dirty worktree,
 non-fast-forward pull, merge-status mismatch, or branch that Git does
