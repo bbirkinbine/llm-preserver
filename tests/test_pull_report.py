@@ -182,3 +182,38 @@ def test_render_plan_performs_no_io(tmp_path, capsys):
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == ""
+
+
+# --- spec 0024: the requested revision ---------------------------------
+
+BRANCH = "4.05bpw"
+
+
+def test_a_requested_branch_line_follows_the_header_naming_ref_and_commit(tmp_path):
+    from llm_preserver.pull_report import render_plan
+
+    lines = render_plan(make_prep(tmp_path), [], requested_revision=BRANCH)
+
+    assert lines[0].startswith("plan: pull from")
+    assert lines[1].startswith("revision:")
+    assert BRANCH in lines[1]
+    assert FULL_COMMIT_HASH in lines[1]
+    assert sum(line.startswith("revision:") for line in lines) == 1
+
+
+def test_a_requested_commit_line_names_the_commit_alone(tmp_path):
+    from llm_preserver.pull_report import render_plan
+
+    lines = render_plan(make_prep(tmp_path), [], requested_revision=FULL_COMMIT_HASH)
+
+    assert lines[1].startswith("revision:")
+    assert lines[1].count(FULL_COMMIT_HASH) == 1  # not "<sha> resolves to <sha>"
+
+
+def test_no_requested_revision_renders_byte_identically(tmp_path):
+    from llm_preserver.pull_report import render_plan
+
+    prep = make_prep(tmp_path)
+
+    assert render_plan(prep, ["q?"], requested_revision=None) == render_plan(prep, ["q?"])
+    assert not any(line.startswith("revision:") for line in render_plan(prep, ["q?"]))

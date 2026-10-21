@@ -57,8 +57,8 @@ class HubClientProtocol(Protocol):
     ``map_hub_exception``.
     """
 
-    def repo_info(self, repo_id: str) -> RepoInfo:
-        """Fetch repo metadata (files with sizes/hashes, repo facts)."""
+    def repo_info(self, repo_id: str, revision: str | None = None) -> RepoInfo:
+        """Fetch repo metadata at ``revision`` (default branch when None)."""
         ...
 
     def download(self, repo_id: str, filename: str, revision: str, dest_dir: Path) -> Path:

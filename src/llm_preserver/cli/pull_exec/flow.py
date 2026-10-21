@@ -16,6 +16,7 @@ from llm_preserver.archive import ArchiveError
 from llm_preserver.archive_status import picker_status
 from llm_preserver.cli.app import fail
 from llm_preserver.cli.pull_exec.confirmations import confirm_or_stop
+from llm_preserver.cli.pull_exec.plan_run import run_plan
 from llm_preserver.cli.pull_exec.plumbing import exit_for_pull_error
 from llm_preserver.cli.pull_exec.prompts import prompt_for_selection
 from llm_preserver.cli.resume_hint import compose_doc_refresh_hint, compose_resume_hint
@@ -28,12 +29,10 @@ from llm_preserver.hub import (
 )
 from llm_preserver.layout import UnmigratedArchiveError
 from llm_preserver.ollama_store import ollama_shape_hint
-from llm_preserver.pull import pull_model, validated_base_model, validated_roles
+from llm_preserver.pull import pull_model
 from llm_preserver.pull_decline import PullDeclined
-from llm_preserver.pull_preflight import require_disk_budget
-from llm_preserver.pull_prepare import prepare_pull
-from llm_preserver.pull_report import render_plan
 from llm_preserver.render import clean_text
+from llm_preserver.revision import fetch_repo_info, revision_line
 
 
 def run_pull(
@@ -51,6 +50,7 @@ def run_pull(
     repo_info: RepoInfo | None = None,
     resume_hint: bool = False,
     hf_logging: bool = False,
+    revision: str | None = None,
 ) -> None:
     """Run the pull flow: interactive listing, plan or pull, exit mapping.
 
@@ -77,6 +77,9 @@ def run_pull(
         hf_logging: Whether --hf-logging is in effect this run; the
             composed hint replays it (spec 0008 — the stalled-transfer
             scenario the hint serves is the one the flag exists for).
+        revision: The ``--revision`` branch, tag, or commit (spec 0024);
+            None reads the default branch exactly as before. Never set
+            together with ``repo_info`` — discover has no revision.
 
     Raises:
         typer.Exit: The fault-domain exit for any pull failure; exit
@@ -101,64 +104,42 @@ def run_pull(
     # should not sit in the block it is recovering from, one inserted
     # line away from being unbound.
     patterns = list(include)
+    # Spec 0024: the commit a --revision resolved to, read by the
+    # doc-refresh handler — bound before the try for the same reason as
+    # patterns. None whenever no --revision was given, which keeps every
+    # composed command byte-identical to the pre-0024 shape.
+    resolved_revision: str | None = None
     try:
         info = repo_info
+        if revision is not None:
+            # Resolve once, before selection or transfer: the inventory,
+            # every download, and every composed command use this commit.
+            # Fetched here (one call, handed down) so the hints know it.
+            info = fetch_repo_info(client, repo_id, revision)
+            resolved_revision = info.commit
+            if not plan:
+                # The plan report carries its own copy of this line.
+                typer.echo(revision_line(revision, info.commit))
         if not select_all and not patterns:
             if info is None:
-                info = client.repo_info(repo_id)
+                info = fetch_repo_info(client, repo_id, None)
             status = picker_status(path, repo_id, info)
             patterns = prompt_for_selection(info, repo_id, status)
         if plan:
-            # Dry run (spec 0005): prepare through the same code path a
-            # real pull executes, report, and exit — confirmations are
-            # recorded as would-ask lines, never asked. The preflight
-            # check runs after the report so an over-budget plan still
-            # prints before refusing (exit 3, scripts gate on it).
-            # Roles validate here too: plan exit 0 must mean the real
-            # command would proceed, and a bad --role would exit 2.
-            validated_roles(roles)
-            validated_base_model(base_model)
-            would_ask: list[str] = []
-
-            def record_prompt(prompt: str) -> bool:
-                would_ask.append(clean_text(prompt, single_line=True))
-                return True
-
-            prep = prepare_pull(
+            run_plan(
                 path,
                 repo_id,
                 client,
-                include=patterns,
-                repo_info=info,
-                refresh_docs=refresh_docs,
+                info,
+                patterns=patterns,
                 select_all=select_all,
-                confirm=record_prompt,
+                roles=roles,
+                base_model=base_model,
+                refresh_docs=refresh_docs,
+                emit_hint=emit_hint,
+                hf_logging=hf_logging,
+                requested_revision=revision,
             )
-            for line in render_plan(prep, would_ask):
-                if line.startswith("warning:"):
-                    # Likely human error —
-                    # highlight it; click strips color off-terminal.
-                    typer.secho(line, fg=typer.colors.YELLOW, bold=True)
-                else:
-                    typer.echo(line)
-            if emit_hint:
-                # No --model: plan mode recorded the confirmations
-                # instead of asking; the destination is the typed repo
-                # and the hint must not bake one in (0006 adjudication).
-                # No --plan: the follow-up wanted is the real pull.
-                plan_hint = compose_resume_hint(
-                    repo_id,
-                    path,
-                    include=patterns,
-                    select_all=select_all,
-                    roles=roles,
-                    base_model=base_model,
-                    refresh_docs=refresh_docs,
-                    hf_logging=hf_logging,
-                )
-                if plan_hint is not None:
-                    typer.echo(plan_hint)
-            require_disk_budget(path, prep.needed_bytes, prep.disk_free)
             return
 
         def capture_resume_hint(resolved_model: str) -> None:
@@ -184,6 +165,7 @@ def run_pull(
                 base_model=base_model,
                 refresh_docs=refresh_docs,
                 hf_logging=hf_logging,
+                revision=resolved_revision,
             )
             if hint is not None and emit_hint:
                 typer.echo(hint)
@@ -212,6 +194,7 @@ def run_pull(
             on_transfer_start=capture_resume_hint,
             on_no_op=mark_no_op,
             on_metadata_only=mark_metadata_only,
+            pin_archived_commit=revision is not None,
         )
     except PullDeclined as exc:
         # Spec 0021: the human answered the question — typed q, said no,
@@ -253,6 +236,7 @@ def run_pull(
                 roles=roles,
                 base_model=base_model,
                 hf_logging=hf_logging,
+                revision=resolved_revision,
             )
             if recovery is not None:
                 typer.echo(recovery, err=True)

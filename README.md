@@ -46,6 +46,10 @@ uv run llm-preserver verify ~/models # audit: every file present, every hash int
   moving a byte.
 - **`pull --whole-repo`** — archives a repo's entire tree instead of
   selected files (the full-precision masters).
+- **`pull --revision`** — pulls from a branch, tag, or commit instead
+  of the default branch, for publishers who keep each quant on its own
+  branch. The selector resolves to an immutable commit, and only that
+  commit is downloaded and recorded.
 - **`verify`** — audits disk against the records: every recorded file
   present (*complete*), every SHA256 intact (*valid*). `--quick` skips
   hashing for a seconds-long structural check; the exit code makes it

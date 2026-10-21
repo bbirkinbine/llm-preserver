@@ -15,9 +15,13 @@ floor and then-locked 1.32.0 client, and on
 https://huggingface.co/docs/huggingface_hub/package_reference/hf_api
 and https://huggingface.co/docs/huggingface_hub/guides/download.
 Discovery listing facts were requalified in the same matrix; full
-provenance is pinned in spec 0022.
+provenance is pinned in spec 0022. ``model_info(..., revision=...)``
+(the request path quotes the revision with ``safe=''``, so branch names
+containing ``/`` pass verbatim) was verified on 2026-10-20 against the
+same v1.33.0 reference and installed source; provenance in spec 0024.
 """
 
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -27,6 +31,8 @@ from huggingface_hub.hf_api import ExpandModelProperty_T
 from llm_preserver.hub.errors import MAPPED_EXCEPTIONS, PullHubError, map_hub_exception
 from llm_preserver.hub.types import RepoFile, RepoInfo
 from llm_preserver.hub_discovery import HubPager, ModelSummary, RelationType, summarize
+from llm_preserver.render import clean_text
+from llm_preserver.revision import is_full_sha
 
 # Discovery listing fields (spec 0006, live-verified 2026-07-13).
 _DISCOVERY_EXPAND: list[ExpandModelProperty_T] = [
@@ -46,6 +52,38 @@ def _first_str(value: object) -> str | None:
     return None
 
 
+# The hub answers with lowercase hex (``ModelInfo.sha``: "Repo SHA at
+# this particular revision" — huggingface_hub v1.33.0 reference,
+# https://huggingface.co/docs/huggingface_hub/v1.33.0/en/package_reference/hf_api,
+# retrieved 2026-10-20, Apache-2.0); anything else is refused before it
+# can be printed, composed into a command, or pinned (spec 0024).
+_RESOLVED_SHA_RE = re.compile(r"[0-9a-f]{40}")
+
+
+def require_resolved_commit(repo_id: str, requested: str, sha: str) -> None:
+    """Refuse a revision answer that is not a usable immutable pin.
+
+    Args:
+        repo_id: The repo the request named (for the message).
+        requested: The revision as requested.
+        sha: The commit the hub returned for it.
+
+    Raises:
+        PullHubError: ``sha`` is not 40 lowercase hex, or the request
+            was itself a full SHA and the hub answered with another.
+    """
+    if _RESOLVED_SHA_RE.fullmatch(sha) is None:
+        raise PullHubError(
+            f"hub resolved revision {clean_text(requested, single_line=True)!r} of {repo_id} "
+            f"to {clean_text(sha, single_line=True)!r}, not a full commit hash: retry later"
+        )
+    if is_full_sha(requested) and requested.lower() != sha:
+        raise PullHubError(
+            f"hub answered commit {requested} of {repo_id} with a different commit {sha}: "
+            "retry later"
+        )
+
+
 class HubClient:
     """Hugging Face implementation of the hub seam.
 
@@ -57,27 +95,39 @@ class HubClient:
     def __init__(self) -> None:
         self._api = HfApi()
 
-    def repo_info(self, repo_id: str) -> RepoInfo:
+    def repo_info(self, repo_id: str, revision: str | None = None) -> RepoInfo:
         """Fetch repo metadata in one ``model_info`` call.
 
         ``files_metadata=True`` supplies file sizes for selection and
-        hub-declared LFS SHA256s for ``verified`` provenance.
+        hub-declared LFS SHA256s for ``verified`` provenance. With a
+        ``revision`` (spec 0024) the inventory is read at that branch,
+        tag, or commit, and the returned ``commit`` is the full SHA it
+        resolved to — the only form that reaches downloads and records.
 
         Args:
             repo_id: Exact hub repo id (``namespace/repo``).
+            revision: Branch, tag, or commit to read; None reads the
+                default branch with exactly the pre-0024 call.
 
         Returns:
             The repo's files and record-relevant facts.
 
         Raises:
-            PullError: The fault-domain mapping of any client failure.
+            PullError: The fault-domain mapping of any client failure;
+                ``PullHubError`` when a revision request comes back
+                without a usable full commit.
         """
         try:
-            info = self._api.model_info(repo_id, files_metadata=True)
+            if revision is None:
+                info = self._api.model_info(repo_id, files_metadata=True)
+            else:
+                info = self._api.model_info(repo_id, revision=revision, files_metadata=True)
         except MAPPED_EXCEPTIONS as exc:
             raise map_hub_exception(exc) from exc
         if info.sha is None:
             raise PullHubError(f"hub returned no commit hash for {repo_id}: retry later")
+        if revision is not None:
+            require_resolved_commit(repo_id, revision, info.sha)
         card = info.card_data
         return RepoInfo(
             commit=info.sha,

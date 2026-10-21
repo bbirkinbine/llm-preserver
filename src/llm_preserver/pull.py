@@ -135,6 +135,7 @@ def pull_model(
     on_transfer_start: Callable[[str], None] | None = None,
     on_no_op: Callable[[], None] | None = None,
     on_metadata_only: Callable[[], None] | None = None,
+    pin_archived_commit: bool = False,
 ) -> Path:
     """Pull selected files from a hub repo into the archive.
 
@@ -180,6 +181,8 @@ def pull_model(
             report "already archived" instead of pull success, since a
             run that moved no bytes and wrote no record must not read
             as one that did.
+        pin_archived_commit: Refuse to merge into an artifact recorded
+            at another commit (a ``--revision`` pull, spec 0024).
 
     Returns:
         The model directory the pull landed in.
@@ -201,6 +204,7 @@ def pull_model(
         refresh_docs=refresh_docs,
         select_all=select_all,
         confirm=confirm,
+        pin_archived_commit=pin_archived_commit,
     )
     for advisory in prep.advisories:
         # Advisory text embeds hub-supplied filenames/metadata; strip

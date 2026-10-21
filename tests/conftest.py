@@ -31,8 +31,8 @@ class FakeHubClient:
     """In-memory double for the spec-0003 hub seam; zero network.
 
     Implements the same surface as ``llm_preserver.hub.HubClient``:
-    ``repo_info(repo_id)``, ``download(repo_id, filename, revision,
-    dest_dir)``, and the spec-0006 discovery methods
+    ``repo_info(repo_id, revision=None)``, ``download(repo_id, filename,
+    revision, dest_dir)``, and the spec-0006 discovery methods
     (``search_models``, ``list_children``, ``model_summary``, serving
     canned ``ModelSummary`` data through a real ``HubPager``). Serves
     bytes from memory, records every download call
@@ -93,14 +93,19 @@ class FakeHubClient:
         self.repo_info_errors = dict(repo_info_errors) if repo_info_errors is not None else {}
         self.download_calls: list[str] = []
         self.repo_info_calls: list[str] = []
+        # Spec 0024: the revision each repo_info / download call carried
+        # (None = the default-branch call, made without the argument).
+        self.repo_info_revisions: list[str | None] = []
+        self.download_revisions: list[tuple[str, str]] = []
         self.search_calls: list[str] = []
         self.list_children_calls: list[tuple[str, str]] = []
         self.model_summary_calls: list[str] = []
 
-    def repo_info(self, repo_id: str):
+    def repo_info(self, repo_id: str, revision: str | None = None):
         from llm_preserver.hub import RepoFile, RepoInfo
 
         self.repo_info_calls.append(repo_id)
+        self.repo_info_revisions.append(revision)
         if repo_id in self.repo_info_errors:
             raise self.repo_info_errors[repo_id]
         if self.repo_info_error is not None:
@@ -121,6 +126,7 @@ class FakeHubClient:
         )
 
     def download(self, repo_id: str, filename: str, revision: str, dest_dir) -> Path:
+        self.download_revisions.append((filename, revision))
         if (
             self.download_error is not None
             and len(self.download_calls) >= self.fail_after_downloads
