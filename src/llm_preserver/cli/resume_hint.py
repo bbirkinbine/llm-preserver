@@ -29,6 +29,7 @@ from pathlib import Path
 
 from llm_preserver.hub_discovery import looks_like_repo_id
 from llm_preserver.render import clean_text
+from llm_preserver.revision import is_full_sha
 
 RESUME_HINT_LEAD_IN = "to continue this pull later"
 DOC_REFRESH_LEAD_IN = "to replace every changed documentation file and finish this pull"
@@ -44,6 +45,7 @@ def _compose_pull_command(
     base_model: str | None = None,
     refresh_docs: bool = False,
     hf_logging: bool = False,
+    revision: str | None = None,
 ) -> str | None:
     """Compose the direct ``pull`` command replaying a pull's shape.
 
@@ -67,14 +69,23 @@ def _compose_pull_command(
         base_model: Curator-asserted lineage, replayed like a role.
         refresh_docs: Whether --refresh-docs rides along.
         hf_logging: Whether --hf-logging rides along.
+        revision: The *resolved* full commit to pin as ``--revision``
+            (spec 0024), or None when the pull named no revision. Never
+            a branch or tag: a moving pointer would let a resumed pull
+            switch trees, so anything not 40-hex composes nothing.
 
     Returns:
-        The command line alone, no lead-in — or None for a repo id that
-        fails validation (no command beats a booby-trapped one).
+        The command line alone, no lead-in — or None for a repo id or
+        revision that fails validation (no command beats a
+        booby-trapped one).
     """
     if not looks_like_repo_id(repo_id) or "/" not in repo_id:
         return None
+    if revision is not None and not is_full_sha(revision):
+        return None
     parts = ["llm-preserver", "pull", repo_id, str(archive_path.resolve())]
+    if revision is not None:
+        parts.extend(["--revision", revision])
     if select_all:
         parts.append("--whole-repo")
     for pattern in include:
@@ -102,6 +113,7 @@ def compose_resume_hint(
     base_model: str | None = None,
     refresh_docs: bool = False,
     hf_logging: bool = False,
+    revision: str | None = None,
 ) -> str | None:
     """Compose the one-line direct ``pull`` command that resumes this pull.
 
@@ -118,6 +130,7 @@ def compose_resume_hint(
             the one the flag exists for (spec 0008). ``--verbose``
             deliberately does not — the hint replays the pull's shape
             and this one diagnostic flag, nothing else.
+        revision: The resolved full commit to pin, or None (spec 0024).
 
     Returns:
         The full hint line, lead-in included — or None for a repo id
@@ -132,6 +145,7 @@ def compose_resume_hint(
         base_model=base_model,
         refresh_docs=refresh_docs,
         hf_logging=hf_logging,
+        revision=revision,
     )
     if command is None:
         return None
@@ -147,6 +161,7 @@ def compose_doc_refresh_hint(
     roles: Sequence[str] = (),
     base_model: str | None = None,
     hf_logging: bool = False,
+    revision: str | None = None,
 ) -> str | None:
     """Compose the ``pull ... --refresh-docs`` command that clears a doc stop.
 
@@ -166,6 +181,7 @@ def compose_doc_refresh_hint(
         roles: Roles the refused pull would have assigned.
         base_model: Curator-asserted lineage to replay.
         hf_logging: Whether --hf-logging was in effect.
+        revision: The resolved full commit to pin, or None (spec 0024).
 
     Returns:
         The full recovery line, lead-in included — or None for a repo id
@@ -180,6 +196,7 @@ def compose_doc_refresh_hint(
         base_model=base_model,
         refresh_docs=True,
         hf_logging=hf_logging,
+        revision=revision,
     )
     if command is None:
         return None

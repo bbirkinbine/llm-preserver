@@ -52,3 +52,14 @@ def test_live_download_of_pinned_gpt2_config(tmp_path: Path) -> None:
     assert downloaded == tmp_path / CANARY_FILENAME
     assert len(content) == CANARY_SIZE
     assert json.loads(content)["model_type"] == "gpt2"
+
+
+def test_live_revision_request_resolves_to_the_pinned_commit() -> None:
+    """A full-SHA ``revision`` reaches the hub and comes back as that commit (spec 0024).
+
+    Read-only metadata; pins a commit, never a moving branch head.
+    """
+    repo = HubClient().repo_info(CANARY_REPO_ID, revision=CANARY_REVISION)
+
+    assert repo.commit == CANARY_REVISION
+    assert any(file.path == CANARY_FILENAME and file.size == CANARY_SIZE for file in repo.files)

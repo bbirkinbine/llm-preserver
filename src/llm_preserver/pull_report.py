@@ -13,16 +13,23 @@ from collections.abc import Sequence
 from llm_preserver.pull_preflight import human_size
 from llm_preserver.pull_prepare import PullPreparation
 from llm_preserver.render import clean_text
+from llm_preserver.revision import revision_line
 from llm_preserver.selection import is_doc_file
 
 
-def render_plan(prep: PullPreparation, would_ask: Sequence[str]) -> list[str]:
+def render_plan(
+    prep: PullPreparation, would_ask: Sequence[str], *, requested_revision: str | None = None
+) -> list[str]:
     """Compose the ``--plan`` report lines for a prepared pull.
 
     Args:
         prep: The pull's decision state from ``prepare_pull``.
         would_ask: Prompts a real pull would have asked, in the order
             they were recorded by the plan-mode confirm callback.
+        requested_revision: The ``--revision`` value as typed, or None.
+            When set, the line under the header names it beside the
+            commit it resolved to (spec 0024), so the immutable pin is
+            on screen before a large transfer starts.
 
     Returns:
         Printable report lines, ending with the nothing-happened
@@ -30,6 +37,8 @@ def render_plan(prep: PullPreparation, would_ask: Sequence[str]) -> list[str]:
     """
     to_download = {planned.repo_file.path for planned in prep.plan.to_download}
     lines = [f"plan: pull from {prep.repo_id} into {prep.model_dir}"]
+    if requested_revision is not None:
+        lines.append(revision_line(requested_revision, prep.info.commit))
     for repo_file in prep.selected:
         size = "?" if repo_file.size is None else human_size(repo_file.size)
         if repo_file.path not in to_download:

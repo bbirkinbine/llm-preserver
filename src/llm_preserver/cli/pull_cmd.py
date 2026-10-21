@@ -34,6 +34,15 @@ def pull(
             help="Full snapshot: download the named repo's whole tree (excludes --include).",
         ),
     ] = False,
+    revision: Annotated[
+        str | None,
+        typer.Option(
+            "--revision",
+            help="Hugging Face branch, tag, or full commit SHA to pull from (default: the "
+            "repo's default branch). llm-preserver resolves it to an immutable commit before "
+            "downloading, and records only that commit.",
+        ),
+    ] = None,
     model: Annotated[
         str | None,
         typer.Option("--model", hidden=True),
@@ -105,6 +114,21 @@ def pull(
             err=True,
         )
         raise typer.Exit(code=2)
+    if revision is not None and revision.strip() in ("", ".", ".."):
+        # Spec 0024: an empty selector would silently mean "default
+        # branch" to some layers and an error to others, and a bare "."
+        # or ".." is a URL dot segment — the HTTP client normalizes
+        # `/revision/..` away, which would quietly read the default
+        # branch (security review, 2026-10-20). Git forbids both as ref
+        # names, so refusing them rejects nothing real. Refused before
+        # any network call or client construction.
+        typer.echo(
+            "error [user input]: --revision must name a branch, tag, or full commit SHA "
+            f"(got {clean_text(repr(revision), single_line=True)}); "
+            "omit --revision to pull the repo's default branch",
+            err=True,
+        )
+        raise typer.Exit(code=2)
     # Fail fast on a bad archive path — before any network call or prompt.
     # The content gate rides here too: an unconverted archive must not
     # take new content (spec 0017 criteria 23-25), and refusing before
@@ -129,4 +153,5 @@ def pull(
         plan=plan,
         yes=yes,
         hf_logging=hf_logging,
+        revision=revision,
     )

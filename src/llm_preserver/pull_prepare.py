@@ -29,6 +29,7 @@ from llm_preserver.pull_metadata import fetch_adapter_base, resolved_base_model
 from llm_preserver.pull_plan import PullPlan, plan_downloads
 from llm_preserver.pull_preflight import already_staged_bytes, total_selected_size
 from llm_preserver.records import ArtifactFormat, ModelRecord
+from llm_preserver.revision_guard import require_archived_commit
 from llm_preserver.selection import (
     infer_format_subdir,
     require_case_distinct_targets,
@@ -77,6 +78,7 @@ def prepare_pull(
     refresh_docs: bool = False,
     select_all: bool = False,
     confirm: ConfirmCallback,
+    pin_archived_commit: bool = False,
 ) -> PullPreparation:
     """Resolve, select, group, plan, and advise — download nothing.
 
@@ -100,6 +102,9 @@ def prepare_pull(
         refresh_docs: Plan replacements for changed upstream doc files.
         select_all: Full snapshot: the selection is the whole tree.
         confirm: Yes/no callback for the plan-affecting questions.
+        pin_archived_commit: The pull named a ``--revision`` (spec
+            0024): refuse when the target artifact is recorded at a
+            different commit, rather than merge two trees.
 
     Returns:
         The pull's complete decision state.
@@ -137,6 +142,10 @@ def prepare_pull(
     # spec 0004's single-snapshot-source guard is gone with it.
     model_dir = model_dir_for(archive_root, repo_id)
     record = load_existing_record(model_dir)
+    if pin_archived_commit:
+        # Before plan_downloads, so this stop speaks before the narrower
+        # doc and weight immutability stops that a mixed tree can trip.
+        require_archived_commit(record, subdir, info.commit, repo_id)
     plan = plan_downloads(
         selected,
         subdir,

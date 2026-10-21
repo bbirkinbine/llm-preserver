@@ -190,6 +190,11 @@ Options:
   tree (see the dedicated section below). The scope is that one repo —
   it never crosses repos (an advisory names the follow-up pull when a
   related repo matters). Mutually exclusive with `--include`.
+- `--revision REF` — pull from a branch, tag, or full commit SHA
+  instead of the repo's default branch. The tool resolves it to an
+  immutable commit before listing or downloading anything, and records
+  only that commit. See "Pulling a branch, tag, or pinned commit"
+  below. Composes with every other option.
 - `--base-model OWNER/REPO` — record this repo's lineage: the model it
   derives from. Affects the **record only** — never where the files
   land. Use it when the repo's card declares no base, or declares one
@@ -554,7 +559,11 @@ Behavior worth knowing:
   `--hf-logging` rides along when the pull ran with it — the
   stalled-transfer scenario the hint serves is the one that flag
   exists for (`--verbose` does not; the hint replays the pull's
-  shape, not general diagnostics).
+  shape, not general diagnostics). A pull run with `--revision`
+  replays it as `--revision <resolved commit>`, never the branch or
+  tag you typed, so the continue lands on the same tree even if the
+  branch moves in the meantime. The doc-refresh recovery line pins the
+  commit the same way.
   Because re-pulls are idempotent, running it later downloads only
   what is still missing. Ctrl-C during the transfer prints the hint
   as the final line — directly above your next shell prompt — and
@@ -588,6 +597,120 @@ reading source:
 | 5 | integrity | hash mismatch after download — the file never entered the archive |
 | 130 | interrupted | Ctrl-C during the transfer — paste the resume hint (printed as the last line) to continue |
 
+## Pulling a branch, tag, or pinned commit
+
+A Hugging Face repo is a git repository, and `pull` reads its
+**default branch** (usually `main`) unless told otherwise. Most repos
+keep everything there. Some publishers do not: they put each variant or
+quantization on its own **branch** or **tag** and leave `main` holding
+something else, such as a README, metadata, or calibration material.
+Pulling such a repo without `--revision` succeeds, hashes, records, and
+exits 0, and what it preserves is the wrong tree.
+
+The case that prompted this option is `turboderp/GLM-5.3-Flash-exl3`.
+Observed on 2026-10-20:
+
+| revision | resolves to | files | contents |
+| --- | --- | --- | --- |
+| `main` (default) | `ef396bc0…` | 7 (~0 GiB) | calibration traces (`cal_trace.*`) and a benchmark prompt file |
+| `4.05bpw` | `2a30229e67012798ba9f0cd832bb78abf4c363d5` | 31 (153.8 GiB) | the deployable EXL3 model: config, tokenizer, chat template, safetensors shards |
+
+The repo has a branch per bits-per-weight (`4.05bpw`, `3.05bpw`,
+`2.05bpw`, ...). The model card usually says which branch is which;
+the repo's **Files and versions** tab on huggingface.co has a branch
+picker.
+
+```bash
+# check first: which tree, which commit, how big
+llm-preserver pull turboderp/GLM-5.3-Flash-exl3 ~/models \
+    --revision 4.05bpw --whole-repo --plan
+# plan: pull from turboderp/GLM-5.3-Flash-exl3 into …/models/turboderp/GLM-5.3-Flash-exl3
+# revision: 4.05bpw resolves to commit 2a30229e67012798ba9f0cd832bb78abf4c363d5
+#      1.7 KiB  .gitattributes
+#      ...
+#      8.0 GiB  model-00001-of-00019.safetensors
+#      ...
+# total to download: 153.8 GiB (31 of 31 files)
+
+# maximum reproducibility: pass the commit itself
+llm-preserver pull turboderp/GLM-5.3-Flash-exl3 ~/models \
+    --revision 2a30229e67012798ba9f0cd832bb78abf4c363d5 --whole-repo
+# revision: commit 2a30229e67012798ba9f0cd832bb78abf4c363d5
+```
+
+**Selectors versus the pin.** A branch or tag is a convenient but
+*mutable* name: the publisher can move it to a new commit at any time.
+A commit SHA is immutable. So `--revision` works like this:
+
+1. The value (branch, tag, `refs/pr/N`, or a full 40-character commit)
+   is sent with the one metadata request the pull already makes. The
+   hub answers with the file list *at that revision* and the full
+   commit it resolved to. A branch or tag resolves afresh on every run;
+   a full commit always means the same tree.
+2. That commit is printed before anything else happens
+   (`revision: 4.05bpw resolves to commit 2a30…`, or
+   `revision: commit 2a30…` when you passed the commit), on real pulls
+   and in `--plan`.
+3. Every file downloads at that commit, never at the branch name, so a
+   branch moving mid-pull cannot mix two trees.
+4. The record pins that commit, both at the artifact level and on every
+   file (`revision` in `model-record.json`). A branch or tag name is
+   never stored. It was a selector for one run, not provenance, and the
+   record schema rejects anything but a full commit.
+5. Every command the tool prints for you to paste later (the resume
+   line, the `--plan` follow-up, the `--refresh-docs` recovery line)
+   carries `--revision <resolved commit>`, not the branch. A resumed
+   pull continues the exact tree you started, even if the branch has
+   moved since.
+
+Without `--revision`, nothing changes: the default branch, the same
+output, and commands without the flag.
+
+**`repo@revision` is not supported.** `pull owner/repo@4.05bpw` is
+rejected as an invalid repo id (exit 2). A separate option keeps repo-id
+validation strict and avoids ambiguity with branch names that contain
+`/` (`feature/q4` passes through verbatim).
+
+**Short commits are not accepted.** The hub rejects a 7-character SHA
+as an unknown revision. Copy the full 40 characters from the commit page.
+
+**Errors.** An unknown branch, tag, or commit exits 2
+(`error [user input]: repo, revision, or file not found ...`), the same
+as an unknown repo or a gated repo you have no access to. No staging
+directory, record, or model directory is created. An empty
+`--revision ""`, or a bare `.` or `..` (which an HTTP client would
+quietly turn into a default-branch request), exits 2 before any network
+call. If the hub ever
+answers with something that is not a full commit, or answers a commit
+request with a *different* commit, the pull stops as a hub-side fault
+(exit 4) rather than pin it.
+
+**One artifact holds one tree** (ADR 0003 gives one directory per
+repo). If the artifact a `--revision` pull would land in is already
+recorded at a *different* commit, the pull stops during planning, before
+any byte moves (exit 5, `error [integrity]`). The message names the
+archived commit. Two revisions often share no file names: two GLM bpw
+branches ship different shard counts, and a `config.json` can differ by
+one digit at the same size. Without this stop they would merge into one
+directory whose record named only the newest commit. To add more files
+from the tree you already archived, pass `--revision <archived commit>`.
+To switch to another revision, `remove` the archived artifact first.
+The same stop fires when a branch you pulled earlier has since moved, and
+the archived commit is the way to keep extending what is there. Keeping
+several revisions of one repo side by side is not supported.
+
+The stop guards `--revision` pulls only. A plain pull (no `--revision`)
+into a model keeps its existing behavior, because `main` moving between
+pulls is the normal way to add another quant months later. That also
+means a plain pull into a directory you filled from a branch can merge
+default-branch files into it, limited only by the per-file immutability
+checks. When a repo keeps its models on branches, use `--revision` on
+every pull of it.
+
+`discover` has no `--revision`; its handoff pulls the default branch.
+For a repo that keeps its models on other branches, take the repo id
+from discover and run `pull --revision` yourself.
+
 ## pull --plan — dry run (verify, then run)
 
 `--plan` runs the whole decision half of a pull — resolve the tree,
@@ -617,6 +740,9 @@ without it. Details:
 - Composes with every selection mode: `--include`, `--whole-repo`,
   and the interactive listing (the pattern prompt still runs; the
   plan prints instead of pulling).
+- With `--revision`, a `revision:` line under the header names the
+  branch or tag you asked for and the commit it resolved to, so you can
+  check the immutable pin before starting a large transfer.
 - Asks no confirmation prompts. Questions a real pull would ask
   (grouping, "selection covers every weight?") are resolved to the
   answer that lets planning continue and printed as `would ask:`

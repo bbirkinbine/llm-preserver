@@ -1078,7 +1078,32 @@ parallelize only with partitioned file ownership.
   predates this spec). The picker now withholds status there, and the
   gate maps to exit 2.
   See spec 0023 phase handoff.
-- **Next spec (0024): pick from TODO.md** — smoke test, spec 0002's
+- **Session 28 (2026-10-20, PR #59): spec 0024 `pull --revision`.** Live
+  trigger: `turboderp/GLM-5.3-Flash-exl3` keeps each EXL3 quant on its
+  own branch, and `main` holds 7 calibration files (~0 GiB) while
+  `4.05bpw` holds the 153.8 GiB model. A default pull archived the wrong
+  tree at exit 0. `--revision` resolves a branch, tag, or full SHA in
+  the single `model_info` call; only the hub's 40-hex commit reaches
+  downloads, records, and composed commands (`--revision <sha>`, never
+  the branch). No schema change. `revision.py` owns the 40-hex rule;
+  the `--plan` branch moved to `cli/pull_exec/plan_run.py` to keep
+  `flow.py` under the cap. **The review round's headline find was a
+  claim in the spec itself**: "a second branch hits the immutability
+  stop" held only for colliding names. Two branches with different
+  shard counts plus a same-size hashless `config.json` merged at exit 0
+  into one artifact whose `revision` named only the newer commit (both
+  reviewers reproduced it). Brian chose to refuse:
+  `revision_guard.py` stops a `--revision` pull into an artifact recorded
+  at another commit (exit 5, during planning), and default-branch pulls
+  are left alone. Security review found `--revision ..` normalized away
+  by httpx into a default-branch read; refused at exit 2. Durable
+  lesson: **a non-goal that cites an existing protection is a claim, and
+  claims need a test** — this one had none, which is how it got past
+  the plan round. Mutation-proved: the guard and its two call sites, plus
+  the positional no-revision call on the interactive path (that last
+  one first survived the whole suite). Live: GLM `--plan` by branch and
+  by SHA, bad branch exit 2, canary green. 1727 tests.
+- **Next spec (0025): pick from TODO.md** — smoke test, spec 0002's
   later adapter phases (LM Studio / llama.cpp / vLLM), or the remaining
   TUI nice-to-haves (arrow-key highlight, type-to-filter, match
   preview), or cache inventory/import. Also queued from live use:
@@ -1088,7 +1113,7 @@ parallelize only with partitioned file ownership.
   paused — phase 1 shipped (PR #20), later adapters open;
   0005–0014 shipped; `0016` draft; `0017` shipped; `0018` shipped;
   `0019` shipped; `0020` shipped (PR #36); `0021` shipped (PR #39);
-  `0022` shipped (PR #40); `0023` shipped (PR #44).
+  `0022` shipped (PR #40); `0023` shipped (PR #44); `0024` shipped (PR #59).
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

@@ -92,7 +92,7 @@ Check items off as they ship; update when priorities shift.
   every test used a single relation, where one label hides inside the
   reserve. Belongs on its own branch, not spec 0017's.
 
-## Next spec (0024) — pick one
+## Next spec (0025) — pick one
 
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
   PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over
@@ -147,6 +147,18 @@ queue entry did **not** make the spec and stay open here:
   practice, drop the heuristic entirely.
 
 ## Shipped
+
+- 0024 Hugging Face revision support: `pull --revision` takes a branch,
+  tag, or full commit SHA and resolves it to the hub's immutable 40-hex
+  commit in the one metadata call. The inventory, every download, both
+  record pin levels, and every composed resume/plan/doc-refresh command
+  use that commit, never the branch name. `--plan` and real pulls print
+  `revision: <ref> resolves to commit <sha>`. A `--revision` pull into an
+  artifact recorded at a different commit is refused at exit 5 rather
+  than merging two trees. `--revision ..` and `.` are refused at exit 2.
+  No schema change; omitting the flag is byte-identical. Trigger:
+  `turboderp/GLM-5.3-Flash-exl3`, whose `main` holds only calibration
+  files. 1,727 tests. (spec 0024, PR #59)
 
 - 0023 archive status in file listings (PR #44): directory/shard
   coverage and per-file metadata observations appear in the `pull` and
@@ -454,6 +466,21 @@ queue entry did **not** make the spec and stay open here:
   `hf_xet`'s lazy import — the ordering the whole flag rests on.
 
 ## Smaller items (from live use)
+
+- [ ] **`discover` should say when a repo keeps models on other
+  branches** (queued from spec 0024, 2026-10-20). Discover's handoff
+  pulls the default branch, which for `turboderp/GLM-5.3-Flash-exl3`
+  is calibration material while the model sits on `4.05bpw` and
+  similar branches. A notice when the picked repo has non-default
+  branches (one `list_repo_refs` call, disclosed) would surface this
+  at the moment the human chooses. Paired candidate: a way to list a
+  repo's branches and tags from the CLI, so `pull --revision` does not
+  need a browser.
+- [ ] **Validate the hub's commit hash on the default-branch path too**
+  (Hardening, queued from spec 0024). `HubClient.repo_info` refuses a
+  non-40-hex SHA only when `--revision` was passed, to keep the
+  no-revision path byte-identical. Today a malformed SHA on the default
+  path would fail only at record save, after the download.
 
 - [ ] **Long errors need a house style** (measured in live use,
   2026-08-17, on the first real spec 0020 stop): the doc-refresh
