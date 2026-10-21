@@ -1,6 +1,6 @@
 # 0024 — Hugging Face Revision Support
 
-**Status:** shipping
+**Status:** shipped (PR #59)
 **Last updated:** 2026-10-20
 
 ## Goal

@@ -1078,7 +1078,7 @@ parallelize only with partitioned file ownership.
   predates this spec). The picker now withholds status there, and the
   gate maps to exit 2.
   See spec 0023 phase handoff.
-- **Session 28 (2026-10-20): spec 0024 `pull --revision`.** Live
+- **Session 28 (2026-10-20, PR #59): spec 0024 `pull --revision`.** Live
   trigger: `turboderp/GLM-5.3-Flash-exl3` keeps each EXL3 quant on its
   own branch, and `main` holds 7 calibration files (~0 GiB) while
   `4.05bpw` holds the 153.8 GiB model. A default pull archived the wrong
@@ -1113,7 +1113,7 @@ parallelize only with partitioned file ownership.
   paused — phase 1 shipped (PR #20), later adapters open;
   0005–0014 shipped; `0016` draft; `0017` shipped; `0018` shipped;
   `0019` shipped; `0020` shipped (PR #36); `0021` shipped (PR #39);
-  `0022` shipped (PR #40); `0023` shipped (PR #44); `0024` shipping.
+  `0022` shipped (PR #40); `0023` shipped (PR #44); `0024` shipped (PR #59).
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

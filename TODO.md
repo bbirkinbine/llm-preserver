@@ -158,7 +158,7 @@ queue entry did **not** make the spec and stay open here:
   than merging two trees. `--revision ..` and `.` are refused at exit 2.
   No schema change; omitting the flag is byte-identical. Trigger:
   `turboderp/GLM-5.3-Flash-exl3`, whose `main` holds only calibration
-  files. 1,727 tests. (spec 0024)
+  files. 1,727 tests. (spec 0024, PR #59)
 
 - 0023 archive status in file listings (PR #44): directory/shard
   coverage and per-file metadata observations appear in the `pull` and
