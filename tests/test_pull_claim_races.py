@@ -73,7 +73,7 @@ def test_holder_releasing_between_create_and_read_is_retried(
     leaf: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     marker = leaf / MARKER_NAME
-    plant(marker, holder(tmp_path, pid=os.getpid()))  # live: would refuse if read
+    plant(marker, holder(tmp_path, pid=os.getppid()))  # live: would refuse if read
     real_open = os.open
     released = []
 

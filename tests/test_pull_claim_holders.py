@@ -77,13 +77,13 @@ def test_running_holder_on_this_host_refuses_naming_everything(
 
     install_kill(monkeypatch)
     marker = leaf / MARKER_NAME
-    raw = plant(marker, holder(tmp_path, pid=os.getpid()))
+    raw = plant(marker, holder(tmp_path, pid=os.getppid()))
 
     refusal = claim_or_refusal(leaf)
 
     assert isinstance(refusal, PullInProgressError)
     message = str(refusal)
-    for fact in (REPO_ID, THIS_HOST, str(os.getpid()), STARTED, str(marker)):
+    for fact in (REPO_ID, THIS_HOST, str(os.getppid()), STARTED, str(marker)):
         assert fact in message, fact
     assert marker.read_bytes() == raw
 

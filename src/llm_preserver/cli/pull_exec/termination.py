@@ -9,6 +9,9 @@ signals raise :class:`Terminated` instead, which unwinds exactly like
 Ctrl-C: every ``finally`` runs, the claim is released, and staged bytes
 stay for the resume.
 
+A signal the process inherited as ignored stays ignored: ``nohup`` is a
+human's request that a hangup not end the pull.
+
 ``kill -9`` cannot be caught by anything, and still leaves the marker.
 """
 
@@ -23,6 +26,10 @@ from types import FrameType
 _SIGNALS = tuple(
     sig for sig in (getattr(signal, "SIGTERM", None), getattr(signal, "SIGHUP", None)) if sig
 )
+
+
+_received: int | None = None
+"""Set by the handler while :func:`unwind_on_termination` is active."""
 
 
 class Terminated(KeyboardInterrupt):
@@ -44,16 +51,35 @@ def unwind_on_termination() -> Iterator[None]:
     The previous handlers come back on exit. Outside the main thread
     Python cannot install a handler, so the body runs unchanged.
     """
+    global _received
     if threading.current_thread() is not threading.main_thread():
         yield
         return
 
     def raise_terminated(signum: int, frame: FrameType | None) -> None:
+        global _received
+        _received = signum
         raise Terminated(signum)
 
-    previous = {sig: signal.signal(sig, raise_terminated) for sig in _SIGNALS}
+    previous = {
+        sig: signal.signal(sig, raise_terminated)
+        for sig in _SIGNALS
+        if signal.getsignal(sig) != signal.SIG_IGN
+    }
     try:
         yield
     finally:
         for sig, handler in previous.items():
             signal.signal(sig, handler)
+        _received = None
+
+
+def signal_received() -> int | None:
+    """The signal that is unwinding the current pull, if one is.
+
+    click folds every ``KeyboardInterrupt`` raised inside a prompt into
+    the ``Abort`` it raises for EOF, :class:`Terminated` included, so a
+    prompt cannot tell a ``kill`` from a human's Ctrl-D by the exception.
+    It asks here instead.
+    """
+    return _received

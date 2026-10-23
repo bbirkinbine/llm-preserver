@@ -52,25 +52,36 @@ def discard_staging_leaf(leaf: Path, *, keep: str) -> None:
     """
     try:
         entries = [entry for entry in leaf.iterdir() if entry.name != keep]
-        for entry in entries:
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        _warn_leaf_left(leaf, exc, keep)
+        return
+    for entry in entries:
+        try:
             if entry.is_dir() and not entry.is_symlink():
                 shutil.rmtree(entry)
             else:
                 entry.unlink(missing_ok=True)
-    except FileNotFoundError:
-        return
-    except OSError as exc:
-        logger.warning(
-            "the archive is complete and recorded; could not remove the pull's "
-            "staging directory at %s (errno %s: %s). It holds the transfer "
-            "client's bookkeeping, not archived data — remove it by hand when "
-            "convenient, unless a pull of this repo is running (its directory "
-            "then holds %s); `verify --staging` lists it until you do",
-            leaf,
-            exc.errno,
-            exc.strerror,
-            keep,
-        )
+        except FileNotFoundError:
+            continue  # gone already: the rest of the leaf still goes
+        except OSError as exc:
+            _warn_leaf_left(leaf, exc, keep)
+            return
+
+
+def _warn_leaf_left(leaf: Path, exc: OSError, keep: str) -> None:
+    logger.warning(
+        "the archive is complete and recorded; could not remove the pull's "
+        "staging directory at %s (errno %s: %s). It holds the transfer "
+        "client's bookkeeping, not archived data — remove it by hand when "
+        "convenient, unless a pull of this repo is running (its directory "
+        "then holds %s); `verify --staging` lists it until you do",
+        leaf,
+        exc.errno,
+        exc.strerror,
+        keep,
+    )
 
 
 def discard_empty_staging_leaf(leaf: Path) -> None:

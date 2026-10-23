@@ -86,7 +86,7 @@ def test_second_pull_of_a_held_repo_exits_3(
     archive: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     pin_host(monkeypatch)
-    raw = plant(marker_path(archive), holder(tmp_path, pid=os.getpid()))
+    raw = plant(marker_path(archive), holder(tmp_path, pid=os.getppid()))
     install_fake_hub(monkeypatch, ObservingHub(marker_path(archive)))
 
     result = invoke(archive, *PULL)
@@ -102,14 +102,14 @@ def test_refusal_is_one_line_naming_repo_holder_start_and_path(
     archive: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     pin_host(monkeypatch)
-    plant(marker_path(archive), holder(tmp_path, pid=os.getpid()))
+    plant(marker_path(archive), holder(tmp_path, pid=os.getppid()))
     install_fake_hub(monkeypatch, ObservingHub(marker_path(archive)))
 
     result = invoke(archive, *PULL)
 
     lines = error_lines(result)
     assert len(lines) == 1, click.unstyle(result.output)
-    for fact in (REPO_ID, THIS_HOST, str(os.getpid()), STARTED, str(marker_path(archive))):
+    for fact in (REPO_ID, THIS_HOST, str(os.getppid()), STARTED, str(marker_path(archive))):
         assert fact in lines[0], fact
     assert "Traceback" not in everything(result)
 
@@ -177,7 +177,7 @@ def test_plan_answers_while_another_pull_holds_the_repo(
     archive: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     pin_host(monkeypatch)
-    raw = plant(marker_path(archive), holder(tmp_path, pid=os.getpid()))
+    raw = plant(marker_path(archive), holder(tmp_path, pid=os.getppid()))
     install_fake_hub(monkeypatch, ObservingHub(marker_path(archive)))
 
     planned = invoke(archive, "--include", "*Q4_K_M*", "--plan")

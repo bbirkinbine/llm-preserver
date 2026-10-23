@@ -596,7 +596,7 @@ reading source:
 | 4 | hub-side | 5xx or rate limiting — retry later; not your fault |
 | 5 | integrity | hash mismatch after download — the file never entered the archive |
 | 130 | interrupted | Ctrl-C during the transfer — paste the resume hint (printed as the last line) to continue |
-| 129 / 143 | terminated | the terminal or SSH session closed (SIGHUP, 129) or a plain `kill` (SIGTERM, 143) during the pull — the same unwind as Ctrl-C: the repo's claim is released, staged bytes stay, and the resume hint is the last line when the terminal can still show it |
+| 129 / 143 | terminated | the terminal or SSH session closed (SIGHUP, 129) or a plain `kill` (SIGTERM, 143) during the pull, a confirmation prompt included — the same unwind as Ctrl-C: the repo's claim is released, staged bytes stay, and the resume hint is the last line when the terminal can still show it. Under `nohup`, SIGHUP stays ignored and the pull runs on |
 
 ## Pulling a branch, tag, or pinned commit
 
@@ -744,14 +744,21 @@ of that repo is refused at **exit 3**:
 - **The marker goes away on its own** when the pull ends: success,
   nothing to pull, a declined prompt, any error, Ctrl-C mid-transfer,
   a plain `kill` (SIGTERM, exit 143), and closing the terminal or SSH
-  session (SIGHUP, exit 129) all remove it. On success it is the last
-  thing removed from the staging directory, so a second pull cannot
-  claim the repo while this one is still cleaning up. The resume command
-  works unchanged.
+  session (SIGHUP, exit 129) all remove it. A `kill` or a closed
+  terminal while a confirmation prompt is waiting exits 143 / 129 too:
+  nobody answered, so it is not reported as a decline. On success the
+  marker is the last thing removed from the staging directory, so a
+  second pull cannot claim the repo while this one is still cleaning
+  up. The resume command works unchanged.
+- **`nohup` keeps working.** A pull started with SIGHUP ignored
+  (`nohup llm-preserver pull … &`) keeps it ignored: closing the
+  terminal does not end it, and its marker stays until it finishes.
 - **A hard kill** (`kill -9`, a crash, a power loss) cannot be caught
   and leaves the marker behind. On the **same machine**, the next pull sees that the recorded
-  pid is no longer running, clears the marker, prints one line saying
-  so, and proceeds. A marker from **another machine** is never cleared
+  pid is no longer running (or is its own pid, as in a container whose
+  entrypoint is always pid 1), clears the marker, prints one line saying
+  so, and proceeds. If that stale marker cannot be deleted (another
+  user's staging directory), the refusal says so and names the file. A marker from **another machine** is never cleared
   automatically, however old: this tool cannot see that machine's
   processes, and the two clocks need not agree. The refusal prints the
   marker's path. If that pull is not running, delete the file and re-run.
@@ -764,7 +771,10 @@ of that repo is refused at **exit 3**:
   that share a hostname judge each other's markers by pid: the second
   sees the first's live pid as missing on its own machine, treats the
   marker as stale, and **both pulls run**, which is the clobbering this
-  guard exists to prevent. A laptop whose hostname changes with the
+  guard exists to prevent. The same holds for a container that shares
+  the host's hostname (`--uts host`, or `--network host` with some
+  runtimes) but has its own pid namespace: give it its own hostname.
+  A laptop whose hostname changes with the
   network has the safe failure: it sees its own old marker as foreign
   and refuses, and the fix is deleting the printed file.
 - **A hub file with the marker's name.** A selection that includes a

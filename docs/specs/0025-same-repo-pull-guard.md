@@ -90,6 +90,15 @@ rides with.
    marker that every other host refuses on (decided by Brian
    2026-10-23, review round). `kill -9` cannot be caught.
 
+   *Second review round, 2026-10-23.* A signal the process inherited as
+   ignored stays ignored, so a `nohup` pull still survives a closed
+   terminal. A signal while a y/N confirmation waits exits 128 + n as
+   well, never "declined" (exit 0) or "not interactive" (exit 2): click
+   folds it into the same `Abort` as EOF, so the prompt asks the
+   handler which signal arrived (decided by Brian). A human's Ctrl-C at
+   a prompt is unchanged, spec 0021's decline. A second signal landing
+   inside the release finishes the release before it propagates.
+
 ### The refusal
 
 5. A second pull of the same repo, on the same host or another, while
@@ -108,7 +117,13 @@ rides with.
    running (`os.kill(pid, 0)` raises `ProcessLookupError`) is stale:
    the pull replaces it and proceeds, printing one INFO line that it
    cleared a marker left by pid N. A pid that exists but belongs to
-   another user (`PermissionError`) is treated as running.
+   another user (`PermissionError`) is treated as running. A marker
+   naming this process's own pid is stale too: this run has not claimed
+   yet, so the holder is provably someone else, and a container whose
+   entrypoint is always pid 1 would otherwise refuse itself after every
+   hard kill (decided by Brian 2026-10-23, second review round). A
+   stale marker that cannot be deleted is a refusal that says so and
+   names the file.
 7. A marker from a **different** hostname is never judged stale, however
    old: the run refuses as in criterion 5, and the message says that if
    the other machine's pull is no longer running the human should delete
@@ -174,7 +189,11 @@ rides with.
   automatic delete this spec declines to add.
 - Cross-host liveness. Two machines that share a hostname will judge
   each other's markers by pid and get it wrong; known limit, noted in
-  the docs, not solved.
+  the docs, not solved. The same goes for a container sharing the
+  host's hostname with its own pid namespace. A boot id plus
+  pid-namespace id in the marker would fix both (and pid reuse after a
+  reboot), but it grows the marker schema and is Linux-only: its own
+  spec if it is ever wanted.
 
 ## External references
 
@@ -240,3 +259,67 @@ is proven by criteria 13-15 on the real archive rather than cited.
   metadata-only writes run unguarded.
 - **Queued elsewhere.** Atomic `save_record`; `remove` honoring the
   marker. Both go to TODO.md on this branch.
+
+## Verification (2026-10-23)
+
+**Live, criteria 13-15.** Run from two client machines — one macOS
+(`smbfs`), one Linux (`cifs`, SMB 3.1.1) — against one NAS share, in a
+scratch archive on that share beside the real one, so no real archive
+content was read or written. Repo `gpustack/bge-m3-GGUF`, one quant per
+run via `--include`, from a checkout of this branch on each machine.
+
+| Criterion | Run | Result |
+| --- | --- | --- |
+| 13 | same host, two pulls started 0.2 s apart | one exit 0; the other exit 3 naming host, pid, start time, marker path |
+| 14 | Linux holds, macOS pulls the same repo | macOS exit 3, foreign-host message; marker left in place |
+| 14 | macOS holds, Linux pulls the same repo | Linux exit 3, foreign-host message |
+| 15 | `kill -9` on macOS, resume on macOS | exit 137, marker left; resume logged the stale clear, exit 0 |
+| 15 | `kill -9` on Linux, resume on macOS | refused, exit 3, with the path; after `rm` of the marker, resume exit 0 |
+
+After all runs, `verify` reported the model `valid` and `.staging/` was
+empty. What the cross-host rows prove is the refusal: in both
+directions, a marker one client created was seen by the other and
+stopped it. In each, the holder had been running for seconds, so they
+do not exercise two clients creating inside one attribute-cache window;
+the same-host row 13 (0.2 s apart) is the closest to that. Nor does the
+final record prove anything about the stale-copy overwrite: the guard
+serialized the pulls, and serialized pulls accumulate one record on
+`main` too.
+
+A real SIGTERM about 2 s into a `hf_xet` download (local disk) stopped
+the pull in 0.1 s: exit 143, the resume command printed, the marker
+gone. That answers a review concern that the Rust transfer would hold
+off the Python handler until its file finished.
+
+**Mutation proof.** Ten guards, each replaced by one exact-string swap,
+full suite run, file restored from a copy:
+
+| Mutation | Killed by |
+| --- | --- |
+| claim deleted at the `pull_model` call site | `test_second_pull_of_a_held_repo_exits_3` |
+| foreign host judged by pid | `test_foreign_host_refusal_tells_the_human_to_delete_the_marker` |
+| live holder judged dead | `test_second_pull_of_a_held_repo_exits_3` |
+| `PermissionError` from `os.kill` judged dead | `test_other_users_pid_counts_as_running` |
+| `O_EXCL` replaced by `O_TRUNC` | `test_second_pull_of_a_held_repo_exits_3` |
+| stale unlink without the unchanged re-read | `test_stale_takeover_leaves_a_marker_that_changed_after_it_was_judged` |
+| release unlinks a marker that is not this run's | `test_release_on_error_keeps_a_marker_swapped_in_mid_pull` |
+| release skipped | `test_fully_archived_repull_without_model_exits_zero_noninteractive` |
+| hub-file collision compared without casefold | `test_selected_root_file_named_like_the_marker_is_refused[case-variant]` |
+| SIGTERM / SIGHUP handlers not installed | `test_signal_mid_transfer_releases_the_claim_and_exits_128_plus_n[SIGTERM]` |
+
+The second review round (standard and adversarial, each reproducing its
+findings) added nine guards, each written as a failing test first,
+proved red against the first-round commit and green after, and then
+mutation-proved the same way:
+
+| Mutation | Killed by |
+| --- | --- |
+| resume-hint echo no longer suppresses `OSError` | `test_a_resume_hint_that_cannot_be_printed_still_exits_128_plus_n` |
+| inherited `SIG_IGN` overridden | `test_an_ignored_sighup_stays_ignored_so_nohup_pulls_finish` |
+| signal at a prompt not re-raised | `test_sigterm_at_the_size_prompt_exits_143_not_a_decline[terminal, piped]` |
+| prompt's newline echo no longer suppresses `OSError` | `test_hangup_at_the_prompt_with_the_terminal_gone_exits_129` |
+| release not retried after an interrupt | `test_a_second_signal_during_release_still_removes_the_marker` |
+| own pid judged running | `test_a_marker_holding_this_processes_own_pid_is_stale` |
+| marker-write cleanup on `OSError` only | `test_an_interrupt_during_the_marker_write_leaves_no_marker` |
+| undeletable stale marker swallowed | `test_a_stale_marker_that_cannot_be_deleted_says_so` |
+| success cleanup stops at a vanished entry | `test_success_cleanup_continues_past_an_entry_that_vanished` |

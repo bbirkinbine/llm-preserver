@@ -207,7 +207,7 @@ def test_stale_takeover_leaves_a_marker_that_changed_after_it_was_judged(
     pin_host(monkeypatch)
     marker = leaf / MARKER_NAME
     plant(marker, holder(tmp_path))
-    live = json.dumps(holder(tmp_path, pid=os.getpid(), started="2026-10-23T09:00:00+00:00"))
+    live = json.dumps(holder(tmp_path, pid=os.getppid(), started="2026-10-23T09:00:00+00:00"))
     real_kill = os.kill
 
     def kill_then_swap(pid: int, sig: int) -> None:

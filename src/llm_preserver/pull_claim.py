@@ -77,9 +77,9 @@ def claim_pull(leaf: Path, repo_id: str) -> Iterator[None]:
     """Hold ``repo_id``'s claim in ``leaf`` for the body of the ``with``.
 
     Release runs on every exit, Ctrl-C included, and removes only a
-    marker whose bytes are still this run's: after the success path
-    deletes the leaf, a new pull of the same repo may claim before this
-    ``finally`` runs, and its marker must survive.
+    marker whose bytes are still this run's: a marker another process
+    wrote over this one (a human's ``rm`` and a fresh claim, or a
+    hand-edited file) is not this run's to delete.
 
     Raises:
         PullInProgressError: Another pull holds the claim, or the marker
@@ -114,7 +114,7 @@ def _acquire(marker: Path, own: bytes, repo_id: str) -> None:
         if holder is None:
             continue  # the holder released between our create and our read
         _refuse_unless_stale(marker, holder, repo_id)
-        if _unlink_if_unchanged(marker, holder.raw):
+        if _unlink_if_unchanged(marker, holder, repo_id):
             logger.info(
                 "cleared a stale pull marker for %s left by pid %d on this host "
                 "(no longer running)",
@@ -135,7 +135,9 @@ def _create_exclusive(marker: Path, own: bytes) -> None:
     try:
         os.write(fd, own)
         os.fsync(fd)
-    except OSError:
+    # BaseException: a Ctrl-C or Terminated during the write (an SMB
+    # round trip) must not leave a half-written marker behind.
+    except BaseException:
         os.close(fd)
         with contextlib.suppress(OSError):
             marker.unlink()
@@ -143,14 +145,25 @@ def _create_exclusive(marker: Path, own: bytes) -> None:
     os.close(fd)
 
 
-def _unlink_if_unchanged(marker: Path, raw: bytes) -> bool:
-    """Remove a stale marker only if it is still the one judged stale."""
+def _unlink_if_unchanged(marker: Path, holder: Holder, repo_id: str) -> bool:
+    """Remove a stale marker only if it is still the one judged stale.
+
+    Raises:
+        PullInProgressError: The stale marker could not be re-read or
+            deleted (another user's leaf, a read-only share).
+    """
     try:
-        if read_marker_bytes(marker) != raw:
+        if read_marker_bytes(marker) != holder.raw:
             return False
         marker.unlink()
-    except OSError:
-        return False  # the next attempt's read_holder names what is wrong
+    except FileNotFoundError:
+        return False  # its holder's release or a human got there first
+    except OSError as exc:
+        raise PullInProgressError(
+            f"a stale pull marker for {repo_id} (left by pid {holder.pid} on this "
+            f"host, no longer running) could not be deleted ({exc.strerror}); delete "
+            f"{marker} by hand and re-run"
+        ) from exc
     return True
 
 
@@ -168,7 +181,10 @@ def _refuse_unless_stale(marker: Path, holder: Holder, repo_id: str) -> None:
             f"{held}. It was started on another machine, so this tool cannot tell "
             "whether it is still running; if it is not, delete that marker file and re-run"
         )
-    if _holder_running(holder.pid):
+    # This run has not claimed yet, so a marker naming its own pid is
+    # another process's leftover: a container whose entrypoint is always
+    # pid 1 would otherwise refuse itself after every hard kill.
+    if holder.pid != os.getpid() and _holder_running(holder.pid):
         raise PullInProgressError(
             f"{held}. Wait for it to finish; if no pull of {repo_id} is running "
             "(the pid now belongs to another process), delete that marker file and re-run"
@@ -186,10 +202,24 @@ def _holder_running(pid: int) -> bool:
 
 
 def _release(marker: Path, own: bytes) -> None:
-    """Remove this run's marker and an emptied leaf. Never raises."""
+    """Remove this run's marker and an emptied leaf.
+
+    A closed terminal can deliver SIGHUP twice, and a second signal
+    landing in here would strand the marker for every other host. So an
+    interrupt mid-release finishes the release, then propagates. Raises
+    nothing else.
+    """
+    try:
+        _release_once(marker, own)
+    except KeyboardInterrupt:
+        _release_once(marker, own)
+        raise
+
+
+def _release_once(marker: Path, own: bytes) -> None:
     try:
         if read_marker_bytes(marker) == own:
             marker.unlink()
     except OSError:
-        pass  # already gone with the leaf, or unreadable: never guess
+        pass  # already gone, or unreadable: never guess
     discard_empty_staging_leaf(marker.parent)

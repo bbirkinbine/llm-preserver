@@ -65,7 +65,7 @@ def test_running_same_host_claim_refuses_before_hub_and_prompts(
     from llm_preserver.pull_claim import PullInProgressError
 
     pin_host(monkeypatch)
-    raw = plant(marker_path(archive), holder(tmp_path, pid=os.getpid()))
+    raw = plant(marker_path(archive), holder(tmp_path, pid=os.getppid()))
     client = ObservingHub(marker_path(archive))
     prompts: list[str] = []
 
@@ -134,7 +134,7 @@ def test_a_live_sibling_claim_under_the_same_owner_is_ignored(
 ) -> None:
     pin_host(monkeypatch)
     sibling = creator_dir(archive) / "other-chat-GGUF" / MARKER_NAME
-    sibling_raw = plant(sibling, holder(tmp_path, repo_id=SIBLING_ID, pid=os.getpid()))
+    sibling_raw = plant(sibling, holder(tmp_path, repo_id=SIBLING_ID, pid=os.getppid()))
     client = ObservingHub(marker_path(archive))
 
     assert do_pull(archive, client) == model_dir(archive)
