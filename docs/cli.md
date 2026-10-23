@@ -592,10 +592,11 @@ reading source:
 | 0 | success | files pulled; also nothing left to pull (an already-complete re-pull), and a **declined prompt** — `q` at the file listing, `n` at either confirmation, or Ctrl-C / Ctrl-D at any of them on a terminal (before any transfer starts; an interrupt mid-transfer is still 130). Nothing was pulled, but nothing failed; read the final line, not the exit code, to tell the two apart |
 | 1 | archive/usage | path is not an archive; bad arguments |
 | 2 | user input | malformed or unknown repo id; gated repo not accepted; no matching files; a prompt that **could not be answered** because stdin is not interactive (the message names the bypass) |
-| 3 | local environment | network unreachable, disk full — check your machine |
+| 3 | local environment | network unreachable, disk full — check your machine; also **another pull of the same repo is running**, from this machine or another (see [Running pulls in parallel](#running-pulls-in-parallel)) |
 | 4 | hub-side | 5xx or rate limiting — retry later; not your fault |
 | 5 | integrity | hash mismatch after download — the file never entered the archive |
 | 130 | interrupted | Ctrl-C during the transfer — paste the resume hint (printed as the last line) to continue |
+| 129 / 143 | terminated | the terminal or SSH session closed (SIGHUP, 129) or a plain `kill` (SIGTERM, 143) during the pull — the same unwind as Ctrl-C: the repo's claim is released, staged bytes stay, and the resume hint is the last line when the terminal can still show it |
 
 ## Pulling a branch, tag, or pinned commit
 
@@ -710,6 +711,77 @@ every pull of it.
 `discover` has no `--revision`; its handoff pulls the default branch.
 For a repo that keeps its models on other branches, take the repo id
 from discover and run `pull --revision` yourself.
+
+## Running pulls in parallel
+
+Pulls of **different** repos can run at the same time, from any number
+of terminals or machines sharing one archive. Each writes only inside
+its own `.staging/<owner>/<repo>/` and `models/<owner>/<repo>/`, so two
+repos under one owner do not meet either.
+
+Two pulls of the **same** repo cannot. They would share one staging
+directory and one record: the first to finish clears staging under the
+second, and the later record overwrites the earlier one. So a pull
+claims its repo for as long as it runs, with a small marker file at
+`.staging/<owner>/<repo>/.llm-preserver-pull.json`, and a second pull
+of that repo is refused at **exit 3**:
+
+```bash
+# error [local environment]: another pull of unsloth/Qwen3.6-27B-GGUF is in
+#   progress (host host-a, pid 41822, started 2026-10-23T09:14:02+00:00); its
+#   marker is /archive/.staging/unsloth/Qwen3.6-27B-GGUF/.llm-preserver-pull.json.
+#   Wait for it to finish; ...
+```
+
+- **When.** A typed `--include` / `--whole-repo` pull is refused before
+  it calls the hub. An interactive pull, a `--revision` pull, and the
+  `discover` handoff have already fetched the file listing by then, so
+  they are refused after the listing, before planning and before any
+  confirmation. The claim is held while you answer the size and
+  every-weight confirmations.
+- **`--plan` is never refused** and never takes the claim. It writes
+  nothing, so asking what a pull would do while that pull runs is safe.
+- **The marker goes away on its own** when the pull ends: success,
+  nothing to pull, a declined prompt, any error, Ctrl-C mid-transfer,
+  a plain `kill` (SIGTERM, exit 143), and closing the terminal or SSH
+  session (SIGHUP, exit 129) all remove it. On success it is the last
+  thing removed from the staging directory, so a second pull cannot
+  claim the repo while this one is still cleaning up. The resume command
+  works unchanged.
+- **A hard kill** (`kill -9`, a crash, a power loss) cannot be caught
+  and leaves the marker behind. On the **same machine**, the next pull sees that the recorded
+  pid is no longer running, clears the marker, prints one line saying
+  so, and proceeds. A marker from **another machine** is never cleared
+  automatically, however old: this tool cannot see that machine's
+  processes, and the two clocks need not agree. The refusal prints the
+  marker's path. If that pull is not running, delete the file and re-run.
+  There is no `--force` flag.
+- **A marker this tool cannot read** (wrong shape, a symlink,
+  permissions, a stale network handle) is refused with its path in the
+  same way and is never deleted for you.
+- **Hostnames.** "Same machine" means the same `hostname`. Give every
+  machine that pulls into a shared archive a distinct one. Two machines
+  that share a hostname judge each other's markers by pid: the second
+  sees the first's live pid as missing on its own machine, treats the
+  marker as stale, and **both pulls run**, which is the clobbering this
+  guard exists to prevent. A laptop whose hostname changes with the
+  network has the safe failure: it sees its own old marker as foreign
+  and refuses, and the fix is deleting the printed file.
+- **A hub file with the marker's name.** A selection that includes a
+  root-level file named `.llm-preserver-pull.json` would download over
+  the marker, so it is refused at exit 2 (`pull` and `--plan` alike).
+  Exclude it from the selection.
+- **A read-only `.staging/`** refuses every pull at exit 3 ("cannot
+  create the pull marker"), including a re-pull with nothing new to
+  download, which used to finish without writing anything. Pulls need
+  a writable `.staging/` to claim the repo; `--plan` does not.
+- **Disk space is checked per pull.** Two large pulls that each fit on
+  their own can overrun the volume together. The one that runs out
+  exits 3 with its staging directory intact, so re-running it resumes.
+- **In-flight models look incomplete.** `status` and `verify` may show a
+  model as incomplete while its pull is still running, until its record
+  lands. Over a network mount, another machine can see that state for a
+  few seconds longer.
 
 ## pull --plan — dry run (verify, then run)
 
@@ -1248,8 +1320,11 @@ prints the id both need: resume the original
 not re-fetched), or discard it with `remove <owner>/<repo>` (which
 clears a staging-only leftover even when no `models/` directory exists).
 One caveat: a pull running *right now* also has content in `.staging/`,
-and the scan cannot tell a live transfer from a forgotten one — run
-`--staging` when no pull is in flight.
+and the scan lists it like any other leftover. A leaf holding
+`.llm-preserver-pull.json` belongs to a pull that is running, or one
+that was hard-killed before it could clean up (see
+[Running pulls in parallel](#running-pulls-in-parallel)). For a clean
+report, run `--staging` when no pull is in flight.
 
 Exit codes are the cron contract — a scheduled run needs no output
 parsing:

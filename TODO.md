@@ -92,7 +92,21 @@ Check items off as they ship; update when priorities shift.
   every test used a single relation, where one label hides inside the
   reserve. Belongs on its own branch, not spec 0017's.
 
-## Next spec (0025) — pick one
+- [ ] **Atomic `save_record`** (queued from spec 0025): write the
+  record to a temp file in the model directory, then `os.replace` it.
+  A concurrent `status` or `verify` can today read a half-written
+  `MODEL-RECORD.md` while a pull saves it. Cheap; kept out of 0025 so
+  that diff stays one idea. The manifest's anticipated record hash
+  (spec 0009) must still match the bytes that land.
+
+- [ ] **`remove` honors the pull marker** (queued from spec 0025):
+  `remove` of a repo while a pull of it runs deletes payload and record
+  under the pull. Refuse when `.staging/<owner>/<repo>/.llm-preserver-pull.json`
+  is held, reusing `pull_claim`'s read/validate/stale logic and
+  `PullInProgressError`. Same posture: a foreign host's marker is
+  reported, never cleared.
+
+## Next spec (0026) — pick one
 
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
   PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over

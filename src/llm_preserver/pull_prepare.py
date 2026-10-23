@@ -25,6 +25,7 @@ from llm_preserver.layout import (
 from llm_preserver.pull_advisory import Advisory, advisories_for, archived_hub_repos
 from llm_preserver.pull_decline import EVERY_WEIGHT_DECLINED, PullDeclined
 from llm_preserver.pull_home import ConfirmCallback, load_existing_record
+from llm_preserver.pull_marker import require_no_marker_collision
 from llm_preserver.pull_metadata import fetch_adapter_base, resolved_base_model
 from llm_preserver.pull_plan import PullPlan, plan_downloads
 from llm_preserver.pull_preflight import already_staged_bytes, total_selected_size
@@ -135,6 +136,7 @@ def prepare_pull(
         selected = select_files(info.files, include)
         require_nondoc_selection(selected, info.files, repo_id, include)
     require_case_distinct_targets(selected)
+    require_no_marker_collision(selected)
     subdir = infer_format_subdir([f.path for f in selected], repo_id)
     # One directory per source repo (ADR 0003): the destination is the
     # repo id, verbatim. No inference, no prompt, no metadata call —

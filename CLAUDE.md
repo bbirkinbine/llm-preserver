@@ -1103,7 +1103,7 @@ parallelize only with partitioned file ownership.
   the positional no-revision call on the interactive path (that last
   one first survived the whole suite). Live: GLM `--plan` by branch and
   by SHA, bad branch exit 2, canary green. 1727 tests.
-- **Next spec (0025): pick from TODO.md** — smoke test, spec 0002's
+- **Next spec (0026): pick from TODO.md** — smoke test, spec 0002's
   later adapter phases (LM Studio / llama.cpp / vLLM), or the remaining
   TUI nice-to-haves (arrow-key highlight, type-to-filter, match
   preview), or cache inventory/import. Also queued from live use:
