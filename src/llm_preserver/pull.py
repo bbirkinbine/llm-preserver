@@ -13,19 +13,14 @@ hard stop, never a silent overwrite (see ``pull_plan``).
 import logging
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import cast, get_args
 
 from llm_preserver.archive import require_archive
-from llm_preserver.hub import (
-    HubClientProtocol,
-    PullEnvError,
-    PullError,
-    PullUserError,
-    RepoInfo,
-)
-from llm_preserver.layout import split_repo_id
+from llm_preserver.hub import HubClientProtocol, PullEnvError, PullError, RepoInfo
+from llm_preserver.layout import require_migrated_archive
+from llm_preserver.pull_claim import PULL_MARKER_FILENAME, claim_repo
 from llm_preserver.pull_decline import SIZE_DECLINED, PullDeclined
 from llm_preserver.pull_home import ConfirmCallback
+from llm_preserver.pull_inputs import validated_base_model, validated_roles
 from llm_preserver.pull_preflight import human_size, require_disk_budget
 from llm_preserver.pull_prepare import STAGING_DIRNAME, PullPreparation, prepare_pull
 from llm_preserver.pull_record import update_record, write_manifest
@@ -37,36 +32,6 @@ from llm_preserver.staging_cleanup import discard_staging_leaf
 logger = logging.getLogger(__name__)
 
 __all__ = ["STAGING_DIRNAME", "pull_model"]
-
-
-def validated_base_model(base_model: str | None) -> str | None:
-    """Refuse a ``--base-model`` that is not a usable repo id.
-
-    Exactly two components, via the one validator the whole tool shares:
-    the value is recorded, rendered into ``MODEL-RECORD.md``, and read
-    back as a lineage pointer, so it can never be free text.
-
-    Raises:
-        PullUserError: If the claim is not an ``<owner>/<repo>`` id.
-    """
-    if base_model is None:
-        return None
-    try:
-        split_repo_id(base_model)
-    except ValueError as exc:
-        raise PullUserError(
-            f"--base-model must look like <owner>/<repo>, got {base_model!r}"
-        ) from exc
-    return base_model
-
-
-def validated_roles(roles: Sequence[str]) -> list[Role]:
-    """Validate caller-supplied role names against the record vocabulary."""
-    valid = get_args(Role)
-    unknown = [role for role in roles if role not in valid]
-    if unknown:
-        raise PullUserError(f"unknown role(s) {unknown!r}: valid roles are {', '.join(valid)}")
-    return cast(list[Role], list(roles))
 
 
 def _size_confirmation(to_download: int, selected: int, needed_bytes: int, repo_id: str) -> str:
@@ -189,105 +154,116 @@ def pull_model(
 
     Raises:
         PullError: One of the four fault-domain errors — user input,
-            local environment, hub-side, or integrity.
+            local environment, hub-side, or integrity. Includes
+            ``PullInProgressError`` (local environment) when another
+            pull of this repo holds its claim (spec 0025).
         ArchiveError: If ``archive_root`` is not a usable archive.
+        UnmigratedArchiveError: If the archive must be converted before
+            it takes content (spec 0017).
     """
     require_archive(archive_root)
     role_list = validated_roles(roles)
     asserted_base = validated_base_model(base_model)
-    prep = prepare_pull(
-        archive_root,
-        repo_id,
-        client,
-        include=include,
-        repo_info=repo_info,
-        refresh_docs=refresh_docs,
-        select_all=select_all,
-        confirm=confirm,
-        pin_archived_commit=pin_archived_commit,
-    )
-    for advisory in prep.advisories:
-        # Advisory text embeds hub-supplied filenames/metadata; strip
-        # terminal control characters before it reaches a terminal.
-        # Warnings (likely human error) log at WARNING so they stand
-        # apart from the INFO advisory wall.
-        level = logging.WARNING if advisory.severity == "warning" else logging.INFO
-        logger.log(
-            level, "%s: %s", advisory.severity, clean_text(advisory.message, single_line=True)
-        )
-    # Plan → preflight → confirm on every mode (spec 0004 shape,
-    # extended to selective pulls by the spec 0005 rider): refuse an
-    # over-budget pull before asking anyone to confirm it. One disk
-    # read (prepare's) backs both the figure shown and the decision.
-    require_disk_budget(archive_root, prep.needed_bytes, prep.disk_free)
-    if not prep.plan.to_download and not prep.plan.adopted:
-        # Nothing to *download* — but ``--role`` and ``--base-model``
-        # are record edits, not downloads, and already-archived is
-        # exactly when a curator wants to correct a lineage claim. The
-        # 0014 no-op contract covers bytes; silently discarding an
-        # explicit instruction is the same class of fault 0014 itself
-        # was written to close (live use, 2026-08-11).
-        if _apply_metadata_only(prep, role_list, asserted_base):
-            logger.info("recorded metadata for %s (no files to pull)", repo_id)
-            if on_metadata_only is not None:
-                on_metadata_only()
-            return prep.model_dir
-        logger.info(
-            "nothing to pull: every selected file is already archived in %s", prep.model_dir
-        )
-        if on_no_op is not None:
-            on_no_op()
-        return prep.model_dir
-    # Adopt-only pulls (files already on disk, record catching up) move
-    # zero bytes; a "pull 0 files (0 B)?" prompt would block scripted
-    # re-pulls for nothing (adjudicated 2026-07-12).
-    if prep.plan.to_download and not confirm(
-        _size_confirmation(
-            len(prep.plan.to_download), len(prep.selected), prep.needed_bytes, repo_id
-        )
-    ):
-        raise PullDeclined(SIZE_DECLINED)
-    if prep.plan.to_download and on_transfer_start is not None:
-        on_transfer_start(f"{prep.creator}/{prep.name}")
-    try:
-        new_entries: list[FileEntry] = list(prep.plan.adopted)
-        if prep.plan.to_download:
-            new_entries.extend(
-                download_and_archive(
-                    client,
-                    repo_id,
-                    prep.info,
-                    prep.plan.to_download,
-                    prep.staging_dir,
-                    prep.model_dir,
-                )
-            )
-        record = update_record(
-            prep.record,
-            prep.info,
+    # Before the claim, so a refused pull of an unconverted archive
+    # leaves no .staging directories behind (spec 0025).
+    require_migrated_archive(archive_root)
+    # Held from before planning reads the record until the last write:
+    # a second pull of this repo that planned meanwhile would overwrite
+    # this run's record from a stale copy (spec 0025).
+    with claim_repo(archive_root, repo_id):
+        prep = prepare_pull(
+            archive_root,
             repo_id,
-            prep.creator,
-            prep.name,
-            role_list,
-            prep.subdir,
-            new_entries,
-            asserted_base=asserted_base,
+            client,
+            include=include,
+            repo_info=repo_info,
+            refresh_docs=refresh_docs,
+            select_all=select_all,
+            confirm=confirm,
+            pin_archived_commit=pin_archived_commit,
         )
-        write_manifest(prep.model_dir, record)
-        save_record(record, prep.model_dir)
-    except PullError:
-        raise
-    except OSError as exc:
-        raise PullEnvError(
-            f"local filesystem failure during pull: {exc}; "
-            "check disk space and permissions, then retry"
-        ) from exc
-    if prep.plan.to_download:
-        # The pull has already succeeded here — payload archived,
-        # hashed, recorded. Staging now holds only the client's
-        # .cache/huggingface bookkeeping, which must never reach the
-        # archive; dropping it runs *outside* the try because a cleanup
-        # that cannot finish is not a failed pull (spec 0019).
-        discard_staging_leaf(prep.staging_dir)
-    logger.info("pulled %d file(s) from %s into %s", len(new_entries), repo_id, prep.model_dir)
-    return prep.model_dir
+        for advisory in prep.advisories:
+            # Advisory text embeds hub-supplied filenames/metadata; strip
+            # terminal control characters before it reaches a terminal.
+            # Warnings (likely human error) log at WARNING so they stand
+            # apart from the INFO advisory wall.
+            level = logging.WARNING if advisory.severity == "warning" else logging.INFO
+            logger.log(
+                level, "%s: %s", advisory.severity, clean_text(advisory.message, single_line=True)
+            )
+        # Plan → preflight → confirm on every mode (spec 0004 shape,
+        # extended to selective pulls by the spec 0005 rider): refuse an
+        # over-budget pull before asking anyone to confirm it. One disk
+        # read (prepare's) backs both the figure shown and the decision.
+        require_disk_budget(archive_root, prep.needed_bytes, prep.disk_free)
+        if not prep.plan.to_download and not prep.plan.adopted:
+            # Nothing to *download* — but ``--role`` and ``--base-model``
+            # are record edits, not downloads, and already-archived is
+            # exactly when a curator wants to correct a lineage claim. The
+            # 0014 no-op contract covers bytes; silently discarding an
+            # explicit instruction is the same class of fault 0014 itself
+            # was written to close (live use, 2026-08-11).
+            if _apply_metadata_only(prep, role_list, asserted_base):
+                logger.info("recorded metadata for %s (no files to pull)", repo_id)
+                if on_metadata_only is not None:
+                    on_metadata_only()
+                return prep.model_dir
+            logger.info(
+                "nothing to pull: every selected file is already archived in %s", prep.model_dir
+            )
+            if on_no_op is not None:
+                on_no_op()
+            return prep.model_dir
+        # Adopt-only pulls (files already on disk, record catching up) move
+        # zero bytes; a "pull 0 files (0 B)?" prompt would block scripted
+        # re-pulls for nothing (adjudicated 2026-07-12).
+        if prep.plan.to_download and not confirm(
+            _size_confirmation(
+                len(prep.plan.to_download), len(prep.selected), prep.needed_bytes, repo_id
+            )
+        ):
+            raise PullDeclined(SIZE_DECLINED)
+        if prep.plan.to_download and on_transfer_start is not None:
+            on_transfer_start(f"{prep.creator}/{prep.name}")
+        try:
+            new_entries: list[FileEntry] = list(prep.plan.adopted)
+            if prep.plan.to_download:
+                new_entries.extend(
+                    download_and_archive(
+                        client,
+                        repo_id,
+                        prep.info,
+                        prep.plan.to_download,
+                        prep.staging_dir,
+                        prep.model_dir,
+                    )
+                )
+            record = update_record(
+                prep.record,
+                prep.info,
+                repo_id,
+                prep.creator,
+                prep.name,
+                role_list,
+                prep.subdir,
+                new_entries,
+                asserted_base=asserted_base,
+            )
+            write_manifest(prep.model_dir, record)
+            save_record(record, prep.model_dir)
+        except PullError:
+            raise
+        except OSError as exc:
+            raise PullEnvError(
+                f"local filesystem failure during pull: {exc}; "
+                "check disk space and permissions, then retry"
+            ) from exc
+        if prep.plan.to_download:
+            # The pull has already succeeded here — payload archived,
+            # hashed, recorded. Staging now holds only the client's
+            # .cache/huggingface bookkeeping, which must never reach the
+            # archive; dropping it runs *outside* the try because a cleanup
+            # that cannot finish is not a failed pull (spec 0019).
+            discard_staging_leaf(prep.staging_dir, keep=PULL_MARKER_FILENAME)
+        logger.info("pulled %d file(s) from %s into %s", len(new_entries), repo_id, prep.model_dir)
+        return prep.model_dir

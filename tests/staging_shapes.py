@@ -77,12 +77,15 @@ def failing_rmtree(target: Path, calls: list[Path] | None = None) -> Callable[..
     macOS ``smbfs`` renames a still-open file to a hidden placeholder
     instead of unlinking it, so the parent ``rmdir`` still sees a
     non-empty directory — the confirmed 2026-08-12 failure, injected
-    here as the real ``OSError(errno.ENOTEMPTY)`` it was. Every other
-    path delegates to the real ``rmtree``, so nothing but the leaf
-    under test changes behavior.
+    here as the real ``OSError(errno.ENOTEMPTY)`` it was. It fires for
+    ``target`` and anything under it: since spec 0025 the success path
+    empties the leaf entry by entry (keeping the claim marker for last)
+    rather than removing the leaf itself. Every other path delegates to
+    the real ``rmtree``, so nothing but the leaf under test changes
+    behavior.
 
     Args:
-        target: The path whose removal raises.
+        target: The path whose removal, or any removal under it, raises.
         calls: Optional list every attempted path is appended to, so a
             test can assert the removal was attempted at all.
     """
@@ -91,7 +94,7 @@ def failing_rmtree(target: Path, calls: list[Path] | None = None) -> Callable[..
     def _rmtree(path: Any, *args: Any, **kwargs: Any) -> Any:
         if calls is not None:
             calls.append(Path(path))
-        if Path(path) == target:
+        if Path(path) == target or target in Path(path).parents:
             raise OSError(errno.ENOTEMPTY, "Directory not empty", str(path))
         return real(path, *args, **kwargs)
 

@@ -10,10 +10,12 @@ Prompt classification keys on the strings ``pull_model`` composes — the
 tool owns both sides of that seam.
 """
 
+import contextlib
 import sys
 
 import typer
 
+from llm_preserver.cli.pull_exec.termination import Terminated, signal_received
 from llm_preserver.cli.window import is_interactive
 from llm_preserver.hub import PullUserError
 from llm_preserver.pull_decline import (
@@ -57,7 +59,19 @@ def confirm_or_stop(prompt: str, assume_yes: bool) -> bool:
         # the next line lands *on* the prompt: "files to pull (…): nothing
         # pulled: quit at the file listing". True on a real terminal, not
         # just under the runner — Ctrl-D leaves the cursor where it is.
-        typer.echo()
+        # After a hangup the terminal is gone, and the newline must not
+        # become a traceback.
+        with contextlib.suppress(OSError):
+            typer.echo()
+        # A SIGTERM / SIGHUP at the prompt reaches here as the same Abort
+        # (click folds Terminated into it). Nobody answered, so it is
+        # neither a decline nor an unanswerable prompt: re-raise it and
+        # let run_pull exit 128 + n (spec 0025, decided by Brian
+        # 2026-10-23). A human's Ctrl-C sets no signal and stays 0021's
+        # decline.
+        signum = signal_received()
+        if signum is not None:
+            raise Terminated(signum) from None
         # Two prompts reach here and only two: the size confirmation and
         # the every-weight one (spec 0017 deleted the grouping question,
         # which is what the third branch used to serve — and its advice

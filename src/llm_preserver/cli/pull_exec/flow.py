@@ -8,6 +8,8 @@ optional pre-fetched ``RepoInfo`` (one metadata call per pull, spec
 0003).
 """
 
+import contextlib
+import signal
 from pathlib import Path
 
 import typer
@@ -19,6 +21,7 @@ from llm_preserver.cli.pull_exec.confirmations import confirm_or_stop
 from llm_preserver.cli.pull_exec.plan_run import run_plan
 from llm_preserver.cli.pull_exec.plumbing import exit_for_pull_error
 from llm_preserver.cli.pull_exec.prompts import prompt_for_selection
+from llm_preserver.cli.pull_exec.termination import Terminated, unwind_on_termination
 from llm_preserver.cli.resume_hint import compose_doc_refresh_hint, compose_resume_hint
 from llm_preserver.hub import (
     HubClientProtocol,
@@ -83,7 +86,8 @@ def run_pull(
 
     Raises:
         typer.Exit: The fault-domain exit for any pull failure; exit
-            130 when Ctrl-C interrupts the transfer; or **exit 0** when
+            130 when Ctrl-C interrupts the transfer (143 / 129 for
+            SIGTERM / SIGHUP, spec 0025); or **exit 0** when
             the human declines at a prompt (spec 0021), which prints
             one plain line and is the only non-failure exit raised
             from inside the try.
@@ -178,24 +182,27 @@ def run_pull(
             nonlocal metadata_only
             metadata_only = True
 
-        model_dir = pull_model(
-            path,
-            repo_id,
-            client,
-            include=patterns,
-            roles=roles,
-            base_model=base_model,
-            repo_info=info,
-            refresh_docs=refresh_docs,
-            select_all=select_all,
-            # confirm_or_stop sanitizes hub-supplied prompt text and
-            # converts unanswerable prompts to deterministic exits.
-            confirm=lambda prompt: confirm_or_stop(prompt, yes),
-            on_transfer_start=capture_resume_hint,
-            on_no_op=mark_no_op,
-            on_metadata_only=mark_metadata_only,
-            pin_archived_commit=revision is not None,
-        )
+        # Spec 0025: SIGTERM / SIGHUP unwind like Ctrl-C while the pull
+        # holds its claim, so a closed terminal releases the marker.
+        with unwind_on_termination():
+            model_dir = pull_model(
+                path,
+                repo_id,
+                client,
+                include=patterns,
+                roles=roles,
+                base_model=base_model,
+                repo_info=info,
+                refresh_docs=refresh_docs,
+                select_all=select_all,
+                # confirm_or_stop sanitizes hub-supplied prompt text and
+                # converts unanswerable prompts to deterministic exits.
+                confirm=lambda prompt: confirm_or_stop(prompt, yes),
+                on_transfer_start=capture_resume_hint,
+                on_no_op=mark_no_op,
+                on_metadata_only=mark_metadata_only,
+                pin_archived_commit=revision is not None,
+            )
     except PullDeclined as exc:
         # Spec 0021: the human answered the question — typed q, said no,
         # or pressed Ctrl-D at an interactive prompt. Nothing was
@@ -205,13 +212,18 @@ def run_pull(
         # future fault domain can reclassify a decline as a failure.
         typer.echo(clean_text(str(exc), single_line=True))
         raise typer.Exit(code=0) from None
-    except KeyboardInterrupt:
+    except KeyboardInterrupt as exc:
         # Ctrl-C mid-transfer (spec 0007): repeat the hint as the final
         # line — directly above the next shell prompt — then exit
-        # 128 + SIGINT. Never swallowed into a retry.
+        # 128 + SIGINT. Never swallowed into a retry. SIGTERM / SIGHUP
+        # arrive here as Terminated (spec 0025) and exit 128 + their
+        # number; after SIGHUP the terminal may be gone, and a hint that
+        # cannot be printed must not turn the exit into a traceback.
+        signum = exc.signum if isinstance(exc, Terminated) else signal.SIGINT
         if hint is not None:
-            typer.echo(hint)
-        raise typer.Exit(code=130) from None
+            with contextlib.suppress(OSError):
+                typer.echo(hint)
+        raise typer.Exit(code=128 + signum) from None
     except ArchiveError as exc:
         raise fail(str(exc)) from exc
     except UnmigratedArchiveError as exc:

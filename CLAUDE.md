@@ -1103,7 +1103,31 @@ parallelize only with partitioned file ownership.
   the positional no-revision call on the interactive path (that last
   one first survived the whole suite). Live: GLM `--plan` by branch and
   by SHA, bad branch exit 2, canary green. 1727 tests.
-- **Next spec (0025): pick from TODO.md** — smoke test, spec 0002's
+- **Session 29 (2026-10-23, PR #60): spec 0025 same-repo pull guard.**
+  Two pulls of one repo shared a staging leaf and a record: the first to
+  finish deleted the leaf under the second (exit 3), and the later
+  `save_record` overwrote the earlier from a stale copy. A pull now
+  claims its repo with an `O_EXCL` marker in its staging leaf before
+  planning reads the record; a second pull of that repo is refused at
+  exit 3, naming the holder. Same host + dead pid is stale and cleared;
+  another host's marker is reported with its path and left for the
+  human (the 0019 posture). **Live-verified from two client machines
+  (macOS `smbfs`, Linux `cifs`) against one NAS share**, in a scratch
+  archive beside the real one: refusal in both directions, `kill -9`
+  recovery same-host (automatic) and cross-host (manual `rm`). The
+  second review round's headline was a regression the new SIGTERM /
+  SIGHUP unwind introduced: **it overrode an inherited `SIG_IGN`, so
+  `nohup` pulls died on hangup** — check `signal.getsignal` before
+  installing a handler. Also: click folds *any* `KeyboardInterrupt`
+  inside a prompt into `Abort`, so a `kill` at a y/N read as the human's
+  decline; the prompt now asks the handler which signal arrived.
+  **`CliRunner` installs its own `visible_prompt_func` for the length of
+  `invoke`**, overwriting a test's patch of it — deliver an in-prompt
+  event through the runner's stdin (`typer.testing.make_input_stream`)
+  instead. Brian's calls: signal at a prompt exits 128+n; a marker with
+  this process's own pid is stale (pid-1 containers). Every guard
+  mutation-proved (19 across both rounds). 1835 tests.
+- **Next spec (0026): pick from TODO.md** — smoke test, spec 0002's
   later adapter phases (LM Studio / llama.cpp / vLLM), or the remaining
   TUI nice-to-haves (arrow-key highlight, type-to-filter, match
   preview), or cache inventory/import. Also queued from live use:
@@ -1113,7 +1137,8 @@ parallelize only with partitioned file ownership.
   paused — phase 1 shipped (PR #20), later adapters open;
   0005–0014 shipped; `0016` draft; `0017` shipped; `0018` shipped;
   `0019` shipped; `0020` shipped (PR #36); `0021` shipped (PR #39);
-  `0022` shipped (PR #40); `0023` shipped (PR #44); `0024` shipped (PR #59).
+  `0022` shipped (PR #40); `0023` shipped (PR #44); `0024` shipped (PR #59);
+  `0025` shipped (PR #60).
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

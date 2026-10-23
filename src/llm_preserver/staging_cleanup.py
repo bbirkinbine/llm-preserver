@@ -11,6 +11,12 @@ complete 160 GiB pull into exit 3).
 ``model_scan`` owns the read-only view of ``.staging/``. This module is
 where *pull* deletes inside it; ``remove`` has its own path
 (``remove.execute``), which is scoped to a model the human named.
+
+The pull's claim marker (spec 0025) is the one entry the success path
+leaves: ``pull_claim`` removes it last, then calls
+:func:`discard_empty_staging_leaf` here. While the marker stands, no
+second pull of the repo can claim the leaf, so nothing this module
+deletes can belong to a live run.
 """
 
 import logging
@@ -20,8 +26,14 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def discard_staging_leaf(leaf: Path) -> None:
-    """Delete a staging leaf, and its parent if that empties it.
+def discard_staging_leaf(leaf: Path, *, keep: str) -> None:
+    """Delete everything in a staging leaf except the entry named ``keep``.
+
+    ``keep`` is the claim marker. The leaf and the marker go when the
+    claim is released, after this returns, so the marker is the last
+    thing to leave: a same-repo pull that started during this cleanup
+    would otherwise claim the leaf and have its in-flight files deleted
+    under it (spec 0025 review round).
 
     Never raises. A failure logs one WARNING that leads with the
     archive being complete, because the alarming reading — "my model is
@@ -35,22 +47,57 @@ def discard_staging_leaf(leaf: Path) -> None:
     ``verify --staging --clean``).
 
     Args:
-        leaf: The ``.staging/<creator>/<model>/`` directory to remove.
+        leaf: The ``.staging/<creator>/<model>/`` directory to empty.
+        keep: The one entry to leave in place.
     """
     try:
-        shutil.rmtree(leaf)
+        entries = [entry for entry in leaf.iterdir() if entry.name != keep]
     except FileNotFoundError:
         return
     except OSError as exc:
-        logger.warning(
-            "the archive is complete and recorded; could not remove the pull's "
-            "staging directory at %s (errno %s: %s). It holds the transfer "
-            "client's bookkeeping, not archived data — remove it by hand when "
-            "convenient; `verify --staging` lists it until you do",
-            leaf,
-            exc.errno,
-            exc.strerror,
-        )
+        _warn_leaf_left(leaf, exc, keep)
+        return
+    for entry in entries:
+        try:
+            if entry.is_dir() and not entry.is_symlink():
+                shutil.rmtree(entry)
+            else:
+                entry.unlink(missing_ok=True)
+        except FileNotFoundError:
+            continue  # gone already: the rest of the leaf still goes
+        except OSError as exc:
+            _warn_leaf_left(leaf, exc, keep)
+            return
+
+
+def _warn_leaf_left(leaf: Path, exc: OSError, keep: str) -> None:
+    logger.warning(
+        "the archive is complete and recorded; could not remove the pull's "
+        "staging directory at %s (errno %s: %s). It holds the transfer "
+        "client's bookkeeping, not archived data — remove it by hand when "
+        "convenient, unless a pull of this repo is running (its directory "
+        "then holds %s); `verify --staging` lists it until you do",
+        leaf,
+        exc.errno,
+        exc.strerror,
+        keep,
+    )
+
+
+def discard_empty_staging_leaf(leaf: Path) -> None:
+    """Remove a staging leaf and its parent, but only while they are empty.
+
+    Releasing a claim (spec 0025) must not delete anything a pull left
+    to resume from, so this is ``os.rmdir`` and never ``rmtree``: a leaf
+    still holding staged bytes, or another run's marker, stays. Never
+    raises.
+
+    Args:
+        leaf: The ``.staging/<creator>/<model>/`` directory to remove.
+    """
+    try:
+        leaf.rmdir()
+    except OSError:
         return
     _discard_empty_creator_dir(leaf.parent)
 

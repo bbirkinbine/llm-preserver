@@ -275,6 +275,18 @@ has nothing recorded to check. `verify --staging` surfaces exactly that
 leftover with a hash-free `.staging/` scan (spec 0012); it is cleared by
 resuming the pull or by `remove`.
 
+While a pull runs, its leaf also holds `.llm-preserver-pull.json`, the
+claim that keeps a second pull of the same repo out (spec 0025). It is
+JSON with five fields: `tool`, `repo_id`, `hostname`, `pid`, and
+`started` (UTC ISO-8601). It is created with an exclusive create before
+planning reads the record, and removed when the pull ends, whatever the
+outcome (SIGTERM and SIGHUP included). On success it is removed last,
+after everything else in the leaf, so no second pull can claim the leaf
+while this one is still deleting inside it. A hard kill (`kill -9`, a
+crash, a power loss) leaves it behind. The next pull on the same host
+clears it once that pid is gone; a marker from another host waits for a
+human.
+
 Deleting staging is the one step that falls *outside* this ordering
 guarantee, and deliberately so (spec 0019). It runs after the record —
 the last thing the convention protects — so by the time it executes the

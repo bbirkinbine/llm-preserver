@@ -12,7 +12,7 @@ import typer
 
 from llm_preserver.cli.resume_hint import compose_resume_hint
 from llm_preserver.hub import HubClientProtocol, RepoInfo
-from llm_preserver.pull import validated_base_model, validated_roles
+from llm_preserver.pull_inputs import validated_base_model, validated_roles
 from llm_preserver.pull_preflight import require_disk_budget
 from llm_preserver.pull_prepare import prepare_pull
 from llm_preserver.pull_report import render_plan
