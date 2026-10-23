@@ -1,6 +1,6 @@
 # 0025 — Same-Repo Pull Guard
 
-**Status:** draft
+**Status:** shipped (PR #60)
 **Last updated:** 2026-10-23
 
 ## Goal

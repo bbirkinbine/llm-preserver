@@ -162,6 +162,16 @@ queue entry did **not** make the spec and stay open here:
 
 ## Shipped
 
+- 0025 same-repo pull guard: a pull claims its repo with an `O_EXCL`
+  marker at `.staging/<owner>/<repo>/.llm-preserver-pull.json` before
+  planning reads the record, and a second pull of the same repo — from
+  this machine or another — is refused at exit 3 naming the holder.
+  Pulls of different repos stay parallel. A same-host marker with a dead
+  pid is cleared automatically; another host's waits for a human `rm`.
+  SIGTERM / SIGHUP unwind like Ctrl-C (exit 143 / 129) and release the
+  claim; `nohup` stays honored. Live-verified from two SMB clients on
+  one share. 1,835 tests. (spec 0025, PR #60)
+
 - 0024 Hugging Face revision support: `pull --revision` takes a branch,
   tag, or full commit SHA and resolves it to the hub's immutable 40-hex
   commit in the one metadata call. The inventory, every download, both
