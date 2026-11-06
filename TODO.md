@@ -140,12 +140,6 @@ Check items off as they ship; update when priorities shift.
   human accept or edit it before the plan runs). A dependency such as
   `textual` or `prompt_toolkit` must pass dependency hygiene first, and
   the design needs a pipe-testable fallback for dumb terminals.
-- [ ] **Cache inventory and import** (0000 roadmap): scan existing
-  Hugging Face, LM Studio, and Ollama caches to show what is not yet
-  archived, then explicitly import recoverable artifacts with locally
-  computed hashes and honest nullable provenance. Prefer a fresh pull
-  whenever the source still exists; import is the rescue path for a
-  surviving cache whose upstream is gone.
 Artifact classification and lineage moved out of this list on
 2026-08-06 — it is now spec 0016, above. Two ideas from the original
 queue entry did **not** make the spec and stay open here:

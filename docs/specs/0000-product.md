@@ -66,6 +66,11 @@ runtime-locked working copies, not archives.
   not circumvented. Gated repos require the user's own accepted terms
   and token.
 - No GUI. CLI only.
+- No cache or local-file import (*decided 2026-11-05*). Models enter
+  the archive by a fresh pull from the hub, so every artifact's
+  provenance comes from the download itself. Importing from Ollama,
+  LM Studio, or Hugging Face caches, or from files already on disk,
+  is out of scope; the earlier roadmap item is withdrawn.
 
 ## Constraints and assumptions
 
@@ -74,8 +79,8 @@ runtime-locked working copies, not archives.
 - Storage is the user's problem (NAS / big disks); the tool must be
   pointed at an archive root and never assume it fits on the boot disk.
 - Model sources: Hugging Face Hub first (covers GGUF repos and full
-  snapshots). Ollama/LM Studio caches are *imports*, not sources of
-  record.
+  snapshots). Ollama/LM Studio caches are not sources (see the
+  import non-goal above).
 - Single upstream dependency: the hub is reached only through
   `huggingface_hub` (HF's official client) and only via the `hub.py`
   seam, so API churn has a one-module blast radius. The API is
@@ -153,24 +158,6 @@ Planned features, spec pending (in rough priority order):
 
 - **Smoke test** — offline smoke test integration (ollama /
   llama-cli), recorded per model.
-- **Cache import** — import/inventory existing Ollama, LM Studio,
-  and Hugging Face caches. Two halves: *inventory* (read-only scan —
-  what the caches hold, what isn't archived yet) and *import* (copy
-  into the archive). Caches are partial sources: the HF cache
-  (`hf download` / `huggingface_hub`) is the richest — its layout
-  preserves repo id and commit hash, though hashes were never
-  verified by us and license/docs are only present if the user
-  pulled them; LM Studio keeps real GGUF filenames and the HF repo
-  id in its path but no license/model card/commit pin; Ollama stores
-  digest-named blobs whose library models are Ollama-quantized with
-  no hub provenance at all. Import
-  therefore computes what it can locally (SHA256s, GGUF-embedded
-  metadata), backfills model-level docs from the hub when the source
-  repo is resolvable, and records the rest as explicit nulls with a
-  per-artifact provenance flag (verified hub pull vs. unverified
-  import). A fresh pull is always preferred when the model is still
-  downloadable; import is the rescue path for models that no longer
-  are.
 - Later: quant-selection UX sugar — the interactive listing should
   annotate recognized quant labels (deterministic lookup table:
   bits/weight, quality tier, "common default" marker) and/or a

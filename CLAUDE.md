@@ -1130,7 +1130,7 @@ parallelize only with partitioned file ownership.
 - **Next spec (0026): pick from TODO.md** — smoke test, spec 0002's
   later adapter phases (LM Studio / llama.cpp / vLLM), or the remaining
   TUI nice-to-haves (arrow-key highlight, type-to-filter, match
-  preview), or cache inventory/import. Also queued from live use:
+  preview). Also queued from live use:
   goal-definitive archiving (capability report in `status`) and the
   file-kind dictionary.
 - Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
