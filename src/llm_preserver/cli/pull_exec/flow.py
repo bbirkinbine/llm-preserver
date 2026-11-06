@@ -9,6 +9,7 @@ optional pre-fetched ``RepoInfo`` (one metadata call per pull, spec
 """
 
 import contextlib
+import logging
 import signal
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from llm_preserver.cli.pull_exec.confirmations import confirm_or_stop
 from llm_preserver.cli.pull_exec.error_hints import echo_recovery_hints
 from llm_preserver.cli.pull_exec.plan_run import run_plan
 from llm_preserver.cli.pull_exec.plumbing import exit_for_pull_error
+from llm_preserver.cli.pull_exec.progress_ticker import ProgressTicker, log_progress_line
 from llm_preserver.cli.pull_exec.prompts import prompt_for_selection
 from llm_preserver.cli.pull_exec.termination import Terminated, unwind_on_termination
 from llm_preserver.cli.resume_hint import compose_resume_hint
@@ -28,8 +30,11 @@ from llm_preserver.hub import HubClientProtocol, PullError, RepoInfo
 from llm_preserver.layout import UnmigratedArchiveError
 from llm_preserver.pull import pull_model
 from llm_preserver.pull_decline import PullDeclined
+from llm_preserver.pull_progress import PullProgress, render_summary
 from llm_preserver.render import clean_text
 from llm_preserver.revision import fetch_repo_info, revision_line
+
+logger = logging.getLogger(__name__)
 
 
 def run_pull(
@@ -48,6 +53,7 @@ def run_pull(
     resume_hint: bool = False,
     hf_logging: bool = False,
     revision: str | None = None,
+    progress: bool = False,
 ) -> None:
     """Run the pull flow: interactive listing, plan or pull, exit mapping.
 
@@ -77,6 +83,10 @@ def run_pull(
         revision: The ``--revision`` branch, tag, or commit (spec 0024);
             None reads the default branch exactly as before. Never set
             together with ``repo_info`` — discover has no revision.
+        progress: ``--progress`` (spec 0026): a meter feeds a ticker that
+            logs a plain line every 30 s once bytes can move, and a
+            summary line after a pull that transferred. Composed
+            commands replay the flag. False changes nothing.
 
     Raises:
         typer.Exit: The fault-domain exit for any pull failure; exit
@@ -107,6 +117,12 @@ def run_pull(
     # patterns. None whenever no --revision was given, which keeps every
     # composed command byte-identical to the pre-0024 shape.
     resolved_revision: str | None = None
+    # Spec 0026: bound before the try for the same reason — the summary
+    # after the block reads meter. Both constructors are pure (a lock
+    # and an Event); the ticker thread starts only when armed. A dry run
+    # moves no bytes, so it gets neither.
+    meter = PullProgress() if progress and not plan else None
+    ticker = ProgressTicker(meter) if meter is not None else None
     try:
         info = repo_info
         if revision is not None:
@@ -137,6 +153,7 @@ def run_pull(
                 emit_hint=emit_hint,
                 hf_logging=hf_logging,
                 requested_revision=revision,
+                progress=progress,
             )
             return
 
@@ -163,10 +180,15 @@ def run_pull(
                 base_model=base_model,
                 refresh_docs=refresh_docs,
                 hf_logging=hf_logging,
+                progress=progress,
                 revision=resolved_revision,
             )
             if hint is not None and emit_hint:
                 typer.echo(hint)
+            if ticker is not None:
+                # After the hint and every prompt: nothing prints while
+                # a human is answering a question.
+                ticker.arm()
 
         def mark_no_op() -> None:
             nonlocal no_op
@@ -176,9 +198,12 @@ def run_pull(
             nonlocal metadata_only
             metadata_only = True
 
+        # Spec 0026: the ticker lives inside the unwind, so leaving the
+        # block on Ctrl-C / SIGTERM stops it before the handlers below
+        # print the resume hint, which must stay the final line.
         # Spec 0025: SIGTERM / SIGHUP unwind like Ctrl-C while the pull
         # holds its claim, so a closed terminal releases the marker.
-        with unwind_on_termination():
+        with unwind_on_termination(), ticker or contextlib.nullcontext():
             model_dir = pull_model(
                 path,
                 repo_id,
@@ -196,6 +221,7 @@ def run_pull(
                 on_no_op=mark_no_op,
                 on_metadata_only=mark_metadata_only,
                 pin_archived_commit=revision is not None,
+                progress=meter,
             )
     except PullDeclined as exc:
         # Spec 0021: the human answered the question — typed q, said no,
@@ -237,6 +263,7 @@ def run_pull(
             base_model=base_model,
             hf_logging=hf_logging,
             revision=resolved_revision,
+            progress=progress,
         )
         raise exit_exc from exc
     if metadata_only:
@@ -245,4 +272,11 @@ def run_pull(
         final = f"{repo_id} is already archived in {model_dir}; nothing new to pull"
     else:
         final = f"pulled {repo_id} into {model_dir}"
+    if meter is not None and meter.started:
+        # Criterion 6: a summary that cannot be written costs the pull
+        # nothing; the archive is already complete.
+        try:
+            log_progress_line(render_summary(meter.snapshot()))
+        except Exception:
+            logger.debug("progress summary not written", exc_info=True)
     typer.echo(clean_text(final, single_line=True))

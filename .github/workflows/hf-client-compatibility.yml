@@ -71,3 +71,8 @@ jobs:
         run: |
           uv run --no-sync pytest \
             tests/test_hf_live_canary.py::test_live_download_of_pinned_gpt2_config
+
+      - name: Run live Xet progress canary
+        run: |
+          uv run --no-sync pytest \
+            tests/test_hf_live_canary.py::test_live_xet_download_reports_progress_through_the_sink

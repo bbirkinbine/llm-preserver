@@ -50,6 +50,9 @@ uv run llm-preserver verify ~/models # audit: every file present, every hash int
   of the default branch, for publishers who keep each quant on its own
   branch. The selector resolves to an immutable commit, and only that
   commit is downloaded and recorded.
+- **`pull --progress`** — a plain-text progress line every 30 seconds
+  and a closing summary, for agent-driven and piped pulls where a
+  terminal progress bar cannot be read.
 - **`verify`** — audits disk against the records: every recorded file
   present (*complete*), every SHA256 intact (*valid*). `--quick` skips
   hashing for a seconds-long structural check; the exit code makes it

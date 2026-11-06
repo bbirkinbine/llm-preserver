@@ -247,6 +247,18 @@ Options:
   client's debug tier (which logs request URLs) is deliberately not
   reachable by any flag. Telemetry lines can still name hub hosts and
   repo ids — skim before pasting output into a public issue.
+- `--progress` — print one plain-text progress line every 30 seconds
+  while bytes move (done of total, rate, time left, the file in
+  flight), and one summary line when the pull finishes. Lines go to
+  stderr through the tool's logger, beside the `downloading n of m`
+  lines, with no carriage returns or terminal control codes, so they
+  read the same in a log file, a pipe, or an agent transcript. With the
+  flag the tool hands the Hugging Face client a progress bar that draws
+  nothing, so the client never draws a bar of its own and these lines
+  are the only progress output, on a terminal or off one. It is opt-in:
+  without it, `pull` prints exactly what it printed before the flag
+  existed. See "Agent-driven pulls (`--progress`)" below for the line
+  format.
 
 Behavior worth knowing:
 
@@ -500,7 +512,12 @@ Behavior worth knowing:
   default logging. A bar that stops moving is therefore often a stall
   the client is already handling, and it can take ~6 minutes to prove
   it: reach for `--hf-logging` (or patience) before Ctrl-C, and watch
-  the stall and retries explain themselves. If you do interrupt, the
+  the stall and retries explain themselves. In captured output, where
+  there is no bar to watch, `--progress` tells the two cases apart: a
+  healthy transfer's 30-second lines show a moving byte count and a
+  nonzero rate, while a stall reads `0 B/s` line after line on the
+  same `downloading` file (see
+  "Agent-driven pulls" below). If you do interrupt, the
   resume hint below has your back. Power users can tune the client's
   own knobs (`HF_XET_CLIENT_READ_TIMEOUT` and friends) as environment
   variables — the tool passes its environment through to the client
@@ -560,7 +577,10 @@ Behavior worth knowing:
   `--hf-logging` rides along when the pull ran with it — the
   stalled-transfer scenario the hint serves is the one that flag
   exists for (`--verbose` does not; the hint replays the pull's
-  shape, not general diagnostics). A pull run with `--revision`
+  shape, not general diagnostics). `--progress` rides along the same
+  way, placed after `--hf-logging`, so a resumed agent-driven pull
+  keeps the output it was started with; the doc-refresh recovery
+  command and the `--plan` follow-up carry it too. A pull run with `--revision`
   replays it as `--revision <resolved commit>`, never the branch or
   tag you typed, so the continue lands on the same tree even if the
   branch moves in the meantime. The doc-refresh recovery line pins the
@@ -794,6 +814,104 @@ of that repo is refused at **exit 3**:
   lands. Over a network mount, another machine can see that state for a
   few seconds longer.
 
+## Agent-driven pulls (`--progress`)
+
+When stdout and stderr are not a terminal (an agent, a pipe, a log
+file), a default pull prints one `downloading n of m` line per file and
+then nothing until that file lands. On a multi-GiB shard that is
+minutes of silence, with no way to tell a healthy transfer from a
+stall. `--progress` is the intended mode for those runs:
+
+```bash
+llm-preserver pull unsloth/Qwen3.6-27B-MTP-GGUF ~/models \
+    --include '*Q8_0*' --yes --progress 2>&1 | tee pull.log
+```
+
+Every 30 seconds while the transfer runs, one self-contained line goes
+to stderr:
+
+```text
+INFO llm_preserver.pull_progress: progress: 12.3 GiB of 45.6 GiB (26%), 85.2 MiB/s, ~6m46s left, downloading 3 of 12: Q8_0/model-00003-of-00012.gguf
+```
+
+The clauses are: bytes done of the whole pull's total (the hub-declared
+sizes of every file still to download), the rate, the estimated time
+left, and the file in flight. The same line changes its last clause for
+the two phases that move no network bytes:
+
+```text
+INFO llm_preserver.pull_progress: progress: 12.3 GiB of 45.6 GiB (26%), 0 B/s, ~6m46s left, hashing 3 of 12 (41%): Q8_0/model-00003-of-00012.gguf
+INFO llm_preserver.pull_progress: progress: 12.3 GiB of 45.6 GiB (26%), 0 B/s, ~6m46s left, copying 4 of 12 from local HF cache: Q8_0/model-00004-of-00012.gguf
+```
+
+`hashing` is the tool's SHA256 pass over a file it just downloaded,
+with how far the hash has read; on a slow share a large shard takes
+minutes, and the percentage shows it is moving. `copying` is the
+Hugging Face client copying a file it already holds in its local cache
+instead of downloading it. When any planned file has no hub-declared
+size, the total is a floor and the line drops the percentage and the
+estimate rather than print a guess as exact:
+
+```text
+INFO llm_preserver.pull_progress: progress: 12.3 GiB of at least 45.6 GiB, 85.2 MiB/s, downloading 3 of 12: Q8_0/model-00003-of-00012.gguf
+```
+
+How to read the numbers:
+
+- **The rate is network bytes over the last 30-second window.** A stall
+  reads `0 B/s`, even on a resumed pull whose earlier files were
+  credited as done.
+- **The estimate is what is left over the network average since the
+  transfer started.** Files reused from staging or copied from the
+  local cache count as done, so they shorten what is left, but they
+  never make the link look faster. No estimate prints before any bytes
+  have arrived.
+- **The last line can read below 100%.** Progress counts bytes received
+  over the network against the files' declared sizes. The Xet transfer
+  backend can receive fewer bytes than a file holds (deduplication,
+  compression), so a complete pull may finish at 99%. The summary's two
+  byte counts make the difference visible.
+
+A completed pull ends with one summary line, just before the
+`pulled ...` line:
+
+```text
+INFO llm_preserver.pull_progress: transferred 45.4 GiB (archived 45.6 GiB) in 9m02s, 85.8 MiB/s average
+```
+
+`transferred` is bytes received over the network; `archived` is the
+file bytes the pull finished. Bytes that did not cross the network get
+their own clause, one per kind, each present only when it applies:
+
+```text
+INFO llm_preserver.pull_progress: transferred 33.1 GiB (archived 45.6 GiB) in 6m42s, 84.3 MiB/s average; reused 2 files (8.3 GiB) from staging; copied 1 file (4.2 GiB) from local HF cache; adopted 1.1 GiB already on disk
+```
+
+`reused ... from staging` is files a previous interrupted attempt had
+already finished; `copied ... from local HF cache` is files the client
+copied from its own cache; `adopted ... already on disk` is unrecorded
+files in the model directory whose bytes already matched the hub hash.
+
+When lines appear, and when they do not:
+
+- Nothing prints while a prompt is waiting for an answer. The first
+  line comes one interval (30 seconds) after the transfer starts, so a
+  pull that finishes sooner shows only the summary.
+- The summary prints only when a transfer happened. A re-pull with
+  nothing new to download, a declined prompt, or a failed pull prints
+  none; lines already printed before a failure stay printed.
+- `--plan --progress` prints no progress lines (nothing transfers), but
+  its follow-up command carries `--progress`.
+- Progress never changes the exit code, the record, the manifest, or
+  which bytes reach the archive. If the client stops reporting bytes,
+  the lines get less precise; the pull does not fail.
+- The interval is fixed at 30 seconds.
+
+The format is documented for humans and agents to read, not promised
+as a stable machine-parseable contract: wording and clauses may change
+between releases. Match on the meaning (a moving byte count, a nonzero
+rate), not on exact text.
+
 ## pull --plan — dry run (verify, then run)
 
 `--plan` runs the whole decision half of a pull — resolve the tree,
@@ -1019,7 +1137,10 @@ shown on a terminal, the window is a fixed 20-line budget and rows are
 never wrap-adjusted, so runs stay byte-identical.
 
 `--plan` makes the final pull the dry run (verify, then re-run for
-real); `--verbose` and `--hf-logging` as in `pull`. Failures map to the same exit codes
+real); `--verbose` and `--hf-logging` as in `pull`. `--progress` passes
+through to the pull (see "Agent-driven pulls" above), and the resume
+hint replays it; with `--match-ollama`, which never pulls, it is
+refused at exit 2 rather than silently ignored. Failures map to the same exit codes
 as `pull` (network 3, hub-side 4). Discovery is deliberately
 interactive-only: scripts already have exact repo ids, `--include`,
 `--yes`, and `--plan`. The tool shows facts and takes your picks — it
@@ -1082,8 +1203,9 @@ never pulls — paste the command yourself (append the archive path if
 want to direct the home).
 
 Boundaries worth knowing: match mode takes no positional arguments,
-never touches the archive, and refuses `--plan` (it promises a pull
-dry run, and match mode never pulls); a candidate whose metadata fails
+never touches the archive, and refuses `--plan` and `--progress` at
+exit 2 (each promises something about a pull, and match mode never
+pulls); a candidate whose metadata fails
 to load is noted and the scan continues; "no exact match was verified" is a
 successful scan (exit 0) — the facts just came back negative. A
 missing store or unknown model name exits 2 naming what was looked for

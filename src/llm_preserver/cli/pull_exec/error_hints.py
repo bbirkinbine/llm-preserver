@@ -26,6 +26,7 @@ def echo_recovery_hints(
     base_model: str | None,
     hf_logging: bool,
     revision: str | None,
+    progress: bool = False,
 ) -> None:
     """Print the recovery command a pull error has one for, on stderr.
 
@@ -40,6 +41,7 @@ def echo_recovery_hints(
         base_model: The run's ``--base-model`` assertion.
         hf_logging: Whether ``--hf-logging`` was in effect.
         revision: The commit a ``--revision`` resolved to, or None.
+        progress: Whether ``--progress`` was in effect (spec 0026).
     """
     if isinstance(exc, PullDocRefreshError):
         # Spec 0020: this stop fires inside prepare_pull — before the
@@ -55,6 +57,7 @@ def echo_recovery_hints(
             roles=roles,
             base_model=base_model,
             hf_logging=hf_logging,
+            progress=progress,
             revision=revision,
         )
         if recovery is not None:

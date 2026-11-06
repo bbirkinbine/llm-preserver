@@ -4,177 +4,19 @@ These fixtures are pure data / filesystem helpers on purpose: they do
 not import ``llm_preserver`` submodules at module level (the hub fakes
 import ``llm_preserver.hub`` lazily inside method bodies), so
 collection of unrelated tests never depends on the implementation
-existing.
+existing. ``FakeHubClient`` lives in ``fake_hub.py`` and is re-exported
+here, so ``from conftest import FakeHubClient`` keeps working.
 """
 
-import hashlib
 import json
 import logging
 from pathlib import Path
 
 import pytest
+from fake_hub import DEFAULT_HUB_FILES, FULL_COMMIT_HASH, FakeHubClient
 
-FULL_COMMIT_HASH = "a" * 40
 FILE_SHA256 = "0" * 64
 GGUF_FILE_SIZE = 12345
-
-DEFAULT_HUB_FILES = [
-    # (repo-relative path, content bytes, is_lfs — LFS files carry a
-    # hub-declared sha256; non-LFS files publish no hash)
-    ("tiny-chat-Q4_K_M.gguf", b"q4 weight bytes", True),
-    ("tiny-chat-Q8_0.gguf", b"q8 weight bytes", True),
-    ("README.md", b"# tiny-chat quantized\n", False),
-]
-
-
-class FakeHubClient:
-    """In-memory double for the spec-0003 hub seam; zero network.
-
-    Implements the same surface as ``llm_preserver.hub.HubClient``:
-    ``repo_info(repo_id, revision=None)``, ``download(repo_id, filename,
-    revision, dest_dir)``, and the spec-0006 discovery methods
-    (``search_models``, ``list_children``, ``model_summary``, serving
-    canned ``ModelSummary`` data through a real ``HubPager``). Serves
-    bytes from memory, records every download call
-    in ``download_calls``, and leaves the same ``.cache/huggingface/``
-    bookkeeping the real client writes into a local dir, so tests can
-    assert it never reaches the archive. Per the seam contract, the
-    client raises fault-domain ``Pull*Error`` exceptions (the real
-    implementation maps ``huggingface_hub`` exceptions internally).
-
-    ``llm_preserver.hub`` is imported lazily inside methods so that
-    collection of unrelated tests never depends on the implementation
-    existing.
-    """
-
-    def __init__(
-        self,
-        *,
-        files,
-        repo_id="bartowski/tiny-chat-GGUF",
-        commit=FULL_COMMIT_HASH,
-        base_model="acme/tiny-chat",
-        pipeline_tag="text-generation",
-        license="apache-2.0",
-        repo_info_error=None,
-        download_error=None,
-        fail_after_downloads=0,
-        search_results=None,
-        children=None,
-        summaries=None,
-        search_error=None,
-        list_children_error=None,
-        model_summary_error=None,
-        repos=None,
-        repo_info_errors=None,
-    ):
-        self.files = list(files)
-        self.repo_id = repo_id
-        self.commit = commit
-        self.base_model = base_model
-        self.pipeline_tag = pipeline_tag
-        self.license = license
-        self.repo_info_error = repo_info_error
-        self.download_error = download_error
-        self.fail_after_downloads = fail_after_downloads
-        # Discovery (spec 0006): canned ModelSummary rows, verbatim
-        # order; children keyed by (repo_id, relation); summaries keyed
-        # by repo_id. Per-method injected errors raise at call time.
-        self.search_results = list(search_results) if search_results is not None else []
-        self.children = dict(children) if children is not None else {}
-        self.summaries = dict(summaries) if summaries is not None else {}
-        self.search_error = search_error
-        self.list_children_error = list_children_error
-        self.model_summary_error = model_summary_error
-        # Match mode (spec 0013): per-repo file lists consulted before
-        # the single-repo default, and per-repo repo_info errors. Both
-        # optional, so existing tests keep the spec-0003 defaults.
-        self.repos = dict(repos) if repos is not None else {}
-        self.repo_info_errors = dict(repo_info_errors) if repo_info_errors is not None else {}
-        self.download_calls: list[str] = []
-        self.repo_info_calls: list[str] = []
-        # Spec 0024: the revision each repo_info / download call carried
-        # (None = the default-branch call, made without the argument).
-        self.repo_info_revisions: list[str | None] = []
-        self.download_revisions: list[tuple[str, str]] = []
-        self.search_calls: list[str] = []
-        self.list_children_calls: list[tuple[str, str]] = []
-        self.model_summary_calls: list[str] = []
-
-    def repo_info(self, repo_id: str, revision: str | None = None):
-        from llm_preserver.hub import RepoFile, RepoInfo
-
-        self.repo_info_calls.append(repo_id)
-        self.repo_info_revisions.append(revision)
-        if repo_id in self.repo_info_errors:
-            raise self.repo_info_errors[repo_id]
-        if self.repo_info_error is not None:
-            raise self.repo_info_error
-        return RepoInfo(
-            commit=self.commit,
-            files=[
-                RepoFile(
-                    path=path,
-                    size=len(content),
-                    sha256=hashlib.sha256(content).hexdigest() if is_lfs else None,
-                )
-                for path, content, is_lfs in self.repos.get(repo_id, self.files)
-            ],
-            base_model=self.base_model,
-            pipeline_tag=self.pipeline_tag,
-            license=self.license,
-        )
-
-    def download(self, repo_id: str, filename: str, revision: str, dest_dir) -> Path:
-        self.download_revisions.append((filename, revision))
-        if (
-            self.download_error is not None
-            and len(self.download_calls) >= self.fail_after_downloads
-        ):
-            self.download_calls.append(filename)
-            raise self.download_error
-        self.download_calls.append(filename)
-        content = next(data for path, data, _is_lfs in self.files if path == filename)
-        target = Path(dest_dir) / filename
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(content)
-        bookkeeping = (
-            Path(dest_dir) / ".cache" / "huggingface" / "download" / f"{filename}.metadata"
-        )
-        bookkeeping.parent.mkdir(parents=True, exist_ok=True)
-        bookkeeping.write_text("etag bookkeeping\n", encoding="utf-8")
-        return target
-
-    def search_models(self, query: str):
-        """Serve the canned search results verbatim — never re-sorted."""
-        from llm_preserver.hub_discovery import HubPager
-
-        self.search_calls.append(query)
-        if self.search_error is not None:
-            raise self.search_error
-        return HubPager(iter(self.search_results))
-
-    def list_children(self, repo_id: str, relation: str):
-        """Serve canned children for exactly ``(repo_id, relation)``."""
-        from llm_preserver.hub_discovery import HubPager
-
-        self.list_children_calls.append((repo_id, relation))
-        if self.list_children_error is not None:
-            raise self.list_children_error
-        return HubPager(iter(self.children.get((repo_id, relation), [])))
-
-    def model_summary(self, repo_id: str):
-        """Serve the canned summary; an unknown repo is the 404 user fault."""
-        from llm_preserver.hub import PullUserError
-
-        self.model_summary_calls.append(repo_id)
-        if self.model_summary_error is not None:
-            raise self.model_summary_error
-        if repo_id not in self.summaries:
-            raise PullUserError(
-                f"repo, revision, or file not found (or access not granted): {repo_id}"
-            )
-        return self.summaries[repo_id]
 
 
 @pytest.fixture(autouse=True)

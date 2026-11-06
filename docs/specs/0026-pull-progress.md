@@ -1,6 +1,6 @@
 # 0026 — Pull Progress
 
-**Status:** draft
+**Status:** shipped (PR #74)
 **Last updated:** 2026-11-06
 
 Tracked as GitHub issue #70; the issue body is the source of this
@@ -39,7 +39,7 @@ and cron output stays deterministic.
    Lines go through the package logger like `downloading n of m`, so
    they carry the same `LEVEL logger:` prefix. Shape, with sizes from
    the existing `human_size` renderer:
-   `INFO llm_preserver.pull_progress: progress: 12.3 GiB of 45.6 GiB (27%), 85.2 MiB/s, ~6m40s left, downloading 3 of 12: <path>`
+   `INFO llm_preserver.pull_progress: progress: 12.3 GiB of 45.6 GiB (26%), 85.2 MiB/s, ~6m40s left, downloading 3 of 12: <path>`
    While a downloaded file is being hashed, the same line continues,
    names the phase and shows how far the hash has read
    (`hashing 3 of 12 (41%): <path>`), so a multi-minute hash of a large
@@ -49,7 +49,9 @@ and cron output stays deterministic.
    marks the total as a floor (`of at least 45.6 GiB`, the wording
    spec 0018 uses for the same case) and omits the time estimate
    rather than present a guess as exact.
-3. With `--progress`, a completed pull ends with one summary line:
+3. With `--progress`, a completed pull ends with one summary line,
+   logged just before its final `pulled ...` stdout line (which stays
+   last, spec 0014):
    bytes received over the network, file bytes archived, elapsed time,
    and average rate. Progress lines count network bytes against the
    hub-declared total, so on Xet (which can receive fewer bytes than
@@ -255,6 +257,15 @@ no-network file (criterion 3). When staging held the file *and* the
 cache had it, the file counts as reused: the client checks staging
 first and only falls back to the cache when the staged copy is stale.
 
+Pass-5 test-round calls (2026-11-06, settled by the orchestrator as
+direct consequences of decided criteria, not new product decisions): a
+summary line that cannot be written leaves the pull at exit 0 ending on
+its `pulled ...` line (criterion 6 covers the main thread too);
+`discover --plan --progress` behaves exactly like `pull --plan
+--progress`, since discover hands off to the same flow; progress lines
+already printed before a pull fails stay printed, and a failed pull
+prints no summary.
+
 ## Phase handoff (2026-11-06, after pass 3)
 
 Passes 1-3 done on `spec-0026-pull-progress`; gate green (ruff, mypy
@@ -272,7 +283,8 @@ via `uv run --with huggingface-hub==1.26.0`). Nothing is wired into
 - **Pass 2:** `pull_progress/` (`meter.py` 226, `render.py` 114);
   54 tests in `test_pull_progress_meter.py` / `_render.py`. Calls the
   test round left open, settled in code: the time estimate's average
-  uses `done_bytes`; a zero-length window reads `0 B/s`; durations
+  uses `done_bytes` (superseded in the review round: it now uses
+  `network_bytes`, criterion 3); a zero-length window reads `0 B/s`; durations
   round to the nearest second; `reused 1 file` is singular. The hash
   count resets only in `start_hash` (a second reset in `start_file`
   made the guard unprovable; removing it made the mutant fail).
@@ -324,3 +336,62 @@ not reentrant);
 in `tests/conftest.py` gains `progress=None`. The seam test must pin
 that a pull without the flag calls `download` with no `progress` key
 at all. Then pass 5 (CLI), 6 (docs, live runs, review), 7 (close-out).
+
+## Phase handoff (2026-11-06, after pass 5)
+
+Branch `spec-0026-pull-progress-wiring` (linked to #70; its PR closes
+it). Passes 4-5 done, uncommitted; gate green (2034 passed / 3 skipped;
+ruff, mypy native and `--platform linux` clean).
+
+- **Pass 4:** `pull_model(progress=...)` begins the meter after every
+  confirmation and right before `on_transfer_start`, never on a no-op,
+  metadata-only, or adopt-only pull. `pull_transfer._fetch_and_hash`
+  feeds it per file (staging check with `already_staged_bytes`'s rule,
+  cache probe, download with the sink, hash progress, finish); with no
+  meter every call is exactly the pre-0026 call. `FakeHubClient` moved
+  to `tests/fake_hub.py` (conftest 290 -> 132). 9 guards
+  mutation-proved, one of them (size-less files never count as staged)
+  only after adding a direct test.
+- **Pass 5:** `--progress` on `pull` and `discover` (refused with
+  `--match-ollama`); `cli/pull_exec/progress_ticker.py` (daemon thread
+  `pull-progress-ticker`, 30 s, logger `llm_preserver.pull_progress`,
+  armed after the resume hint at `on_transfer_start`, stopped inside
+  the 0025 unwind so the interrupt hint stays the final line); summary
+  logged before the `pulled ...` line only when the meter started;
+  resume, doc-refresh and `--plan` follow-up commands carry the flag.
+  45 tests across `tests/test_progress_ticker.py` and
+  `tests/test_cli_pull_progress{,_edges,_hints}.py`; 14 guards
+  mutation-proved.
+
+**Resume at pass 6:** docs (`docs/cli.md`, `docs/hf-client-maintenance.md`),
+live runs in a scratch archive, `/review-check`, `/review` +
+`/review-adversarial`; then pass 7 close-out once the PR exists.
+
+## Verification (2026-11-06, live)
+
+Scratch archives and a scratch `HF_HOME` under the session scratchpad;
+never the real archive or the user's HF cache.
+
+- **Xet, piped** (`Qwen/Qwen2.5-1.5B-Instruct-GGUF`, fp16, 3.3 GiB):
+  one tick at 30 s, `1.6 GiB of 3.3 GiB (48%), 54.8 MiB/s, ~32s left`,
+  finished about 30 s later; summary
+  `transferred 2.9 GiB (archived 3.3 GiB) in 59s, 49.8 MiB/s average`,
+  the Xet received-vs-archived gap criterion 3 predicts; printed before
+  the final `pulled ...` line; zero CR/ESC bytes in the capture; exit 0.
+- **Plain HTTP** (same file, `HF_HUB_DISABLE_XET=1`): three ticks
+  (29% -> 59% -> 90%, per-window rates 33-35 MiB/s, estimate
+  `~1m13s` -> `~40s` -> `~9s`); `transferred 3.3 GiB (archived
+  3.3 GiB)`, no dedup on this path; zero CR/ESC; exit 0.
+- **Real pseudo-terminal** (Python `pty`, `unsloth/SmolLM2-135M-
+  Instruct-GGUF` Q2_K): with and without `--progress`, and with
+  `--verbose`, no client progress bar text appeared in any mode, nor for
+  a bare `hf_hub_download` on the same pty, so this harness cannot show
+  bars disappearing. Criterion 5's suppression rests on the offline
+  contract test (`capfd` empty with the real client) and on the bar
+  class being disabled by construction. **Owed: one run in a real
+  terminal emulator**, where the existing docs record client bars
+  rendering, to confirm none render under `--progress`.
+- **Live Xet canary** (`test_live_xet_download_reports_progress_through_the_sink`,
+  commit-pinned 84 MiB file, fresh `HF_XET_CACHE`): passes twice in a
+  row; fails with `update_transfer` removed from the bridge. Added to
+  the weekly compatibility workflow.

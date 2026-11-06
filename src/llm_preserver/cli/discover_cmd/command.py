@@ -83,6 +83,16 @@ def discover(
             help="Show the HF client's own transfer telemetry (stalls, retries, backoff).",
         ),
     ] = False,
+    progress: Annotated[
+        bool,
+        typer.Option(
+            "--progress",
+            help=(
+                "Pass --progress to the pull: a plain-text progress line every 30 s "
+                "and a closing summary."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Find a model by name and pull it — search, model tree, pull, no browser."""
     setup_logging(verbose, hf_logging=hf_logging)
@@ -105,6 +115,10 @@ def discover(
             # mode never pulls — a swallowed flag reads as a dry run
             # that happened.
             raise refuse("--plan does not apply to --match-ollama; match mode never pulls")
+        if progress:
+            # Same reason as --plan: a flag about a pull, in a mode that
+            # never pulls, must not be swallowed (spec 0026).
+            raise refuse("--progress does not apply to --match-ollama; match mode never pulls")
         if limit is not None and not 1 <= limit <= MATCH_LIMIT_MAX:
             raise refuse(f"--limit must be between 1 and {MATCH_LIMIT_MAX}, got {limit}")
         try:
@@ -123,6 +137,6 @@ def discover(
         raise fail(str(exc)) from exc
     client = make_hub_client()
     try:
-        run_discovery(path, client, query, plan, hf_logging=hf_logging)
+        run_discovery(path, client, query, plan, hf_logging=hf_logging, progress=progress)
     except PullError as exc:
         raise exit_for_pull_error(exc) from exc

@@ -22,6 +22,13 @@ Check items off as they ship; update when priorities shift.
 
 ## Hardening (independent of any spec)
 
+- [ ] **Stale record example in `docs/data-structures.md`.** The
+  example record still claims `record_schema_version: 2` and has the
+  pre-ADR-0003 shape (`hub_id` differs from `source_repo`, no
+  `base_model` / `base_model_source`), and the `ModelRecord` class
+  diagram lacks the v3 lineage fields. Docs-only; found while bumping
+  the schema to v4 for #69.
+
 - [ ] **Stale cache-import wording in source comments.** Cache import
   was withdrawn 2026-11-05 (0000 non-goals), but docstrings still name
   it as a live case for the `unverified` provenance value and for
@@ -112,7 +119,7 @@ Check items off as they ship; update when priorities shift.
   `PullInProgressError`. Same posture: a foreign host's marker is
   reported, never cleared.
 
-## Next spec (0026) — pick one
+## Next spec (0027) — pick one
 
 - [ ] **Runtime views, later phases** (spec 0002; phase 1 shipped,
   PR #20 — see Shipped): LM Studio / llama.cpp / vLLM adapters over
@@ -162,6 +169,19 @@ queue entry did **not** make the spec and stay open here:
   practice, drop the heuristic entirely.
 
 ## Shipped
+
+- 0026 pull progress: opt-in `pull --progress` (and `discover
+  --progress`) prints one plain-text line every 30 s while bytes move
+  (done of total, network rate, time left, the file in flight, or the
+  hash's progress) and a summary that separates bytes received from
+  bytes archived and names files reused from staging, copied from the
+  local HF cache, or adopted. Measured through `hf_hub_download`'s
+  `tqdm_class` (a Xet partial file sits at 0 bytes, so size sampling
+  cannot work); without the flag every call and every output byte is
+  unchanged. Offline contract tests at the 1.26.0 floor and the lock,
+  plus a weekly live Xet canary. Live-verified over Xet and plain HTTP
+  on a 3.3 GiB file. Groundwork shipped in PR #73. 2,035 tests.
+  (spec 0026, PR #74)
 
 - 0025 same-repo pull guard: a pull claims its repo with an `O_EXCL`
   marker at `.staging/<owner>/<repo>/.llm-preserver-pull.json` before
