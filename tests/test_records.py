@@ -12,6 +12,7 @@ import pytest
 from pydantic import ValidationError
 
 from llm_preserver.records import (
+    RECORD_SCHEMA_VERSION,
     ArtifactEntry,
     FileEntry,
     ModelRecord,
@@ -188,11 +189,11 @@ def test_save_writes_generated_markdown_alongside_json(tmp_path):
 
 
 def test_record_json_carries_schema_version(tmp_path):
-    # Spec 0003 bumps the record schema to v2 (per-file provenance,
-    # "hashed-locally", optional-empty roles).
+    # Current version is pinned in test_records_v4.py (issue #69 media
+    # roles); here only that the bytes on disk carry it.
     save_record(make_model_record(), tmp_path)
     data = json.loads((tmp_path / "model-record.json").read_text())
-    assert data["record_schema_version"] == 3
+    assert data["record_schema_version"] == RECORD_SCHEMA_VERSION
 
 
 def test_unknown_fields_survive_round_trip(tmp_path):

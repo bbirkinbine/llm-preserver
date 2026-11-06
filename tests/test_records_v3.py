@@ -67,17 +67,6 @@ def make_model_record(**overrides) -> ModelRecord:
     return ModelRecord(**kwargs)
 
 
-def test_record_schema_version_is_three() -> None:
-    # hub_id changes meaning under ADR 0003 (it names the source repo,
-    # not the original model) and lineage fields arrive: both are
-    # reasons an older tool must not silently reinterpret a new record.
-    assert RECORD_SCHEMA_VERSION == 3
-
-
-def test_a_new_record_declares_schema_version_three() -> None:
-    assert make_model_record().record_schema_version == 3
-
-
 def test_base_model_defaults_to_none() -> None:
     # A pull records what the card declares and never invents one, so
     # "no declared lineage" must be representable.

@@ -16,11 +16,13 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-RECORD_SCHEMA_VERSION = 3
-"""Schema v3 (spec 0017): ``base_model`` and ``base_model_source``, the
-lineage the ADR 0003 layout no longer states structurally. v1 and v2
-records still load — every change so far is a widening (new optional
-field, new enum value, relaxed constraint)."""
+RECORD_SCHEMA_VERSION = 4
+"""Schema v4 (issue #69): ``diffusion``, ``video`` and ``image`` roles.
+Bumped so a v3 tool, which rejects those values, reports the record as
+newer rather than as corrupt. v3 (spec 0017) added ``base_model`` and
+``base_model_source``. v1-v3 records still load — every change so far
+is a widening (new optional field, new enum value, relaxed
+constraint)."""
 
 RECORD_FILENAME = "model-record.json"
 RENDERED_FILENAME = "MODEL-RECORD.md"
@@ -32,7 +34,9 @@ manifest carrying a bogus digest line for itself, which
 ``sha256sum -c`` then fails forever. Only the exact root paths are
 reserved — a nested file sharing the name is a different file."""
 
-Role = Literal["chat", "coding", "embedding", "reranker", "multimodal"]
+Role = Literal[
+    "chat", "coding", "embedding", "reranker", "multimodal", "diffusion", "video", "image"
+]
 ArtifactFormat = Literal["gguf", "hf-snapshot", "mlx"]
 Provenance = Literal["verified", "hashed-locally", "unverified"]
 BaseModelSource = Literal["card", "asserted", "migrated"]

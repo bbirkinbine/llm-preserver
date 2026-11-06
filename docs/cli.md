@@ -209,7 +209,8 @@ Options:
   > with the replacement command. The half of its job worth keeping —
   > asserting lineage — is `--base-model`.
 - `--role ROLE` — assign a curator role (`chat`, `coding`,
-  `embedding`, `reranker`, `multimodal`) at pull time; repeatable.
+  `embedding`, `reranker`, `multimodal`, `diffusion`, `video`, `image`)
+  at pull time; repeatable.
   Without it the model is archived role-less and shows under
   "(no role)" in `status` until you assign one.
 - `--refresh-docs` — replace documentation files whose upstream
