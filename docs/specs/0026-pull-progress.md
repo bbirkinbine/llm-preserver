@@ -61,9 +61,27 @@ and cron output stays deterministic.
    download *and* the download moved zero bytes; zero bytes alone is
    not enough, because a client that stopped reporting would then make
    every file read as reused. Bytes that did
-   not cross the network (files reused from a previous attempt's
-   staging, or adopted because an unrecorded on-disk file already
-   matched the hub hash) are counted separately from bytes transferred.
+   not cross the network are counted separately from bytes transferred,
+   in three kinds: files reused from a previous attempt's staging;
+   files the client copied from the local Hugging Face cache; and files
+   adopted because an unrecorded on-disk file already matched the hub
+   hash. A file counts as copied from the cache when a local probe
+   (`try_to_load_from_cache`, the lookup the client itself makes) found
+   it before the download, staging did not already hold it, and the
+   download moved zero bytes; its size counts as done like a reused
+   file's. While such a copy is in flight the line says so
+   (`copying 3 of 12 from local HF cache: <path>`), so a multi-GiB local
+   copy that moves no network bytes does not read as a stall (amended
+   2026-11-06 after review: the cache was a third no-network source the
+   draft did not account for).
+
+   The **rate** in each line counts network bytes only, never credited
+   reused or copied sizes, so a stalled resumed pull reads `0 B/s`. The
+   **time estimate** is the remaining bytes (`total - done`) over the
+   average network rate since start: credited files shorten what is
+   left but never make the link look faster (amended 2026-11-06 after
+   review; the first implementation divided `done` by elapsed time and
+   printed `~59s left` for a 50-minute remainder on a resumed pull).
 4. Without `--progress`, output is byte-identical to today, on a TTY
    and off one, and `HubClient.download` makes exactly today's client
    call (no `tqdm_class`). Off a TTY, a differential test pins it: the
@@ -230,6 +248,13 @@ line prints one interval after the transfer starts, never during
 prompts; `--plan --progress` prints no lines but its follow-up command
 carries the flag.
 
+Review-round decisions (Brian, 2026-11-06, on `f1fa8e9`): the rate
+and the estimate's speed come from network bytes only; the local HF
+cache is probed before each download and reported as its own kind of
+no-network file (criterion 3). When staging held the file *and* the
+cache had it, the file counts as reused: the client checks staging
+first and only falls back to the cache when the staged copy is stale.
+
 ## Phase handoff (2026-11-06, after pass 3)
 
 Passes 1-3 done on `spec-0026-pull-progress`; gate green (ruff, mypy
@@ -263,12 +288,38 @@ via `uv run --with huggingface-hub==1.26.0`). Nothing is wired into
   `tqdm_class` always passed.
 - **Known gap carried forward:** the bridge's keyword test cannot
   catch a bridge that forwards `**kwargs` to tqdm, because a disabled
-  tqdm returns before validating them. Xet has no offline coverage
-  (pass 6's live canary).
+  tqdm returns before validating them.
+- **Review round on `f1fa8e9`** (`/review` + `/review-adversarial`;
+  every finding reproduced before it was fixed). Fixed: the rate and
+  the estimate's speed came from `done_bytes`, so reused credit made a
+  stalled resumed pull read `1.7 GiB/s, ~30s left` (both reviewers);
+  files copied from the local HF cache moved zero network bytes and
+  were invisible, now probed via `HubClient.cached_locally` and shown as
+  `copying ... from local HF cache` (adversarial; criterion 3 amended,
+  Brian's call); three mutation-surviving render guards now pinned;
+  `# type: ignore[type-arg]` replaced by a `tqdm[NoReturn]` alias
+  visible only to the checker (tqdm cannot be subscripted at runtime);
+  sink and cache-lookup failures logged at DEBUG. The contract file was
+  split (`tests/hf_offline_shapes.py`, `test_hub_progress_bridge.py`,
+  `test_hf_client_cache_probe.py`), its fixture pins `ENDPOINT` so a
+  path-prefixed `HF_ENDPOINT` no longer breaks it, and **Xet now has
+  offline coverage**: the client's pure-Python Xet reporter is driven
+  with fake reports through the bridge, at the lock and the floor.
+  1965 passed / 3 skipped; 41 hub contract tests pass at 1.26.0; 11 new
+  guards mutation-proved. Left as-is: the concurrency test cannot prove
+  the lock (correct by inspection); a late Xet callback would be
+  charged to the next file (not reproducible offline; watch in pass 6);
+  the client silently re-hashes a staged file with no metadata before
+  reuse (rare window after an interrupt); U+2028/bidi survive
+  `clean_text` (pre-existing, queued).
 
 **Resume at pass 4** (core wiring): `pull_transfer.download_and_archive`
 and `pull_model` take the meter; `start_file` gets `already_staged`
-from the per-file check behind `pull_preflight.already_staged_bytes`;
+from the per-file check behind `pull_preflight.already_staged_bytes`
+and `cached_locally` from `client.cached_locally(...)`, both asked only
+when the meter is set (`FakeHubClient` gains `cached_locally`); never
+start the ticker or snapshot from a signal handler (the meter's lock is
+not reentrant);
 `sha256_of(progress=meter.add_hash_bytes)`; `FakeHubClient.download`
 in `tests/conftest.py` gains `progress=None`. The seam test must pin
 that a pull without the flag calls `download` with no `progress` key

@@ -42,22 +42,28 @@ def _amount(snap: ProgressSnapshot) -> str:
 
 
 def _estimate(snap: ProgressSnapshot) -> str | None:
-    """The ``~6m40s left`` clause, from the average rate since start.
+    """The ``~6m40s left`` clause: what is left over the network average.
 
-    None when the total is a floor, nothing has moved yet, or the pull
-    has reached its total: no guess is printed as if it were exact.
+    What is left counts credited reused and copied files as done; the
+    speed counts only bytes that crossed the network, so a resumed pull
+    never looks faster than its link (spec 0026 criterion 3). None when
+    the total is a floor, nothing has been received yet, or the pull has
+    reached its total: no guess is printed as if it were exact.
     """
     if snap.total_is_floor or snap.done_bytes >= snap.total:
         return None
-    average = _rate(snap.done_bytes, snap.now - snap.started_at)
+    average = _rate(snap.network_bytes, snap.now - snap.started_at)
     if average <= 0:
         return None
     return f"~{_duration((snap.total - snap.done_bytes) / average)} left"
 
 
 def _file_clause(snap: ProgressSnapshot) -> str:
-    """``downloading 3 of 12: <path>`` or ``hashing 3 of 12 (41%): <path>``."""
+    """``downloading 3 of 12: <path>``, ``hashing 3 of 12 (41%): <path>``,
+    or ``copying 3 of 12 from local HF cache: <path>``."""
     position = f"{snap.phase} {snap.index} of {snap.file_count}"
+    if snap.phase == "copying":
+        position = f"{position} from local HF cache"
     if snap.phase == "hashing" and snap.hash_total:
         percent = min(snap.hash_done * 100 // snap.hash_total, 100)
         position = f"{position} ({percent}%)"
@@ -70,16 +76,17 @@ def render_progress_line(snap: ProgressSnapshot, prev: ProgressSnapshot | None) 
     Args:
         snap: The current moment.
         prev: The moment the previous line was printed, or None for the
-            first line; the rate covers the window between them, so a
-            stall reads ``0 B/s``.
+            first line; the rate covers the window between them and
+            counts network bytes only, so a stall reads ``0 B/s`` even
+            when a reused file was credited inside the window.
 
     Returns:
         The line, without a trailing newline.
     """
     if prev is None:
-        window = _rate(snap.done_bytes, snap.now - snap.started_at)
+        window = _rate(snap.network_bytes, snap.now - snap.started_at)
     else:
-        window = _rate(snap.done_bytes - prev.done_bytes, snap.now - prev.now)
+        window = _rate(snap.network_bytes - prev.network_bytes, snap.now - prev.now)
     clauses = [_amount(snap), _per_second(max(window, 0.0))]
     estimate = _estimate(snap)
     if estimate is not None:
@@ -96,7 +103,7 @@ def render_summary(snap: ProgressSnapshot) -> str:
 
     Returns:
         Bytes received and archived, elapsed time, average rate, and
-        the reused and adopted clauses when they apply.
+        the reused, copied and adopted clauses when they apply.
     """
     elapsed = snap.now - snap.started_at
     line = (
@@ -108,6 +115,12 @@ def render_summary(snap: ProgressSnapshot) -> str:
         noun = "file" if snap.reused_files == 1 else "files"
         line += (
             f"; reused {snap.reused_files} {noun} ({human_size(snap.reused_bytes)}) from staging"
+        )
+    if snap.copied_files > 0:
+        noun = "file" if snap.copied_files == 1 else "files"
+        line += (
+            f"; copied {snap.copied_files} {noun} ({human_size(snap.copied_bytes)})"
+            " from local HF cache"
         )
     if snap.adopted_bytes > 0:
         line += f"; adopted {human_size(snap.adopted_bytes)} already on disk"

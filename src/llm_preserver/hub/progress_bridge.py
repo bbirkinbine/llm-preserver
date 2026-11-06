@@ -32,12 +32,26 @@ the real client at the floor and the lock so a release that drops it
 fails CI instead of silently reporting nothing.
 """
 
+import logging
+from typing import TYPE_CHECKING, NoReturn
+
 from tqdm.auto import tqdm
 
 from llm_preserver.hub.types import TransferSink
 
+logger = logging.getLogger(__name__)
 
-def transfer_tqdm_class(sink: TransferSink) -> type[tqdm]:  # type: ignore[type-arg]
+# tqdm is generic only in its stubs (over the iterable's item type) and
+# cannot be subscripted at runtime. This bar never iterates, so the
+# checker sees item type NoReturn, which also selects the no-iterable
+# constructor the client uses; at runtime the base is plain tqdm.
+if TYPE_CHECKING:
+    _BarBase = tqdm[NoReturn]
+else:
+    _BarBase = tqdm
+
+
+def transfer_tqdm_class(sink: TransferSink) -> type[_BarBase]:
     """Build a disabled ``tqdm`` subclass that reports to ``sink``.
 
     Args:
@@ -47,7 +61,7 @@ def transfer_tqdm_class(sink: TransferSink) -> type[tqdm]:  # type: ignore[type-
         A class to pass as ``hf_hub_download``'s ``tqdm_class``.
     """
 
-    class _TransferBar(tqdm):  # type: ignore[type-arg]
+    class _TransferBar(_BarBase):
         # tqdm starts its monitor thread in __new__ unless the interval
         # is 0, even for a disabled bar.
         monitor_interval = 0
@@ -65,7 +79,7 @@ def transfer_tqdm_class(sink: TransferSink) -> type[tqdm]:  # type: ignore[type-
             try:
                 sink.add_transfer_bytes(n)
             except Exception:
-                return
+                logger.debug("progress sink failed; byte count dropped", exc_info=True)
 
         def set_transfer_postfix_str(self, s: str, refresh: bool = False) -> None:
             return None

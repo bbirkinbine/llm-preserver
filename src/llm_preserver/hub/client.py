@@ -21,11 +21,12 @@ containing ``/`` pass verbatim) was verified on 2026-10-20 against the
 same v1.33.0 reference and installed source; provenance in spec 0024.
 """
 
+import logging
 import re
 from collections.abc import Iterator
 from pathlib import Path
 
-from huggingface_hub import HfApi, hf_hub_download
+from huggingface_hub import HfApi, hf_hub_download, try_to_load_from_cache
 from huggingface_hub.hf_api import ExpandModelProperty_T
 
 from llm_preserver.hub.errors import MAPPED_EXCEPTIONS, PullHubError, map_hub_exception
@@ -34,6 +35,8 @@ from llm_preserver.hub.types import RepoFile, RepoInfo, TransferSink
 from llm_preserver.hub_discovery import HubPager, ModelSummary, RelationType, summarize
 from llm_preserver.render import clean_text
 from llm_preserver.revision import is_full_sha
+
+logger = logging.getLogger(__name__)
 
 # Discovery listing fields (spec 0006, live-verified 2026-07-13).
 _DISCOVERY_EXPAND: list[ExpandModelProperty_T] = [
@@ -194,6 +197,40 @@ class HubClient:
         except MAPPED_EXCEPTIONS as exc:
             raise map_hub_exception(exc) from exc
         return Path(local)
+
+    def cached_locally(self, repo_id: str, filename: str, revision: str) -> bool:
+        """Whether the local Hugging Face cache holds this file at this commit.
+
+        Mirrors the lookup ``hf_hub_download`` itself makes in local-dir
+        mode before it copies a cached file into staging, which moves no
+        network bytes and so reports no progress (spec 0026 criterion 3).
+        Provenance — huggingface_hub v1.33.0, Apache-2.0, retrieved
+        2026-11-06 from
+        https://raw.githubusercontent.com/huggingface/huggingface_hub/v1.33.0/src/huggingface_hub/file_download.py:
+        ``_hf_hub_download_to_local_dir`` returns an up-to-date local
+        file first, then calls ``try_to_load_from_cache(repo_id=...,
+        filename=..., cache_dir=..., revision=commit_hash, ...)`` and
+        copies when it returns a ``str`` path; it returns ``None`` when
+        the file was not cached and a sentinel when its absence was
+        recorded.
+
+        This only feeds progress reporting, so a lookup that fails for
+        any reason answers False rather than failing the pull.
+
+        Args:
+            repo_id: Exact hub repo id.
+            filename: Repo-relative file.
+            revision: The pinned commit hash.
+
+        Returns:
+            True only when the lookup returned a cached file path.
+        """
+        try:
+            found = try_to_load_from_cache(repo_id=repo_id, filename=filename, revision=revision)
+        except Exception:
+            logger.debug("local cache lookup failed for %s", filename, exc_info=True)
+            return False
+        return isinstance(found, str)
 
     def _summaries(
         self, source: Iterator[object], relation: RelationType | None = None

@@ -88,6 +88,13 @@ class HubClientProtocol(Protocol):
         """
         ...
 
+    def cached_locally(self, repo_id: str, filename: str, revision: str) -> bool:
+        """Whether the local Hugging Face cache holds this file at this commit.
+
+        A local lookup, no network; never raises (spec 0026 criterion 3).
+        """
+        ...
+
     def search_models(self, query: str) -> HubPager:
         """Free-text hub search, the hub's relevance order, paged."""
         ...
