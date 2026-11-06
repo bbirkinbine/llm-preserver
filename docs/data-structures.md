@@ -89,7 +89,7 @@ a quantization), `FileEntry` one file of that artifact.
 ```mermaid
 classDiagram
     class ModelRecord {
-        record_schema_version : int, defaults to 2
+        record_schema_version : int, defaults to 4
         name : str
         hub_id : str
         roles : list~Role~ may be empty, first is primary
@@ -129,6 +129,9 @@ classDiagram
         embedding
         reranker
         multimodal
+        diffusion
+        video
+        image
     }
 
     class ArtifactFormat {
@@ -221,13 +224,19 @@ differently to each:
 | Version | Lives in | Constant | On a *newer* value |
 | --- | --- | --- | --- |
 | Archive schema | `archive.json` → `schema_version` | `archive.SCHEMA_VERSION = 2` | **Refuse.** Every command — including read-only `status`/`show` — errors and tells the user to upgrade. |
-| Record schema | `model-record.json` → `record_schema_version` | `records.RECORD_SCHEMA_VERSION = 3` | **Flag, don't refuse.** `status` shows it in the completeness column; `show` warns on stderr but still renders. Read-only inspection stays useful. |
+| Record schema | `model-record.json` → `record_schema_version` | `records.RECORD_SCHEMA_VERSION = 4` | **Flag, don't refuse.** `status` shows it in the completeness column; `show` warns on stderr but still renders. Read-only inspection stays useful. |
 
 Schema v2 (spec 0003) widened v1: per-file `provenance` and
 `revision`, the `hashed-locally` provenance state, and optional-empty
 `roles`. v1 records still load — every v2 change is a widening (a new
 optional field, a new enum value, a relaxed constraint), never a
-rename.
+rename. v3 (spec 0017) added `base_model` and `base_model_source`; v4
+(issue #69) added the `diffusion`, `video` and `image` roles.
+
+A new enum value bumps the version even though nothing else changes. An
+older tool rejects the value it does not know, and only a record that
+claims a newer schema lets it say "written by a newer tool" instead of
+showing an unexplained `record unreadable`.
 
 The record carries its own version so a lone model directory rsynced
 away from the archive stays self-describing without the root marker.
