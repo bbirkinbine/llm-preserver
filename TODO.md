@@ -22,6 +22,12 @@ Check items off as they ship; update when priorities shift.
 
 ## Hardening (independent of any spec)
 
+- [ ] **Stale cache-import wording in source comments.** Cache import
+  was withdrawn 2026-11-05 (0000 non-goals), but docstrings still name
+  it as a live case for the `unverified` provenance value and for
+  hashless records: `records/schema.py` (three places) and
+  `verify/core.py`. Comment-only; reword to "reserved; no current
+  writer" or "an empty record".
 - [x] **`specs-status.sh` did not strike through a `shipped (PR #N)`
   spec** — fixed 2026-09-23 by teaching status ranking, row rendering,
   and summary counts that `shipped (PR #N)` is a shipped status. Found
@@ -140,6 +146,7 @@ Check items off as they ship; update when priorities shift.
   human accept or edit it before the plan runs). A dependency such as
   `textual` or `prompt_toolkit` must pass dependency hygiene first, and
   the design needs a pipe-testable fallback for dumb terminals.
+
 Artifact classification and lineage moved out of this list on
 2026-08-06 — it is now spec 0016, above. Two ideas from the original
 queue entry did **not** make the spec and stay open here:

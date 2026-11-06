@@ -1133,7 +1133,7 @@ parallelize only with partitioned file ownership.
   preview). Also queued from live use:
   goal-definitive archiving (capability report in `status`) and the
   file-kind dictionary.
-- Specs: `0000` evergreen (revised 2026-07-13); `0002` runtime views
+- Specs: `0000` evergreen (revised 2026-11-05); `0002` runtime views
   paused — phase 1 shipped (PR #20), later adapters open;
   0005–0014 shipped; `0016` draft; `0017` shipped; `0018` shipped;
   `0019` shipped; `0020` shipped (PR #36); `0021` shipped (PR #39);
