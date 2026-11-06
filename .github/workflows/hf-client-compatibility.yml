@@ -55,6 +55,9 @@ jobs:
         run: |
           uv run --no-sync pytest \
             tests/test_hf_client_compatibility.py \
+            tests/test_hf_client_progress_contract.py \
+            tests/test_hf_client_cache_probe.py \
+            tests/test_hub_progress_bridge.py \
             tests/test_hub.py \
             tests/test_hub_discovery_client.py \
             tests/test_hf_logging.py

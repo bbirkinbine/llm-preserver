@@ -49,6 +49,18 @@ class RepoInfo:
     license: str | None
 
 
+class TransferSink(Protocol):
+    """Receives network byte counts while a download is in flight.
+
+    Called from the download client's own progress thread; an
+    implementation must be thread-safe and must not raise (spec 0026).
+    """
+
+    def add_transfer_bytes(self, n: int) -> None:
+        """Count ``n`` network bytes; negative when a retry restarts."""
+        ...
+
+
 class HubClientProtocol(Protocol):
     """Structural seam between pull orchestration and hub access.
 
@@ -61,8 +73,26 @@ class HubClientProtocol(Protocol):
         """Fetch repo metadata at ``revision`` (default branch when None)."""
         ...
 
-    def download(self, repo_id: str, filename: str, revision: str, dest_dir: Path) -> Path:
-        """Download one file at ``revision`` into ``dest_dir``."""
+    def download(
+        self,
+        repo_id: str,
+        filename: str,
+        revision: str,
+        dest_dir: Path,
+        progress: TransferSink | None = None,
+    ) -> Path:
+        """Download one file at ``revision`` into ``dest_dir``.
+
+        ``progress``, when given, receives network bytes as they arrive
+        (``pull --progress``, spec 0026).
+        """
+        ...
+
+    def cached_locally(self, repo_id: str, filename: str, revision: str) -> bool:
+        """Whether the local Hugging Face cache holds this file at this commit.
+
+        A local lookup, no network; never raises (spec 0026 criterion 3).
+        """
         ...
 
     def search_models(self, query: str) -> HubPager:

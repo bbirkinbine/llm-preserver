@@ -19,7 +19,7 @@ from .errors import (
     PullUserError,
     map_hub_exception,
 )
-from .types import HubClientProtocol, RepoFile, RepoInfo
+from .types import HubClientProtocol, RepoFile, RepoInfo, TransferSink
 
 __all__ = [
     "HubClient",
@@ -33,5 +33,6 @@ __all__ = [
     "PullUserError",
     "RepoFile",
     "RepoInfo",
+    "TransferSink",
     "map_hub_exception",
 ]
