@@ -388,9 +388,20 @@ never the real archive or the user's HF cache.
   a bare `hf_hub_download` on the same pty, so this harness cannot show
   bars disappearing. Criterion 5's suppression rests on the offline
   contract test (`capfd` empty with the real client) and on the bar
-  class being disabled by construction. **Owed: one run in a real
-  terminal emulator**, where the existing docs record client bars
-  rendering, to confirm none render under `--progress`.
+  class being disabled by construction.
+- **Real terminal, closed 2026-11-06** (second machine, fresh `main` at
+  `709c146`, PTY over `ssh -tt`; `microsoft/Phi-3.5-mini-instruct`,
+  20 files / 7.1 GiB, disposable archives). Control without
+  `--progress`: the client's Xet bars drew at once (16 escape bytes,
+  39 `%|` tokens, 17 "reconstructing file" and 233 "downloading bytes"
+  bar lines before an intentional interrupt). With `--progress`: lines
+  at 30 s (`40%, 98.9 MiB/s, ~44s left`) and 60 s
+  (`72%, 78.2 MiB/s, ~22s left`), summary
+  `transferred 6.1 GiB (archived 7.1 GiB) in 1m16s, 82.3 MiB/s average`,
+  and zero escape bytes, `%|` tokens or bar lines in the raw capture;
+  the archive verified complete. Criterion 5 holds live: the same
+  terminal draws bars without the flag, and `--progress` suppresses
+  them.
 - **Live Xet canary** (`test_live_xet_download_reports_progress_through_the_sink`,
   commit-pinned 84 MiB file, fresh `HF_XET_CACHE`): passes twice in a
   row; fails with `update_transfer` removed from the bridge. Added to

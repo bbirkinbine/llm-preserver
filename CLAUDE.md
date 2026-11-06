@@ -1147,7 +1147,8 @@ parallelize only with partitioned file ownership.
   Hard-won facts:
   - **the client draws no bars on a Python pty** in any mode, not even
     for a bare `hf_hub_download`, so suppressed bars cannot be shown
-    live there; that check is owed in a real terminal emulator;
+    live there. A real PTY over `ssh -tt` does draw them, and that run
+    closed the check: bars without the flag, none with it;
   - **a live canary must prove which path it took**: the Xet canary
     passed over plain HTTP until it spied on `xet_get`;
   - **back up mutation targets by full path**: two files named
