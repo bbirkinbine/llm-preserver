@@ -18,20 +18,14 @@ from llm_preserver.archive import ArchiveError
 from llm_preserver.archive_status import picker_status
 from llm_preserver.cli.app import fail
 from llm_preserver.cli.pull_exec.confirmations import confirm_or_stop
+from llm_preserver.cli.pull_exec.error_hints import echo_recovery_hints
 from llm_preserver.cli.pull_exec.plan_run import run_plan
 from llm_preserver.cli.pull_exec.plumbing import exit_for_pull_error
 from llm_preserver.cli.pull_exec.prompts import prompt_for_selection
 from llm_preserver.cli.pull_exec.termination import Terminated, unwind_on_termination
-from llm_preserver.cli.resume_hint import compose_doc_refresh_hint, compose_resume_hint
-from llm_preserver.hub import (
-    HubClientProtocol,
-    PullDocRefreshError,
-    PullError,
-    PullInvalidIdError,
-    RepoInfo,
-)
+from llm_preserver.cli.resume_hint import compose_resume_hint
+from llm_preserver.hub import HubClientProtocol, PullError, RepoInfo
 from llm_preserver.layout import UnmigratedArchiveError
-from llm_preserver.ollama_store import ollama_shape_hint
 from llm_preserver.pull import pull_model
 from llm_preserver.pull_decline import PullDeclined
 from llm_preserver.render import clean_text
@@ -233,33 +227,17 @@ def run_pull(
         raise typer.Exit(code=2) from exc
     except PullError as exc:
         exit_exc = exit_for_pull_error(exc)
-        if isinstance(exc, PullDocRefreshError):
-            # Spec 0020: this stop fires inside prepare_pull — before
-            # the on_transfer_start seam that composes the 0007 hint —
-            # so the human is told to re-run with a flag and has no
-            # command to append it to. Compose it here, from the shape
-            # this run already holds. Dispatch is on the type, never on
-            # the message text.
-            recovery = compose_doc_refresh_hint(
-                repo_id,
-                path,
-                include=patterns,
-                select_all=select_all,
-                roles=roles,
-                base_model=base_model,
-                hf_logging=hf_logging,
-                revision=resolved_revision,
-            )
-            if recovery is not None:
-                typer.echo(recovery, err=True)
-        if isinstance(exc, PullInvalidIdError):
-            # Spec 0013: an Ollama-shaped id gets the deterministic
-            # recovery command appended to the 0011 error. Detection
-            # lives in the error path only; the id is never rewritten
-            # and the exit code is unchanged.
-            shape_hint = ollama_shape_hint(repo_id)
-            if shape_hint is not None:
-                typer.echo(shape_hint, err=True)
+        echo_recovery_hints(
+            exc,
+            repo_id,
+            path,
+            include=patterns,
+            select_all=select_all,
+            roles=roles,
+            base_model=base_model,
+            hf_logging=hf_logging,
+            revision=resolved_revision,
+        )
         raise exit_exc from exc
     if metadata_only:
         final = f"{repo_id} was already archived; recorded the metadata you passed, no files pulled"

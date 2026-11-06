@@ -29,7 +29,8 @@ from huggingface_hub import HfApi, hf_hub_download
 from huggingface_hub.hf_api import ExpandModelProperty_T
 
 from llm_preserver.hub.errors import MAPPED_EXCEPTIONS, PullHubError, map_hub_exception
-from llm_preserver.hub.types import RepoFile, RepoInfo
+from llm_preserver.hub.progress_bridge import transfer_tqdm_class
+from llm_preserver.hub.types import RepoFile, RepoInfo, TransferSink
 from llm_preserver.hub_discovery import HubPager, ModelSummary, RelationType, summarize
 from llm_preserver.render import clean_text
 from llm_preserver.revision import is_full_sha
@@ -144,7 +145,14 @@ class HubClient:
             license=_first_str(card.license) if card is not None else None,
         )
 
-    def download(self, repo_id: str, filename: str, revision: str, dest_dir: Path) -> Path:
+    def download(
+        self,
+        repo_id: str,
+        filename: str,
+        revision: str,
+        dest_dir: Path,
+        progress: TransferSink | None = None,
+    ) -> Path:
         """Download one file at a pinned revision into a staging dir.
 
         Uses the client's ``local_dir`` mode, which leaves
@@ -157,6 +165,9 @@ class HubClient:
             filename: Repo-relative file to fetch.
             revision: The pinned commit hash (never a branch name).
             dest_dir: Staging directory to download into.
+            progress: Receives network bytes as they arrive (spec 0026).
+                None makes exactly the pre-0026 client call, so a pull
+                without ``--progress`` is unchanged.
 
         Returns:
             The path of the downloaded file inside ``dest_dir``.
@@ -165,12 +176,21 @@ class HubClient:
             PullError: The fault-domain mapping of any client failure.
         """
         try:
-            local = hf_hub_download(
-                repo_id=repo_id,
-                filename=filename,
-                revision=revision,
-                local_dir=dest_dir,
-            )
+            if progress is None:
+                local = hf_hub_download(
+                    repo_id=repo_id,
+                    filename=filename,
+                    revision=revision,
+                    local_dir=dest_dir,
+                )
+            else:
+                local = hf_hub_download(
+                    repo_id=repo_id,
+                    filename=filename,
+                    revision=revision,
+                    local_dir=dest_dir,
+                    tqdm_class=transfer_tqdm_class(progress),
+                )
         except MAPPED_EXCEPTIONS as exc:
             raise map_hub_exception(exc) from exc
         return Path(local)
