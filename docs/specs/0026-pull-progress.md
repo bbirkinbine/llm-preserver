@@ -1,6 +1,6 @@
 # 0026 — Pull Progress
 
-**Status:** shipped (PR #PRNUM)
+**Status:** shipped (PR #74)
 **Last updated:** 2026-11-06
 
 Tracked as GitHub issue #70; the issue body is the source of this

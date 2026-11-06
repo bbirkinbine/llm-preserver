@@ -181,7 +181,7 @@ queue entry did **not** make the spec and stay open here:
   unchanged. Offline contract tests at the 1.26.0 floor and the lock,
   plus a weekly live Xet canary. Live-verified over Xet and plain HTTP
   on a 3.3 GiB file. Groundwork shipped in PR #73. 2,035 tests.
-  (spec 0026, PR #PRNUM)
+  (spec 0026, PR #74)
 
 - 0025 same-repo pull guard: a pull claims its repo with an `O_EXCL`
   marker at `.staging/<owner>/<repo>/.llm-preserver-pull.json` before

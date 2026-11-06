@@ -1127,7 +1127,7 @@ parallelize only with partitioned file ownership.
   instead. Brian's calls: signal at a prompt exits 128+n; a marker with
   this process's own pid is stale (pid-1 containers). Every guard
   mutation-proved (19 across both rounds). 1835 tests.
-- **Session 32 (2026-11-06, PRs #72, #73, #PRNUM): issue #69 media
+- **Session 32 (2026-11-06, PRs #72, #73, #74): issue #69 media
   roles and spec 0026 `pull --progress` shipped.** #69 added the
   `diffusion` / `video` / `image` roles and bumped the record schema to
   v4 (Brian's call), so a v3 tool reports such a record as newer rather
@@ -1167,7 +1167,7 @@ parallelize only with partitioned file ownership.
   0005–0014 shipped; `0016` draft; `0017` shipped; `0018` shipped;
   `0019` shipped; `0020` shipped (PR #36); `0021` shipped (PR #39);
   `0022` shipped (PR #40); `0023` shipped (PR #44); `0024` shipped (PR #59);
-  `0025` shipped (PR #60); `0026` shipped (PRs #73, #PRNUM).
+  `0025` shipped (PR #60); `0026` shipped (PRs #73, #74).
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to

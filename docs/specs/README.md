@@ -54,7 +54,7 @@ line; the source of truth is the spec file, this is a rendered cache. Run
 - ~~[0023 — Archive Status In File Listings](0023-archive-status-listing.md)~~  (shipped (PR #44)) — depends on 0018, 0021
 - ~~[0024 — Hugging Face Revision Support](0024-hf-revision-support.md)~~  (shipped (PR #59))
 - ~~[0025 — Same-Repo Pull Guard](0025-same-repo-pull-guard.md)~~  (shipped (PR #60))
-- ~~[0026 — Pull Progress](0026-pull-progress.md)~~  (shipped (PR #PRNUM))
+- ~~[0026 — Pull Progress](0026-pull-progress.md)~~  (shipped (PR #74))
 - [0002 — Runtime views](0002-runtime-views.md)  (paused) — depends on 0001
 <!-- specs-status:end -->
 
