@@ -18,7 +18,7 @@ script instead of installing it, for manual setup.
 
 Commands documented here: `init`, `pull` (selective, `--whole-repo`
 full snapshot, and `--plan` dry run), `discover`, `status`, `show`,
-`verify`, `remove`, `views`. Planned features (cache import, smoke
+`verify`, `remove`, `views`. Planned features (smoke
 tests) are listed in the roadmap in
 [`specs/0000-product.md`](specs/0000-product.md)
 and appear here when they ship.
@@ -1228,7 +1228,7 @@ categories:
 - **complete** — every recorded file exists at its recorded size, but
   nothing was hash-validated: every `--quick` result caps out here,
   and so does a full run over a record that carries no hashes at all
-  (e.g. a future unverified cache import) — "valid" is never claimed
+  — "valid" is never claimed
   for a model whose digests were not actually checked.
 - **incomplete** — recorded files are missing from disk (each is
   named). `remove` updates the record whenever it deletes, so a
@@ -1249,7 +1249,7 @@ categories:
   but **drift outranks it**: a model that is both drifted and
   unmigrated still exits 5, with both words on its line.
 - **unhashed** (per-file, informational) — the record carries no
-  SHA256 for the file (e.g. an unverified cache import); existence and
+  SHA256 for the file; existence and
   size are still checked.
 - **unrecorded** (per-file, informational) — on disk but in no record:
   something was hand-copied in. The tool's own generated files

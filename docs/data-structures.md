@@ -4,7 +4,7 @@ Visual reference for the on-disk and in-memory structures the tool is
 built on. This is the foundation layer (spec 0001, layout decided by
 ADR 0001 — `docs/adr/0001-model-storage.md`); every later feature —
 pull, verify, remove, and runtime views (shipped — views at phase
-1, the Ollama adapter), smoke test and cache import (planned) — reads,
+1, the Ollama adapter), smoke test (planned) — reads,
 writes, or deletes these same structures. Diagrams
 are Mermaid — GitHub and VS Code's markdown preview render them
 natively.
@@ -165,7 +165,7 @@ Semantics that don't fit in a box:
 | --- | --- |
 | `roles` vs `capabilities` | `roles` is curator judgment ("why is this on the shelf") — a strict enum, first entry drives `status` grouping. It may be empty (schema v2): roles are judgment the tool never fabricates, so a freshly pulled model can carry none and groups under a "(no role)" bucket. `capabilities` is machine facts recorded from source metadata (`tools`, `vision`, ...) — free strings, because the vocabulary belongs to hubs/runtimes and will grow. |
 | `revision` | Full 40-hex commit hash only; a branch name is a moving pointer, not provenance, and fails validation. The artifact-level field tracks the most recent pull; each `FileEntry` also carries its own `revision` pin (schema v2), so a merged artifact never implies older files were resolved at a newer commit. |
-| `provenance` | `verified` = local SHA256 matched a hub-declared hash; `hashed-locally` (schema v2) = the hub published no hash to check against, so the file was hashed on download but not cross-checked; `unverified` = cache import that can't be checked against a source. Recorded per file (v2); an artifact is `verified` only when every file is. |
+| `provenance` | `verified` = local SHA256 matched a hub-declared hash; `hashed-locally` (schema v2) = the hub published no hash to check against, so the file was hashed on download but not cross-checked; `unverified` = reserved; no command writes it. Its intended writer, cache import, was withdrawn 2026-11-05 (0000 non-goals); the value stays because removing it would be a schema change. Recorded per file (v2); an artifact is `verified` only when every file is. |
 | `FileEntry.source` | Internet Archive's original-vs-generated split: `original` files (weights, tokenizer, license) are sacred and never regenerable; `generated` files (`MODEL-RECORD.md`, future manifests) can be rebuilt from originals + record. Backup and recovery logic treat the classes differently. |
 | `FileEntry.path` | Upstream filename preserved verbatim (GGUF names encode quant type and shard position). Validated: relative, POSIX, no `..`, no backslashes or control characters — filenames are upstream-supplied and therefore untrusted. The three tool-owned root filenames (`model-record.json`, `MODEL-RECORD.md`, `manifest-sha256.txt`) are also reserved (spec 0010): a record may not name one as a payload path. |
 | Nullable fields | "Unknown at this point in time", serialized as explicit `null` — never omitted — so a reader can tell "unknown" from "not part of this schema version". Schema evolution is add-a-field, never rename. |
@@ -369,11 +369,9 @@ flowchart LR
 
     subgraph FUTURE ["planned layers (0000-product roadmap)"]
         SMOKE["smoke-test spec"]
-        IMPORT["cache-import spec"]
     end
 
     DL -- "writes payload files +<br/>artifact entries, hashes,<br/>pinned revisions" --> REC
-    IMPORT -- "writes artifacts with<br/>provenance: unverified" --> REC
     VER -- "re-hashes files against records;<br/>regenerates manifest-sha256.txt;<br/>complete vs valid" --> REC
     SMOKE -- "writes runtime_tested" --> REC
     VIEWS -- "reads only; generates<br/>disposable symlink/config views" --> REC
