@@ -33,6 +33,7 @@ def run_plan(
     emit_hint: bool,
     hf_logging: bool,
     requested_revision: str | None = None,
+    progress: bool = False,
 ) -> None:
     """Prepare, report, and preflight a dry-run pull; write nothing.
 
@@ -51,6 +52,8 @@ def run_plan(
         requested_revision: The ``--revision`` value as typed, or None;
             when set, the report names it beside the resolved commit and
             the follow-up command pins that commit (spec 0024).
+        progress: Whether the follow-up command replays --progress
+            (spec 0026); a dry run itself prints no progress lines.
 
     Raises:
         PullError: Planning faults, mapped by the caller.
@@ -99,6 +102,7 @@ def run_plan(
             base_model=base_model,
             refresh_docs=refresh_docs,
             hf_logging=hf_logging,
+            progress=progress,
             revision=None if requested_revision is None else prep.info.commit,
         )
         if plan_hint is not None:

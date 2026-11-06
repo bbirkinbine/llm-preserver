@@ -23,6 +23,7 @@ from llm_preserver.pull_home import ConfirmCallback
 from llm_preserver.pull_inputs import validated_base_model, validated_roles
 from llm_preserver.pull_preflight import human_size, require_disk_budget
 from llm_preserver.pull_prepare import STAGING_DIRNAME, PullPreparation, prepare_pull
+from llm_preserver.pull_progress import PullProgress
 from llm_preserver.pull_record import update_record, write_manifest
 from llm_preserver.pull_transfer import download_and_archive
 from llm_preserver.records import FileEntry, Role, save_record
@@ -101,6 +102,7 @@ def pull_model(
     on_no_op: Callable[[], None] | None = None,
     on_metadata_only: Callable[[], None] | None = None,
     pin_archived_commit: bool = False,
+    progress: PullProgress | None = None,
 ) -> Path:
     """Pull selected files from a hub repo into the archive.
 
@@ -148,6 +150,10 @@ def pull_model(
             as one that did.
         pin_archived_commit: Refuse to merge into an artifact recorded
             at another commit (a ``--revision`` pull, spec 0024).
+        progress: The ``--progress`` meter (spec 0026). Begun just before
+            ``on_transfer_start`` and fed per file; never begun when
+            there is nothing to download. None leaves every call
+            exactly as it was before spec 0026.
 
     Returns:
         The model directory the pull landed in.
@@ -223,6 +229,13 @@ def pull_model(
             )
         ):
             raise PullDeclined(SIZE_DECLINED)
+        if prep.plan.to_download and progress is not None:
+            # After every confirmation, so the clock never counts the
+            # time a human spent answering a prompt.
+            progress.begin(
+                [(p.repo_file.path, p.repo_file.size) for p in prep.plan.to_download],
+                adopted_bytes=sum(entry.size or 0 for entry in prep.plan.adopted),
+            )
         if prep.plan.to_download and on_transfer_start is not None:
             on_transfer_start(f"{prep.creator}/{prep.name}")
         try:
@@ -236,6 +249,7 @@ def pull_model(
                         prep.plan.to_download,
                         prep.staging_dir,
                         prep.model_dir,
+                        progress=progress,
                     )
                 )
             record = update_record(

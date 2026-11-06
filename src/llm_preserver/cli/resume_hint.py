@@ -45,6 +45,7 @@ def _compose_pull_command(
     base_model: str | None = None,
     refresh_docs: bool = False,
     hf_logging: bool = False,
+    progress: bool = False,
     revision: str | None = None,
 ) -> str | None:
     """Compose the direct ``pull`` command replaying a pull's shape.
@@ -69,6 +70,7 @@ def _compose_pull_command(
         base_model: Curator-asserted lineage, replayed like a role.
         refresh_docs: Whether --refresh-docs rides along.
         hf_logging: Whether --hf-logging rides along.
+        progress: Whether --progress rides along (spec 0026).
         revision: The *resolved* full commit to pin as ``--revision``
             (spec 0024), or None when the pull named no revision. Never
             a branch or tag: a moving pointer would let a resumed pull
@@ -100,6 +102,8 @@ def _compose_pull_command(
         parts.append("--refresh-docs")
     if hf_logging:
         parts.append("--hf-logging")
+    if progress:
+        parts.append("--progress")
     return " ".join(shlex.quote(clean_text(part, single_line=True)) for part in parts)
 
 
@@ -113,6 +117,7 @@ def compose_resume_hint(
     base_model: str | None = None,
     refresh_docs: bool = False,
     hf_logging: bool = False,
+    progress: bool = False,
     revision: str | None = None,
 ) -> str | None:
     """Compose the one-line direct ``pull`` command that resumes this pull.
@@ -130,6 +135,9 @@ def compose_resume_hint(
             the one the flag exists for (spec 0008). ``--verbose``
             deliberately does not — the hint replays the pull's shape
             and this one diagnostic flag, nothing else.
+        progress: Whether --progress was in effect; it rides along for
+            the same reason (spec 0026): a resumed agent-driven pull
+            needs the same legible output as the one interrupted.
         revision: The resolved full commit to pin, or None (spec 0024).
 
     Returns:
@@ -145,6 +153,7 @@ def compose_resume_hint(
         base_model=base_model,
         refresh_docs=refresh_docs,
         hf_logging=hf_logging,
+        progress=progress,
         revision=revision,
     )
     if command is None:
@@ -161,6 +170,7 @@ def compose_doc_refresh_hint(
     roles: Sequence[str] = (),
     base_model: str | None = None,
     hf_logging: bool = False,
+    progress: bool = False,
     revision: str | None = None,
 ) -> str | None:
     """Compose the ``pull ... --refresh-docs`` command that clears a doc stop.
@@ -181,6 +191,7 @@ def compose_doc_refresh_hint(
         roles: Roles the refused pull would have assigned.
         base_model: Curator-asserted lineage to replay.
         hf_logging: Whether --hf-logging was in effect.
+        progress: Whether --progress was in effect (spec 0026).
         revision: The resolved full commit to pin, or None (spec 0024).
 
     Returns:
@@ -196,6 +207,7 @@ def compose_doc_refresh_hint(
         base_model=base_model,
         refresh_docs=True,
         hf_logging=hf_logging,
+        progress=progress,
         revision=revision,
     )
     if command is None:

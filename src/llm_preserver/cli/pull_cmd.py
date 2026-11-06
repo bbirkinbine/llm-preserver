@@ -90,6 +90,16 @@ def pull(
             help="Show the HF client's own transfer telemetry (stalls, retries, backoff).",
         ),
     ] = False,
+    progress: Annotated[
+        bool,
+        typer.Option(
+            "--progress",
+            help=(
+                "Print a plain-text progress line every 30 s and a closing summary "
+                "(for agent-driven and non-TTY runs; the client draws no bar of its own)."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Pull selected files (or with --whole-repo, the whole tree) from a Hugging Face repo."""
     setup_logging(verbose, hf_logging=hf_logging)
@@ -153,5 +163,6 @@ def pull(
         plan=plan,
         yes=yes,
         hf_logging=hf_logging,
+        progress=progress,
         revision=revision,
     )

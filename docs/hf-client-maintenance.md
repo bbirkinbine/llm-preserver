@@ -41,14 +41,40 @@ Then qualify both supported endpoints without rewriting `uv.lock`:
 
 ```bash
 uv run --frozen --with 'huggingface-hub==1.26.0' pytest \
-  tests/test_hf_client_compatibility.py tests/test_hub.py \
-  tests/test_hub_discovery_client.py tests/test_hf_logging.py
+  tests/test_hf_client_compatibility.py tests/test_hf_client_progress_contract.py \
+  tests/test_hf_client_cache_probe.py tests/test_hub_progress_bridge.py \
+  tests/test_hub.py tests/test_hub_discovery_client.py tests/test_hf_logging.py
 uv run --frozen --with 'huggingface-hub<2' pytest \
-  tests/test_hf_client_compatibility.py tests/test_hub.py \
-  tests/test_hub_discovery_client.py tests/test_hf_logging.py
+  tests/test_hf_client_compatibility.py tests/test_hf_client_progress_contract.py \
+  tests/test_hf_client_cache_probe.py tests/test_hub_progress_bridge.py \
+  tests/test_hub.py tests/test_hub_discovery_client.py tests/test_hf_logging.py
 uv run --frozen --with 'huggingface-hub==1.26.0' --with pip-audit pip-audit
 uv run --frozen --with 'huggingface-hub<2' --with pip-audit pip-audit
 ```
+
+`pull --progress` (spec 0026) leans on two client behaviors that are not
+documented API, so a release can change them without an error; the offline
+contract tests above are what catch it, and the compatibility workflow runs
+them at the floor and at latest 1.x:
+
+- **`tqdm_class` and `update_transfer`.** `hf_hub_download` accepts a
+  `tqdm_class`, and the client finds an `update_transfer(n)` method on it by
+  `getattr` to report network bytes, on plain HTTP and Xet alike. A release
+  that renames or drops that lookup degrades progress silently to per-file
+  updates. Pinned by `tests/test_hf_client_progress_contract.py` (the real
+  client, offline, through a mock transport) and
+  `tests/test_hub_progress_bridge.py` (the bridge class, including the
+  client's Xet reporter driven with fake reports; it imports the private
+  `utils._xet_progress_reporting` module, so a move there fails this test
+  first).
+- **`try_to_load_from_cache`.** The pull probes the local Hugging Face cache
+  with this function before each download, to report a file the client
+  copies from its cache rather than the network. Pinned by
+  `tests/test_hf_client_cache_probe.py`.
+
+When a release note in the range touches progress bars, `tqdm`, Xet progress
+reporting, or the cache layout, read those code paths in the new version as
+well as running the tests.
 
 The scheduled workflow is also available through `workflow_dispatch`. It
 prints the resolved version for its floor and latest-1.x jobs, runs the offline

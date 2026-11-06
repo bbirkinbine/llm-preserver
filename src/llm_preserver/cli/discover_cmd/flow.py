@@ -20,7 +20,12 @@ from llm_preserver.hub import HubClientProtocol
 
 
 def run_discovery(
-    path: Path, client: HubClientProtocol, query: str, plan: bool, hf_logging: bool = False
+    path: Path,
+    client: HubClientProtocol,
+    query: str,
+    plan: bool,
+    hf_logging: bool = False,
+    progress: bool = False,
 ) -> None:
     """Drive search → tree hops → the shared pull core.
 
@@ -34,6 +39,7 @@ def run_discovery(
         query: The free-text search term.
         plan: True to make the final pull a dry run (spec 0005).
         hf_logging: Passthrough of the vendor-telemetry flag (0008).
+        progress: Passthrough of ``--progress`` (spec 0026).
     """
     current = search_stage(client, query)
     trail: list[str] = [] if current is None else [current.repo_id]
@@ -70,5 +76,6 @@ def run_discovery(
             # resume hint is the only record of the pull shape (0007).
             resume_hint=True,
             hf_logging=hf_logging,
+            progress=progress,
         )
         return

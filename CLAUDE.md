@@ -1127,7 +1127,36 @@ parallelize only with partitioned file ownership.
   instead. Brian's calls: signal at a prompt exits 128+n; a marker with
   this process's own pid is stale (pid-1 containers). Every guard
   mutation-proved (19 across both rounds). 1835 tests.
-- **Next spec (0026): pick from TODO.md** — smoke test, spec 0002's
+- **Session 32 (2026-11-06, PRs #72, #73, #PRNUM): issue #69 media
+  roles and spec 0026 `pull --progress` shipped.** #69 added the
+  `diffusion` / `video` / `image` roles and bumped the record schema to
+  v4 (Brian's call), so a v3 tool reports such a record as newer rather
+  than corrupt. Spec 0026's live-use trigger: agents archive models
+  with `pull`, and off a TTY a multi-GiB shard was one line followed by
+  minutes of silence. **The issue's proposed mechanism was wrong, and
+  research before the plan caught it**: sampling the partial file's
+  size fails on Xet, where the `.incomplete` file sits at 0 bytes and
+  then jumps. Progress comes instead from the client's public
+  `tqdm_class` argument and its duck-typed `update_transfer` calls,
+  pinned by an offline contract test at the floor and the lock. Two
+  review rounds earned their keep. The first found reused-file credit
+  inflating the rate and estimate (a stalled resumed pull read
+  `1.7 GiB/s, ~30s left`), and files copied from the local HF cache
+  moving zero network bytes, invisible to the meter. The second found
+  that a ticker thread unable to start failed the whole pull.
+  Hard-won facts:
+  - **the client draws no bars on a Python pty** in any mode, not even
+    for a bare `hf_hub_download`, so suppressed bars cannot be shown
+    live there; that check is owed in a real terminal emulator;
+  - **a live canary must prove which path it took**: the Xet canary
+    passed over plain HTTP until it spied on `xet_get`;
+  - **back up mutation targets by full path**: two files named
+    `flow.py` collided and a "restore" overwrote one with the other.
+
+  `gh issue develop` links a branch to its issue, so merging the
+  partial PR #73 closed #70 despite saying "Part of #70"; it was
+  reopened. 2,035 tests.
+- **Next spec (0027): pick from TODO.md** — smoke test, spec 0002's
   later adapter phases (LM Studio / llama.cpp / vLLM), or the remaining
   TUI nice-to-haves (arrow-key highlight, type-to-filter, match
   preview). Also queued from live use:
@@ -1138,7 +1167,7 @@ parallelize only with partitioned file ownership.
   0005–0014 shipped; `0016` draft; `0017` shipped; `0018` shipped;
   `0019` shipped; `0020` shipped (PR #36); `0021` shipped (PR #39);
   `0022` shipped (PR #40); `0023` shipped (PR #44); `0024` shipped (PR #59);
-  `0025` shipped (PR #60).
+  `0025` shipped (PR #60); `0026` shipped (PRs #73, #PRNUM).
 - Design stance (revised with 0000, 2026-07-13): no LLM and no tool
   judgment inside the tool — deterministic product, so no `/eval`.
   Discovery may pass through hub search/tree facts for the human to
